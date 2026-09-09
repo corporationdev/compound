@@ -12,6 +12,9 @@ export function validateStage(stage: string): string {
   }
   return stage;
 }
+export function projectsFolderNameForStage(stage: string): string {
+  return getStageKind(validateStage(stage)) === 'production' ? 'compound' : `compound-${stage}`;
+}
 export function resolveRuntimeContext(
   stage: string,
   options: {
@@ -65,6 +68,12 @@ export function resolveRuntimeContext(
       VITE_CONVEX_SITE_URL: convexSiteUrl,
       VITE_SERVER_URL: serverUrl,
     },
-    desktopConfig: { convexUrl, authUrl: convexSiteUrl, serverUrl },
+    desktopConfig: {
+      stage,
+      projectsFolderName: projectsFolderNameForStage(stage),
+      convexUrl,
+      authUrl: convexSiteUrl,
+      serverUrl,
+    },
   };
 }

@@ -19,6 +19,8 @@ On September 9, 2026, setup and Alchemy deployment succeeded for `dev-isaacdyor-
 
 Dropping/importing a file remains local. Upload happens when the user or agent requests transcription, analysis, or automatic captions. `compound media transcribe` and `compound media listen` handle the upload internally. Normal projects, edits, exports and caption JSON stay on the computer. This does not implement browser-only project editing or cloud project sync.
 
+The desktop initializes a default projects folder on startup: `~/Movies/compound` in production and `~/Movies/compound-<stage>` in development/preview (the OS Videos folder on other platforms). Each stage remembers its own selected folder. The first stage opened after this update keeps an existing saved selection; other stages initialize their own default. Changing the selection does not move existing projects.
+
 The authenticated Worker API is:
 
 - `POST /media/upload-url { contentType, size }` → `{ uploadId, uploadUrl }`. The client PUTs the prepared file to that R2 URL.
@@ -36,12 +38,12 @@ Deepgram word timing is used as returned, with simple punctuation-based segmenta
 - `src/stage.ts`: `resolveStage('dev')` produces a stable `dev-<user>-<machine hash>` stage. Explicit `--stage` remains available.
 - `src/stage-kind.ts`: development stages select `compound-dev`; `pr-*`/`preview-*` select `compound-preview`; production stages select `compound-prod`. Resource names still use the full stage, not the vault tier.
 - `src/deployment.ts`: the public `rootDomain` is `compound.mov`, matching the Cloudflare zone and Resend domain. Production Convex is `strong-panda-857` (`https://strong-panda-857.convex.cloud`), as supplied by the user. These are version-controlled identifiers, not secrets. Recording this identity does not deploy the production backend or infrastructure.
-- `src/runtime.ts`: derives web, Worker, Convex auth, desktop and Resend configuration together. Dev's web UI uses localhost:5173; its stable `server-dev-….<rootDomain>` hostname tunnels to the local Worker on port 3000, following PostBob. A PR uses `app-pr-42.<rootDomain>` and `server-pr-42.<rootDomain>`; production uses `app.<rootDomain>` and `server.<rootDomain>`.
+- `src/runtime.ts`: derives web, Worker, Convex auth, desktop and Resend configuration together. Dev's web UI uses localhost:5173; its stable `server-dev-….<rootDomain>` hostname tunnels to the local Worker on port 3000, following PostBob. Automatic PR stages use `preview-<clean-branch>-<hash>`, with `app-<stage>.<rootDomain>` and `server-<stage>.<rootDomain>`; production uses `app.<rootDomain>` and `server.<rootDomain>`.
 - `src/models.ts`: `nova-3` for Deepgram and `gemini-3.5-flash-lite` for Gemini, matching PostBob's current Gemini analysis choice. Change these constants in code, not in 1Password or an env file.
 
-Convex assigns deployment names, so those URLs cannot be inferred from a PR number. Non-production resolution accepts Convex's `CONVEX_URL` deployment output, reads the local CLI's `packages/backend/.env.local` in dev, or derives the hostname from a deployment-specific deploy key. The selected URL must match that key. Production uses the committed production deployment name. Previously generated app env URLs are never used to resolve a new stage.
+Convex assigns deployment names, so those URLs cannot be inferred from a PR number. Non-production resolution accepts Convex's `CONVEX_URL` deployment output, reads the local CLI's `packages/backend/.env.local` in dev, or derives the hostname from a deployment-specific deploy key. A deployment-specific key must match the selected URL. Project preview keys must belong to the committed Compound team/project; Convex supplies their isolated deployment URL through its deploy command. Production uses the committed production deployment name. Previously generated app env URLs are never used to resolve a new stage.
 
-No URLs, model identifiers, or sender email addresses belong in `.env.op`. The Resend sender is derived as `Compound <no-reply@<rootDomain>>`; verify that domain in Resend. Alchemy attaches Worker custom domains for preview/production and a Cloudflare Tunnel hostname for dev, so the root domain must be a zone managed in your Cloudflare account. Browser hosting for `app...` remains a separate deployment.
+No URLs, model identifiers, or sender email addresses belong in `.env.op`. The Resend sender is derived as `Compound <no-reply@<rootDomain>>`; verify that domain in Resend. Alchemy attaches Worker custom domains for preview/production and a Cloudflare Tunnel hostname for dev, so the root domain must be a zone managed in your Cloudflare account. Alchemy also hosts the Vite frontend at `app-<stage>...` outside local development. This makes the web frontend accessible; project-folder editing still requires desktop.
 
 ## Create the secrets
 
@@ -52,13 +54,14 @@ Create `compound-dev`, `compound-preview`, and `compound-prod`. The grouped `.en
 | Deployment / `Cloudflare` | `account-id`, `api-token` | Deployment tools; only the public account ID is a Worker variable |
 | R2 / `R2` | `access-key-id`, `secret-access-key` | Worker signing credentials, scoped to the relevant stage buckets |
 | Alchemy / `Alchemy` | `password`, `state-token` | Infrastructure workspace only; encrypt state and authenticate the CI state service |
-| Convex / `Convex` | `deploy-key` | Convex CLI only |
+| Convex / `Convex` | `deploy-key` | Convex CLI only; a project preview key in the preview vault |
+| Convex / `Convex` | `team-access-token` | Preview teardown through the Management API; never synced to app runtime |
 | Auth / `Better Auth` | `secret` | Convex only; at least 32 random characters, independent per tier |
 | Auth / `Resend` | `api-key` | Convex only |
 | AI / `Deepgram` | `api-key` | Worker only |
 | AI / `Gemini` | `api-key` | Worker only; Google AI Studio/Gemini API key, not Vertex service-account JSON |
 
-Use a fresh hosted Convex deployment and a **deployment-specific deploy key**. This minimal setup does not create Convex previews with a project-level preview key. Multiple PR stage names select the same preview vault; separate Convex deployment outputs/keys must be supplied if you want separate Convex backends. Naming a stage alone does not create database isolation.
+Use deployment-specific keys for dev and production. In `compound-preview / Convex / deploy-key`, use a project preview deploy key for `corporation/compound` (format `preview:corporation:compound|…`). Each branch stage creates or reuses its own isolated Convex deployment with `--preview-name`. The shared preview vault supplies credentials, not a shared database. Store the Convex team access token in `compound-preview / Convex / team-access-token`; it is injected only for preview by default and is used for exact-stage cleanup. Dev/prod setup does not require this additional token. The preview R2 signing credentials must cover the dynamically created preview buckets.
 
 R2 buckets are `compound-media-<stage>`. Keep public access disabled. Create the bucket before issuing bucket-scoped signing credentials, or let Alchemy create it. The deployment token needs Worker/R2 administration, Worker custom domains, Zone Read/DNS Edit for the selected zone, and **Cloudflare One / Zero Trust → Cloudflare One Connector: cloudflared → Edit** for PostBob's dev tunnel (also documented as Cloudflare Tunnel Write). The R2 signing key is separate from this deployment token. Alchemy configures the dev bucket with `dev: { remote: true }`, so direct signed uploads and local Worker reads see the same bytes.
 
@@ -86,13 +89,13 @@ bun run dev                         # Refresh setup; Convex watch + Alchemy dev/
 
 Use `--stage pr-42`, `--stage preview`, or `--stage prod` for explicit stages. `--dev` and no stage flag both resolve your personal dev stage. To use the shared literal `dev` stage, consistently pass `--stage dev` to setup, deploy, and dev.
 
-Like PostBob, `setup` injects credentials, writes runtime config, and syncs the four Convex runtime variables. It does not deploy code, create vaults, or provision accounts. `deploy` syncs/deploys Convex through its CLI, then runs Alchemy to reconcile the bucket, Worker, secrets, and routing. `bun run deploy:infra --dev` runs just Alchemy. `bun run destroy --stage <stage>` destroys the selected Alchemy stack and does not delete Convex accounts/data. No Supabase data is migrated.
+For deployment-specific keys, `setup` injects credentials, writes runtime config, and syncs the four Convex runtime variables. With a project preview key, setup stops after injection; `deploy` creates/reuses the preview first, receives its public URL, writes runtime configuration, deploys code, syncs auth settings, and deploys Alchemy. It does not deploy code, create vaults, or provision accounts. `deploy` syncs/deploys Convex through its CLI, then runs Alchemy to reconcile the bucket, Worker, secrets, and routing. `bun run deploy:infra --dev` runs just Alchemy. `bun run destroy --stage <stage>` destroys the selected Alchemy stack and does not delete Convex accounts/data. No Supabase data is migrated.
 
 `bun run runtime:write --dev` regenerates configuration after a public identity/deployment-output change. For UI-only development use `bun run dev:desktop` or `bun run dev:web_v1`. Missing configuration produces a login setup message.
 
 Injection resolves only credentials listed in `.env.op` and distributes them according to each app's grouped `.env.example`. Literal credentials and bootstrap tokens are rejected in `.env.op`. Like PostBob, the injector passes a temporary reference-only file to `op inject` because stdin detection fails under Bun; it captures resolved values and removes the temporary file. `--include KEY` refreshes selected credentials only after full injection for the same stage. `--check` writes nothing. Full stage changes clear prior runtime values; runtime generation writes only allowlisted values with restrictive permissions. Generated files stay ignored, and secrets are never printed or placed in subprocess arguments.
 
-The web app and packaged Electron app receive only three public URLs. Production release configuration is derived directly from committed config and needs **no 1Password access**.
+The web app receives public URLs; desktop runtime configuration also includes its stage and default project-folder name. Neither receives provider secrets. Production release configuration is derived directly from committed config and needs **no 1Password access**.
 
 ## Auth behavior
 
@@ -122,10 +125,22 @@ Verify actual email delivery and sign-in in browser, Electron dev, and a package
 
 ## CI and distribution
 
-`Check` runs without secrets on pushes and pull requests. `Deploy cloud` is manual, selects a GitHub environment named `dev`, `preview`, or `prod`, and reads its `OP_SERVICE_ACCOUNT_TOKEN`. Setup writes the infra workspace's Alchemy credentials; deploy syncs Convex and runs Alchemy with its Cloudflare state store in CI. Give each environment a suitably scoped service account. The manual workflow offers shared dev/preview/prod stages; local scripts also accept PR stages. Automatic per-PR Convex provisioning/cleanup is separate work.
+`Check` runs without secrets on pushes and pull requests. `Deploy cloud` is manual, selects a GitHub environment named `dev`, `preview`, or `prod`, and reads its `OP_SERVICE_ACCOUNT_TOKEN`. Setup writes the infra workspace's Alchemy credentials; deploy syncs Convex and runs Alchemy with its Cloudflare state store in CI. Give each environment a suitably scoped service account. The manual workflow remains available for shared dev/preview/prod stages.
+
+`Deploy Preview` follows PostBob's PR lifecycle: same-repository PRs deploy on opened/reopened/synchronize, using GitHub environment `Preview` and its `OP_SERVICE_ACCOUNT_TOKEN`. Fork and Dependabot PRs do not receive deployment credentials. The branch-derived stage adds an eight-character hash to PostBob's cleaned/truncated name to prevent collisions. Deployment and teardown share a concurrency group; stale revisions and already-closed PRs are skipped.
+
+The deploy workflow injects `compound-preview`, runs `convex deploy --preview-name`, writes configuration from the returned Convex URL, syncs auth environment variables, and deploys the media Worker, R2 bucket and Vite web frontend through Alchemy. It maintains one PR comment with web/API links and deployment status. Unlike PostBob's `--preview-create`, `--preview-name` preserves test accounts and data between pushes. Incompatible schema changes may require a migration or deliberate reset. Convex previews still have provider-managed expiry; these are not permanent databases.
+
+`Teardown Preview` runs when a PR closes or merges. It skips cleanup if the PR was reopened while queued, destroys only that stage's Alchemy resources (including emptying its temporary R2 bucket), and deletes the exact matching Convex preview through the Management API. Convex deletion is attempted even if Alchemy cleanup fails. Cleanup can be retried with the same stage; it never offers an all-previews deletion option.
+
+To exercise a preview manually, use `bun run setup --stage preview-example` then `bun run deploy --stage preview-example`. To remove it, inject that stage and run `bun scripts/teardown-preview.ts --stage preview-example`. These commands modify the selected environment; use a separate checkout to keep local dev configuration intact. CI uses encrypted remote Alchemy state automatically.
+
+Lifecycle tests: `bun test scripts/preview.test.ts`. Workflow YAML, local checks and the web build are verified separately from an actual GitHub Actions deployment.
 
 The tagged macOS release workflow derives public production URLs from `@compound/config/runtime`, with no 1Password step. Existing macOS signing/notarization secrets remain GitHub secrets: `MACOS_CERT_P12`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`. GitHub supplies `GITHUB_TOKEN`. No provider key is needed on a release runner.
 
 Release publishing/download links now target this repository (`corporationdev/compound`). Upstream auto-update, install telemetry, hard-coded Sentry reporting, and the upstream Homebrew tap workflow were removed. Desktop builds are named Compound, with bundle ID `dev.corporation.compound`, Compound artwork, and `Compound-arm64.dmg` releases. The CLI command is now `compound`; update older scripts that invoke `dapi`. See [branding-audit.md](branding-audit.md).
 
 References: [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer), [Convex Better Auth](https://labs.convex.dev/better-auth), [Cloudflare fixed-length request streams](https://developers.cloudflare.com/workers/runtime-apis/request/), [R2 lifecycle API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/lifecycle/methods/update/).
+
+Convex lifecycle reference: [named previews preserve existing data; preview-create resets it](https://docs.convex.dev/production/multiple-deployments), [Management API team tokens](https://docs.convex.dev/management-api/overview).

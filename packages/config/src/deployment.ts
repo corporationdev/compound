@@ -5,4 +5,6 @@
 export const deployment = {
   rootDomain: 'compound.mov',
   productionConvexDeployment: 'strong-panda-857',
+  convexTeamSlug: 'corporation',
+  convexProjectSlug: 'compound',
 } as const;

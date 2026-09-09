@@ -65,7 +65,7 @@ export interface ProjectBundle {
 }
 
 export interface GlobalDBSchema extends idb.DBSchema {
-  meta: { key: string; value: boolean };
+  meta: { key: string; value: boolean | string };
   roots: {
     value: ProjectRoot;
     key: string;
@@ -113,7 +113,7 @@ const folderLabel = (path: string): string => path.split(/[\\/]/).filter(Boolean
  * makes it the active one. The kind is the caller's to say: a path re-opened
  * another way takes the new kind.
  */
-export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 'multi'): Promise<ProjectRoot> {
+export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 'multi', stage?: string): Promise<ProjectRoot> {
   const db = await dbPromise;
   const now = new Date().toISOString();
   const existing = await db.getFromIndex('roots', 'by-path', path);
@@ -123,6 +123,7 @@ export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 
     : { id: nanoid(), path, name: folderLabel(path), kind, createdAt: now, lastUsedAt: now };
 
   await db.put('roots', root);
+  if (kind === 'multi' && stage) await db.put('meta', path, `project-root:${stage}`);
   return root;
 }
 
@@ -138,8 +139,19 @@ export async function listProjectRoots(kind?: ProjectRootKind): Promise<ProjectR
  * when there is none. Single-project roots never qualify — making one active
  * would point the dashboard (and "new project") into a project folder.
  */
-export async function lastUsedProjectRoot(): Promise<ProjectRoot | null> {
+export async function lastUsedProjectRoot(stage?: string): Promise<ProjectRoot | null> {
   const db = await dbPromise;
+  if (stage) {
+    const path = await db.get('meta', `project-root:${stage}`);
+    if (typeof path === 'string') {
+      const root = await db.getFromIndex('roots', 'by-path', path);
+      return root && normalizeRoot(root).kind === 'multi' ? normalizeRoot(root) : null;
+    }
+    // Preserve the existing selection for the first stage after upgrading.
+    // Later stages start with their own default, rather than reusing that root.
+    if (await db.get('meta', 'project-root:legacy-adopted')) return null;
+    await db.put('meta', true, 'project-root:legacy-adopted');
+  }
   let cursor = await db
     .transaction('roots', 'readonly')
     .store.index('by-last-used')
@@ -147,7 +159,10 @@ export async function lastUsedProjectRoot(): Promise<ProjectRoot | null> {
 
   while (cursor) {
     const root = normalizeRoot(cursor.value);
-    if (root.kind === 'multi') return root;
+    if (root.kind === 'multi') {
+      if (stage) await db.put('meta', root.path, `project-root:${stage}`);
+      return root;
+    }
     cursor = await cursor.continue();
   }
   return null;

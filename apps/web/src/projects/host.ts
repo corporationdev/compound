@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Renderer half of on-disk projects. Projects live as folders under a root
-// (persisted) — a default one until the user picks another; each project's
+// (persisted) — a stage default until the user picks another; each project's
 // package.json is its record (`projectId`, `displayName`, `main`). The
 // desktop main process scans, scaffolds, renames, copies, trashes, compiles,
 // and watches them. Desktop only for now: without the bridge every call
@@ -26,9 +26,8 @@ import type { CompileResult, ProjectInfo, SourceEdit, WriteResult } from '@deskt
 export type { CompileResult, ProjectInfo, SourceEdit, WriteResult };
 
 // The roots live in the app's IndexedDB (see @/lib/db) as a list
-// keyed by path. The app works against one of them — the one used last — but
-// the store is already the list several roots will need, so growing into them
-// is UI rather than a migration.
+// keyed by path. The app works against one of them — the saved selection for the current stage — and
+// each stage remembers its own active path in the database metadata.
 //
 // Reading a database is asynchronous, so the root starts null and arrives a
 // tick later. Every call here waits for it, leaving only the UI to tell "no
@@ -37,25 +36,30 @@ export type { CompileResult, ProjectInfo, SourceEdit, WriteResult };
 const [projectsRoot, setProjectsRoot] = createSignal<string | null>(null);
 const [rootsReady, setRootsReady] = createSignal(false);
 
-/** The projects root folder: null until one is picked, and until `rootsReady`. */
+/** The selected/default projects folder; null while initializing or unavailable. */
 export { projectsRoot };
 
-/** Whether the roots have been read back from the database yet. */
+/** Whether the saved selection or stage default has finished initializing. */
 export { rootsReady };
 
-const ready = new Promise<void>((resolve) => {
-	lastUsedProjectRoot()
-		.then((root) => setProjectsRoot(root?.path ?? null))
-		.catch((error) => console.error('[projects] could not read the projects roots', error))
-		.finally(() => {
-			setRootsReady(true);
-			resolve();
-		});
-});
+let projectStage: string | undefined;
+const ready = (async () => {
+	if (!window.desktop) return;
+	const config = await mainBridge.call(MAIN_CHANNELS.CLOUD_CONFIG, undefined);
+	projectStage = config.stage;
+	const saved = await lastUsedProjectRoot(projectStage);
+	const root = saved?.path ?? await mainBridge.call(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, undefined);
+	if (root) {
+		await rememberProjectRoot(root, 'multi', projectStage);
+		setProjectsRoot(root);
+	}
+})()
+	.catch((error) => console.error('[projects] could not initialize the projects folder', error))
+	.finally(() => setRootsReady(true));
 
 export const isDesktop = (): boolean => !!window.desktop;
 
-/** The projects root, waited for: null off the desktop and until one is picked. */
+/** The initialized projects root, or null when unavailable/off desktop. */
 export async function getProjectsRoot(): Promise<string | null> {
 	await ready;
 	return projectsRoot();
@@ -63,10 +67,11 @@ export async function getProjectsRoot(): Promise<string | null> {
 
 /** Opens the native folder picker and remembers the chosen root. */
 export async function pickProjectsRoot(): Promise<string | null> {
+	await ready;
 	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_ROOT, undefined);
 	if (!root) return null;
 
-	await rememberProjectRoot(root);
+	await rememberProjectRoot(root, 'multi', projectStage);
 	setProjectsRoot(root);
 	return root;
 }
@@ -89,7 +94,7 @@ export async function ensureProjectsRoot(): Promise<string | null> {
 	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, undefined);
 	if (!root) return pickProjectsRoot();
 
-	await rememberProjectRoot(root);
+	await rememberProjectRoot(root, 'multi', projectStage);
 	setProjectsRoot(root);
 	return root;
 }

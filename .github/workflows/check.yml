@@ -16,6 +16,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run test:cloud
+      - run: bun test scripts/preview.test.ts
+      - run: bun test apps/web/test/project-roots.test.ts
       - run: bun run test:branding
       - run: bun run build
       - run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload

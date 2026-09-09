@@ -1,5 +1,6 @@
 import { getStageKind } from '@compound/config/stage';
 import { resolveRuntimeContext } from '@compound/config/runtime';
+import { convexTarget } from './convex-target';
 import {
   stageFrom,
   scopedEnv,
@@ -22,18 +23,9 @@ export function writeRuntime(stage: string) {
   requireKeys(infra, ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'ALCHEMY_PASSWORD', 'ALCHEMY_STATE_TOKEN']);
   requireKeys(server, ['CLOUDFLARE_ACCOUNT_ID', ...workerSecretKeys]);
   requireKeys(backend, ['CONVEX_DEPLOY_KEY']);
-  const keyPrefix = backend.CONVEX_DEPLOY_KEY!.split('|')[0]!.split(':');
-  if (keyPrefix.length !== 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(keyPrefix[1]!)) {
-    throw new Error(
-      'Use a deployment-specific Convex key; project-level preview keys are not supported',
-    );
-  }
-  const keyUrl = `https://${keyPrefix[1]}.convex.cloud`;
   const local = getStageKind(stage) === 'dev' ? readEnv('packages/backend/.env.local') : {};
   // Deployment outputs override discovery; stale generated app .env URLs are never inputs.
-  const convexUrl = process.env.CONVEX_URL?.trim() || local.CONVEX_URL || keyUrl;
-  if (convexUrl !== keyUrl)
-    throw new Error('Convex deployment output does not match the selected deploy key');
+  const convexUrl = convexTarget(stage, backend.CONVEX_DEPLOY_KEY!, process.env.CONVEX_URL?.trim() || local.CONVEX_URL).url;
   const runtime = resolveRuntimeContext(stage, { convexUrl });
   if (!/^[a-f0-9]{32}$/.test(server.CLOUDFLARE_ACCOUNT_ID!))
     throw new Error('Invalid Cloudflare account id');

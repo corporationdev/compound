@@ -15,6 +15,7 @@ import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
 import { isHeadless } from "./cli-server";
+import { cloudConfig } from "./cloud";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import { applyEdits, editLabel, stampProject } from "./edit";
@@ -155,14 +156,15 @@ export const getProject = (dir: string): Promise<ProjectInfo | null> => describe
  * sync services leave alone: iCloud's "Desktop & Documents Folders" covers
  * only those two, and OneDrive's Known Folder Move only Desktop, Documents,
  * and Pictures. It also needs no macOS permission prompt, which Documents and
- * Desktop do. Created on demand, so a user who never makes a project never
- * gets the folder.
+ * Desktop do. Created at startup for the selected stage: compound in
+ * production, compound-<stage> in development and preview.
  *
  * Null when it turns out to be synced after all and the user would rather
  * pick somewhere else — the caller falls back to `pickRoot`.
  */
 export async function defaultRoot(window: BrowserWindow | null): Promise<string | null> {
-  const dir = join(app.getPath("videos"), "Compound");
+  const { projectsFolderName } = await cloudConfig();
+  const dir = join(app.getPath("videos"), projectsFolderName);
   if (!(await confirmCloudLocation(window, dir, "Choose another folder"))) return null;
   await mkdir(dir, { recursive: true });
   return dir;

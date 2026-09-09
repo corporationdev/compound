@@ -1,0 +1,39 @@
+name: Teardown Preview
+on:
+  pull_request:
+    types: [closed]
+concurrency:
+  group: preview-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref != 'main' && github.actor != 'dependabot[bot]'
+    environment: Preview
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/preview-stage
+        with:
+          branch: ${{ github.event.pull_request.head.ref }}
+      - name: Check whether the PR is still closed
+        id: current
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.issue.number });
+            core.setOutput('closed', pr.state === 'closed');
+      - uses: ./.github/actions/inject-secrets
+        if: steps.current.outputs.closed == 'true'
+        with:
+          stage: ${{ env.STAGE }}
+          op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Destroy Alchemy and delete Convex preview
+        if: steps.current.outputs.closed == 'true'
+        run: bun scripts/teardown-preview.ts --stage "$STAGE"

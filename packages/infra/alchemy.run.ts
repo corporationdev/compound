@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolveRuntimeContext } from '@compound/config/runtime';
 import alchemy from 'alchemy';
-import { R2Bucket, Tunnel, Worker } from 'alchemy/cloudflare';
+import { R2Bucket, Tunnel, Worker, Vite } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
 import { config } from 'dotenv';
 
@@ -28,6 +28,7 @@ export const mediaBucket = await R2Bucket('media', {
   name: runtime.bucket,
   devDomain: false,
   dev: { remote: true },
+  empty: runtime.stageKind === 'preview',
   cors: [{
     allowed: { origins: [runtime.webUrl], methods: ['PUT'], headers: ['Content-Type'] },
     maxAgeSeconds: 3600,
@@ -77,6 +78,19 @@ export const serverTunnel = useServerTunnel
     })
   : undefined;
 
+// PostBob hosts its web frontend through Alchemy Vite outside local development.
+export const web = !useServerTunnel
+  ? await Vite('web', {
+      name: `compound-web-${stage}`,
+      adopt: true,
+      cwd: '../../apps/web',
+      assets: 'dist',
+      build: { command: 'bun run build', env: runtime.webClientEnv, memoize: false },
+      domains: [new URL(runtime.webUrl).hostname],
+      compatibilityDate: '2026-05-01',
+    })
+  : undefined;
+
 if (serverTunnel && app.local) {
   const cloudflared = [
     '/opt/homebrew/bin/cloudflared', '/usr/local/bin/cloudflared', '/usr/bin/cloudflared',
@@ -92,4 +106,5 @@ if (serverTunnel && app.local) {
 
 console.log(`Stage -> ${stage}`);
 console.log(`Server -> ${useServerTunnel ? runtime.serverUrl : server.url}`);
+if (web) console.log(`Web -> ${runtime.webUrl}`);
 await app.finalize();

@@ -125,7 +125,7 @@ export type MainChannel = (typeof MAIN_CHANNELS)[keyof typeof MAIN_CHANNELS];
 // one of these by its host, so auth and checkout never consume each other's.
 
 export type CloudAuthOperation = 'sendCode' | 'verifyCode' | 'session' | 'token' | 'signOut' | 'updateUser' | 'deleteUser' | 'requestEmailChange' | 'changeEmail';
-export type CloudConfig = { convexUrl: string; authUrl: string; serverUrl: string };
+export type CloudConfig = { stage: string; projectsFolderName: string; convexUrl: string; authUrl: string; serverUrl: string };
 export type MainRequestMap = {
   [MAIN_CHANNELS.CLOUD_CONFIG]: { request: void; response: CloudConfig };
   [MAIN_CHANNELS.CLOUD_AUTH]: { request: { operation: CloudAuthOperation; body?: Record<string, unknown> }; response: unknown };

@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron';
 import { readFile, writeFile, mkdir, rm, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { projectsFolderNameForStage, validateStage } from '@compound/config/runtime';
 import type { CloudAuthOperation, CloudConfig } from './main-channels';
 
 const AUTH_ROUTES: Record<CloudAuthOperation, string> = {
@@ -26,7 +27,9 @@ export async function cloudConfig(): Promise<CloudConfig> {
       )
         throw new Error('Invalid cloud URL');
     }
-    return { convexUrl: value.convexUrl, authUrl: value.authUrl, serverUrl: value.serverUrl };
+    const stage = validateStage(value.stage);
+    const projectsFolderName = projectsFolderNameForStage(stage);
+    return { stage, projectsFolderName, convexUrl: value.convexUrl, authUrl: value.authUrl, serverUrl: value.serverUrl };
   } catch {
     throw new Error(
       'Cloud is not configured. Run bun run setup after creating the Compound secrets.',

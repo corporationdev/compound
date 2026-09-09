@@ -61,6 +61,8 @@ test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () 
   expect(dev.serverUrl).toBe('https://server-dev-isaac-1234.compound.example');
   expect(dev.convexSiteUrl).toBe('https://dev-one.convex.site');
   expect(dev.bucket).toBe('compound-media-dev-isaac-1234');
+  expect(dev.desktopConfig.stage).toBe('dev-isaac-1234');
+  expect(dev.desktopConfig.projectsFolderName).toBe('compound-dev-isaac-1234');
   const preview = resolveRuntimeContext('pr-42', {
     ...identity,
     convexUrl: 'https://preview-one.convex.cloud',
@@ -71,10 +73,12 @@ test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () 
     preview.webClientEnv.VITE_SERVER_URL.replace('server-', 'app-'),
   );
   expect(preview.desktopConfig.serverUrl).toBe(preview.webClientEnv.VITE_SERVER_URL);
+  expect(preview.desktopConfig.projectsFolderName).toBe('compound-pr-42');
   const prod = resolveRuntimeContext('prod', identity);
   expect(prod.webUrl).toBe('https://app.compound.example');
   expect(prod.serverUrl).toBe('https://server.compound.example');
   expect(prod.convexUrl).toBe('https://production-one.convex.cloud');
+  expect(prod.desktopConfig.projectsFolderName).toBe('compound');
   expect(prod.backendEnv.RESEND_FROM_EMAIL).toBe('Compound <no-reply@compound.example>');
 });
 test('runtime fails on missing identity, invalid deployment outputs and production mismatches', () => {

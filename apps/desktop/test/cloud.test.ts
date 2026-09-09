@@ -24,6 +24,7 @@ test('native session persists only the signed header; queued logout cannot be un
   await writeFile(
     join(directory, 'runtime-config.json'),
     JSON.stringify({
+      stage: 'dev-test',
       convexUrl: 'https://test.convex.cloud',
       authUrl: 'https://test.convex.site',
       serverUrl: 'https://media.example.com',

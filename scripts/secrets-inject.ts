@@ -31,7 +31,9 @@ for (const key of allKeys) {
     throw new Error(`Invalid .env.op entry ${key}: only vault references belong here; keep the service account token in root .env`);
 }
 for (const key of included) if (!allKeys.has(key)) throw new Error(`Unknown --include key: ${key}`);
-const keys = included.length ? included : [...allKeys];
+const keys = included.length ? included : [...allKeys].filter(
+  (key) => key !== 'CONVEX_MANAGEMENT_TOKEN' || deriveEnvTier(stage) === 'preview',
+);
 requireKeys(
   Object.fromEntries(keys.map((key) => [key, template[key]?.replace('op://', '') ?? ''])),
   keys,
