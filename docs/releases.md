@@ -28,15 +28,20 @@ Apple credentials do not belong in the application `.env.op` or client bundle.
 
 ## Cut a release
 
-From a clean working tree on the production branch:
+Open **GitHub → Actions → Release → Run workflow**:
 
-```sh
-bun run release patch
-# Run the git push command printed by the release script.
-```
+1. Leave the branch set to **main**.
+2. Choose **patch** (the default), **minor**, or **major**.
+3. Click **Run workflow**.
 
-Pushing the version tag starts **Release**. An existing tag can also be selected
-with the workflow's manual Run workflow action. The job builds one universal
+The workflow bumps the shared version, commits it to `main`, and creates the
+version tag automatically. No local commands or manual tags are needed. Re-running
+the same workflow run reuses its tag instead of bumping the version again.
+The GitHub Actions token must be allowed to push the version commit to `main`;
+branch protection rules still apply. The version commit uses the workflow token,
+so it does not start another release or production deployment.
+
+The job then builds one universal
 Mac app, signs and notarizes it, checks both architectures and the bundled CLI,
 and produces `Compound-mac-universal.dmg` and `Compound-mac-universal.zip`.
 

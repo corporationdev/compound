@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Cuts a release: bumps the single global version in the root and all app
-// package.jsons, refreshes the lockfile, commits, and tags. Pushing the tag
-// is what triggers the Release workflow, so that stays a manual step.
+// package.jsons, refreshes the lockfile, commits, and tags. The Release workflow
+// calls this automatically and pushes the refs; local use prints a push command.
 // Usage: bun run release <patch|minor|major|x.y.z>
 
 import { execFileSync } from "node:child_process";

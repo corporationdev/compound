@@ -4,26 +4,69 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing version tag to release (for example v0.205.0)'
+      bump:
+        description: 'Version bump'
         required: true
-        type: string
+        default: patch
+        type: choice
+        options: [patch, minor, major]
 concurrency:
   group: desktop-production-release
   cancel-in-progress: false
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Require main for a new release
+        if: github.event_name == 'workflow_dispatch'
+        run: test "$GITHUB_REF" = refs/heads/main
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        if: github.event_name == 'workflow_dispatch'
+      - name: Prepare release version
+        id: release
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            # Re-running this workflow must reuse its version, even if main has advanced.
+            tag="$(git for-each-ref --format='%(refname:short)|%(contents:subject)' refs/tags | awk -F'|' -v subject="Release workflow $GITHUB_RUN_ID" '$2 == subject { print $1 }')"
+            if [ -z "$tag" ]; then
+              git config user.name 'github-actions[bot]'
+              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              bun run release "$RELEASE_BUMP"
+              tag="$(git describe --tags --exact-match HEAD)"
+              git tag --force --annotate "$tag" --message "Release workflow $GITHUB_RUN_ID"
+              # Fail without publishing either ref if main changed while preparing the release.
+              git push --atomic origin HEAD:refs/heads/main "refs/tags/$tag"
+            fi
+          fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
   publish-macos:
+    needs: prepare-release
     runs-on: macos-latest
     environment: prod
     timeout-minutes: 90
     permissions:
       contents: write
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.prepare-release.outputs.tag }}
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Check versions match tag
