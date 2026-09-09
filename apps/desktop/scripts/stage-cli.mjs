@@ -48,6 +48,21 @@ execFileSync("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-p
   stdio: "inherit",
 });
 
+// Ship one esbuild executable that runs on both Mac architectures. Keeping every
+// copy universal also lets Electron merge the two app bundles without exceptions.
+if (process.platform === "darwin") {
+  const esbuildVersion = JSON.parse(readFileSync(join(stageDir, "node_modules/esbuild/package.json"), "utf8")).version;
+  execFileSync("npm", ["install", "--force", "--ignore-scripts", "--no-save", "--no-audit", "--no-fund", "--no-package-lock",
+    `@esbuild/darwin-arm64@${esbuildVersion}`, `@esbuild/darwin-x64@${esbuildVersion}`], {
+    cwd: stageDir, stdio: "inherit",
+  });
+  const binaries = ["darwin-arm64", "darwin-x64"].map((arch) => join(stageDir, "node_modules/@esbuild", arch, "bin/esbuild"));
+  const universal = join(stageDir, "esbuild-universal");
+  execFileSync("lipo", ["-create", ...binaries, "-output", universal]);
+  for (const binary of [...binaries, join(stageDir, "node_modules/esbuild/bin/esbuild")]) cpSync(universal, binary);
+  rmSync(universal);
+}
+
 // The wrapper runs the CLI bundle on the app's own Electron binary in Node
 // mode, so users need no separate Node install. It resolves symlinks first
 // because both Homebrew and the in-app installer link it into PATH.
@@ -73,7 +88,7 @@ if (process.platform === "darwin" && !process.env.SKIP_SIGN) {
   const identities = execFileSync("security", ["find-identity", "-v", "-p", "codesigning"], {
     encoding: "utf8",
   });
-  const identity = identities.match(/"(Developer ID Application: [^"]+)"/)?.[1];
+  const identity = process.env.APPLE_SIGNING_IDENTITY ?? identities.match(/"(Developer ID Application: [^"]+)"/)?.[1];
   if (identity) {
     const esbuildDir = join(stageDir, "node_modules", "@esbuild");
     for (const pkg of readdirSync(esbuildDir)) {
@@ -82,7 +97,10 @@ if (process.platform === "darwin" && !process.env.SKIP_SIGN) {
         stdio: "inherit",
       });
     }
+    execFileSync("codesign", ["--force", "--options", "runtime", "--timestamp", "--sign", identity,
+      join(stageDir, "node_modules/esbuild/bin/esbuild")], { stdio: "inherit" });
   } else {
+    if (process.env.COMPOUND_RELEASE === "1") throw new Error("No Developer ID signing identity found");
     console.warn("stage-cli: no Developer ID identity found, leaving esbuild binary unsigned");
   }
 }

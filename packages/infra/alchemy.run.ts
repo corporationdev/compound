@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolveRuntimeContext } from '@compound/config/runtime';
+import { release } from '@compound/config/release';
 import alchemy from 'alchemy';
 import { R2Bucket, Tunnel, Worker, Vite } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
@@ -87,6 +88,27 @@ export const web = !useServerTunnel
       assets: 'dist',
       build: { command: 'bun run build', env: runtime.webClientEnv, memoize: false },
       domains: [new URL(runtime.webUrl).hostname],
+      compatibilityDate: '2026-05-01',
+    })
+  : undefined;
+
+export const releases = runtime.stageKind === 'production'
+  ? await R2Bucket('releases', {
+      name: release.bucket, adopt: true, devDomain: false, delete: false,
+    })
+  : undefined;
+
+export const landing = runtime.landingHostname
+  ? await Vite('landing', {
+      name: `compound-landing-${stage}`,
+      adopt: true,
+      cwd: '../../apps/landing',
+      entrypoint: 'worker/index.ts',
+      assets: { directory: 'dist', run_worker_first: ['/download', '/releases/*'] },
+      spa: false,
+      build: { command: 'bun run build', memoize: false },
+      bindings: releases ? { RELEASES: releases } : {},
+      domains: [runtime.landingHostname],
       compatibilityDate: '2026-05-01',
     })
   : undefined;

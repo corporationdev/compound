@@ -10,6 +10,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'));
+const productionRelease = process.env.COMPOUND_RELEASE === '1';
+if (productionRelease) {
+  if (process.env.SKIP_SIGN) throw new Error('Production releases must be signed');
+  for (const key of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_SIGNING_IDENTITY'])
+    if (!process.env[key]) throw new Error(`Missing release credential: ${key}`);
+}
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -30,20 +36,22 @@ const config: ForgeConfig = {
     // Staged by scripts/stage-{cli,docs,skills}.mjs; end up at
     // Contents/Resources/{cli,docs,skills}.
     extraResource: ['./cli', './docs', './skills'],
-    osxSign: process.env.SKIP_SIGN ? undefined : {},
+    osxSign: process.env.SKIP_SIGN ? undefined : {
+      ...(process.env.APPLE_SIGNING_IDENTITY ? { identity: process.env.APPLE_SIGNING_IDENTITY } : {}),
+    },
     osxNotarize:
-      process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
+      !process.env.SKIP_SIGN && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
         ? {
-            appleId: process.env.APPLE_ID,
-            appleIdPassword: process.env.APPLE_PASSWORD,
-            teamId: process.env.APPLE_TEAM_ID,
+            appleApiKey: process.env.APPLE_API_KEY,
+            appleApiKeyId: process.env.APPLE_API_KEY_ID,
+            appleApiIssuer: process.env.APPLE_API_ISSUER,
           }
         : undefined,
   },
   makers: [
     new MakerZIP({}, ['darwin']),
-    new MakerDMG({
-      name: `Compound-${process.arch}`,
+    new MakerDMG((arch) => ({
+      name: `Compound-mac-${arch}`,
       icon: './assets/icon.icns',
       // Dark, on-brand window; @2x sibling is picked up automatically for retina.
       background: './assets/dmg-background.png',
@@ -56,7 +64,7 @@ const config: ForgeConfig = {
         { x: 188, y: 217, type: 'file', path: opts.appPath },
         { x: 470, y: 217, type: 'link', path: '/Applications' },
       ],
-    }),
+    })),
   ],
   publishers: [
     new PublisherGithub({

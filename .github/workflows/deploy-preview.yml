@@ -31,7 +31,7 @@ jobs:
             core.setOutput('deploy', pr.state === 'open' && pr.head.sha === context.payload.pull_request.head.sha);
       - name: Check
         if: steps.current.outputs.deploy == 'true'
-        run: bun run check && bun run test:cloud && bun test scripts/preview.test.ts
+        run: bun run check && bun run test:cloud && bun test scripts/preview.test.ts && bun run --cwd apps/landing test
       - name: Inject preview secrets
         if: steps.current.outputs.deploy == 'true'
         uses: ./.github/actions/inject-secrets
@@ -55,8 +55,9 @@ jobs:
             const config = success ? JSON.parse(fs.readFileSync('apps/desktop/runtime-config.json', 'utf8')) : null;
             const server = config?.serverUrl;
             const web = server?.replace('://server-', '://app-');
+            const landing = server?.replace('://server-', '://');
             const logs = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-            const body = [marker, `## Preview deployment ${success ? 'ready' : 'failed'}`, '', `Stage: \`${process.env.STAGE}\``, '', ...(success ? [`[Web preview](${web}) · [API health](${server}/health)`, '', 'Project-folder editing requires the desktop app. Preview data is preserved across updates until teardown or Convex expiry.'] : []), '', `[Deployment logs](${logs})`].join('\n');
+            const body = [marker, `## Preview deployment ${success ? 'ready' : 'failed'}`, '', `Stage: \`${process.env.STAGE}\``, '', ...(success ? [`[Landing page](${landing}) · [Web preview](${web}) · [API health](${server}/health)`, '', 'Project-folder editing requires the desktop app. Preview data is preserved across updates until teardown or Convex expiry.'] : []), '', `[Deployment logs](${logs})`].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: context.issue.number });
             const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
             if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });

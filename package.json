@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "dev:web_v1": "bun run --cwd apps/web dev",
+    "dev:landing": "bun run --cwd apps/landing dev",
+    "build:landing": "bun run --cwd apps/landing build",
     "dev:desktop": "node scripts/dev-desktop.mjs",
     "build": "bun run --cwd apps/web build",
     "build:web_v1": "bun run --cwd apps/web build",

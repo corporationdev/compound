@@ -1,0 +1,28 @@
+name: Deploy Production
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Check
+        run: bun run check && bun run test:cloud && bun run --cwd apps/landing test
+      - name: Inject production secrets
+        uses: ./.github/actions/inject-secrets
+        with:
+          stage: prod
+          op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Deploy Convex and Alchemy
+        run: bun run deploy --stage prod

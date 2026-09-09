@@ -1,29 +1,35 @@
 name: Release
-
 on:
   push:
-    tags: ["v*"]
-
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to release (for example v0.205.0)'
+        required: true
+        type: string
+concurrency:
+  group: desktop-production-release
+  cancel-in-progress: false
 jobs:
   publish-macos:
     runs-on: macos-latest
     environment: prod
+    timeout-minutes: 90
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.11
-
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       - name: Check versions match tag
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          TAG="${RELEASE_TAG#v}"
           for PKG in package.json apps/desktop/package.json apps/cli/package.json apps/web/package.json; do
             V="$(node -p "require('./$PKG').version")"
             if [ "$V" != "$TAG" ]; then
@@ -31,30 +37,59 @@ jobs:
               exit 1
             fi
           done
-
-      - run: bun install --frozen-lockfile
-
+      - name: Check
+        run: bun run check && bun run test:cloud && bun run --cwd apps/landing test
       - name: Derive public production config
         run: bun scripts/release-env.ts
-
-      - name: Import signing certificate
+      - name: Load Apple release credentials
+        uses: 1password/load-secrets-action@v3
+        with:
+          export-env: true
         env:
-          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          MACOS_CERT_P12: op://compound-prod/Apple/certificate
+          MACOS_CERT_PASSWORD: op://compound-prod/Apple/certificate-password
+          APPLE_API_KEY_BASE64: op://compound-prod/Apple/api-key
+          APPLE_API_KEY_ID: op://compound-prod/Apple/api-key-id
+          APPLE_API_ISSUER: op://compound-prod/Apple/api-issuer
+          APPLE_TEAM_ID: op://compound-prod/Apple/team-id
+      - name: Prepare signing keychain and validate Apple access
+        run: bun scripts/release-signing.ts
+      - name: Build signed and notarized universal installer
+        run: bun run --cwd apps/desktop make --arch=universal
+      - name: Verify signature, notarization, architectures, and bundled CLI
+        run: bun scripts/release-artifacts.ts
+      - name: Save verified release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compound-mac-universal
+          path: .generated/release/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+      - name: Attach installers to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          KEYCHAIN_PASSWORD="$(uuidgen)"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
-          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
-          rm cert.p12
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-
-      - name: Build, notarize, and publish draft release
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" .generated/release/*.dmg .generated/release/*.zip .generated/release/checksums.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Load installer storage credentials
+        uses: 1password/load-secrets-action@v3
+        with:
+          export-env: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bun run --cwd apps/desktop publish
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: op://compound-prod/Cloudflare/account-id
+          R2_ACCESS_KEY_ID: op://compound-prod/R2/access-key-id
+          R2_SECRET_ACCESS_KEY: op://compound-prod/R2/secret-access-key
+      - name: Publish the public download
+        run: bun scripts/release-publish.ts
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+      - name: Clean up signing credentials
+        if: always()
+        run: bun scripts/release-signing-cleanup.ts

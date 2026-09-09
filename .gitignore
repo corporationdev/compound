@@ -42,6 +42,7 @@ skills-lock.json
 .claude
 # Generated Compound runtime configuration and local secrets
 .generated/
+.astro/
 .alchemy/
 .wrangler/
 .dev.vars*

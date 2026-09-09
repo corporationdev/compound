@@ -51,6 +51,7 @@ export function resolveRuntimeContext(
   const serverHostname = `${production ? 'server' : `server-${stage}`}.${rootDomain}`;
   // PostBob's dev tunnel forwards this stable hostname to the local Worker on :3000.
   const serverUrl = `https://${serverHostname}`;
+  const landingHostname = local ? undefined : production ? rootDomain : `${stage}.${rootDomain}`;
   return {
     stage,
     stageKind: kind,
@@ -60,6 +61,8 @@ export function resolveRuntimeContext(
     webUrl,
     serverUrl,
     serverHostname,
+    landingHostname,
+    landingUrl: landingHostname ? `https://${landingHostname}` : 'http://localhost:3002',
     bucket: `compound-media-${stage}`,
     backendEnv: { SITE_URL: webUrl, RESEND_FROM_EMAIL: `Compound <no-reply@${rootDomain}>` },
     serverBindings: { CONVEX_URL: convexUrl, CORS_ORIGIN: webUrl },

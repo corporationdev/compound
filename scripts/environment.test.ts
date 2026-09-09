@@ -58,6 +58,7 @@ test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () 
     convexUrl: 'https://dev-one.convex.cloud',
   });
   expect(dev.webUrl).toBe('http://localhost:5173');
+  expect(dev.landingUrl).toBe('http://localhost:3002');
   expect(dev.serverUrl).toBe('https://server-dev-isaac-1234.compound.example');
   expect(dev.convexSiteUrl).toBe('https://dev-one.convex.site');
   expect(dev.bucket).toBe('compound-media-dev-isaac-1234');
@@ -68,6 +69,7 @@ test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () 
     convexUrl: 'https://preview-one.convex.cloud',
   });
   expect(preview.webUrl).toBe('https://app-pr-42.compound.example');
+  expect(preview.landingHostname).toBe('pr-42.compound.example');
   expect(preview.serverUrl).toBe('https://server-pr-42.compound.example');
   expect(preview.serverBindings.CORS_ORIGIN).toBe(
     preview.webClientEnv.VITE_SERVER_URL.replace('server-', 'app-'),
@@ -76,6 +78,7 @@ test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () 
   expect(preview.desktopConfig.projectsFolderName).toBe('compound-pr-42');
   const prod = resolveRuntimeContext('prod', identity);
   expect(prod.webUrl).toBe('https://app.compound.example');
+  expect(prod.landingUrl).toBe('https://compound.example');
   expect(prod.serverUrl).toBe('https://server.compound.example');
   expect(prod.convexUrl).toBe('https://production-one.convex.cloud');
   expect(prod.desktopConfig.projectsFolderName).toBe('compound');
