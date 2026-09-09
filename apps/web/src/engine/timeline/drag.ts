@@ -23,7 +23,7 @@ import {
 	TrimDragOrigin,
 	findAssetDuration,
 	store,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 import { Not, Or } from 'koota';
 
 import { clamp } from '@/utils';

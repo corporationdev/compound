@@ -1,9 +1,9 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* The everyday composition: sequenced A-roll, an image overlay, data-driven
  * titles via <For>, and a music bed under everything.
  *
  *   cp examples/01-basics.tsx ~/Projects/basics/index.tsx
- *   dapi open ~/Projects/basics
+ *   compound open ~/Projects/basics
  *
  * Sources are remote URLs so the example mounts anywhere; `src` equally takes
  * local paths ("/Movies/clip.mp4"), library paths ("b-roll/drone.mp4") and
@@ -14,7 +14,7 @@
  */
 
 import { For } from "solid-js";
-import type { Time } from "@diffusionstudio/jsx";
+import type { Time } from "@compound/jsx";
 
 const VIDEOS = "https://mdn.github.io/shared-assets/videos";
 const MUSIC = "https://mdn.github.io/webaudio-examples/audio-basics/outfoxing.mp3";

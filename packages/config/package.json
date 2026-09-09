@@ -1,0 +1,14 @@
+{
+  "name": "@compound/config",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./stage": "./src/stage.ts",
+    "./stage-kind": "./src/stage-kind.ts",
+    "./runtime": "./src/runtime.ts",
+    "./deployment": "./src/deployment.ts",
+    "./models": "./src/models.ts"
+  },
+  "scripts": { "check": "tsc --noEmit" },
+  "devDependencies": { "typescript": "~5.9.3", "@types/node": "^24.10.1" }
+}

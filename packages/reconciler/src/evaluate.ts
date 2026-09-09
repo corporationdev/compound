@@ -14,6 +14,8 @@ import { JSX_RUNTIME } from './runtime';
 const MODULES: Record<string, unknown> = {
 	'solid-js': solid,
 	'solid-js/store': solidStore,
+	'@compound/jsx': JSX_RUNTIME,
+	// Existing project sources and cached bundles keep using the same host.
 	'@diffusionstudio/jsx': JSX_RUNTIME,
 };
 
@@ -23,7 +25,7 @@ export function evaluate(code: string): () => unknown {
 
 	const require = (id: string): unknown => {
 		const resolved = MODULES[id];
-		if (!resolved) throw new Error(`Cannot import "${id}" — only solid-js and @diffusionstudio/jsx are available.`);
+		if (!resolved) throw new Error(`Cannot import "${id}" — only solid-js and @compound/jsx are available.`);
 		return resolved;
 	};
 

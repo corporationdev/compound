@@ -5,7 +5,7 @@
 // Cuts a release: bumps the single global version in the root and all app
 // package.jsons, refreshes the lockfile, commits, and tags. Pushing the tag
 // is what triggers the Release workflow, so that stays a manual step.
-// Usage: npm run release <patch|minor|major|x.y.z>
+// Usage: bun run release <patch|minor|major|x.y.z>
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -24,7 +24,7 @@ const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8"
 
 const arg = process.argv[2];
 if (!arg) {
-  console.error("Usage: npm run release <patch|minor|major|x.y.z>");
+  console.error("Usage: bun run release <patch|minor|major|x.y.z>");
   process.exit(1);
 }
 
@@ -62,12 +62,12 @@ for (const rel of PKGS) {
   writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
 }
 
-execFileSync("npm", ["install", "--package-lock-only", "--no-audit", "--no-fund"], {
+execFileSync("bun", ["install", "--lockfile-only"], {
   cwd: root,
   stdio: "inherit",
 });
 
-git("add", ...PKGS, "package-lock.json");
+git("add", ...PKGS, "bun.lock");
 git("commit", "-m", tag);
 git("tag", tag);
 

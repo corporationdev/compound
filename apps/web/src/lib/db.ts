@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { openDB } from 'idb';
+import { migrateLegacyDatabase } from './db-migration';
 import type * as idb from 'idb';
 import { nanoid } from 'nanoid';
 
@@ -25,7 +26,7 @@ export function generateProjectName(): string {
 /**
  * What a root's path points at: a folder of project folders ('multi', the
  * dashboard's kind), or one project folder that is itself the root ('single',
- * how `dapi open <path>` registers a project living anywhere on disk).
+ * how `compound open <path>` registers a project living anywhere on disk).
  */
 export type ProjectRootKind = 'multi' | 'single';
 
@@ -64,6 +65,7 @@ export interface ProjectBundle {
 }
 
 export interface GlobalDBSchema extends idb.DBSchema {
+  meta: { key: string; value: boolean };
   roots: {
     value: ProjectRoot;
     key: string;
@@ -78,11 +80,12 @@ export interface GlobalDBSchema extends idb.DBSchema {
   };
 }
 
-const DB_NAME = 'diffusion-studio-idb';
-const DB_VERSION = 2;
+const DB_NAME = 'compound-idb';
+const DB_VERSION = 3;
 
 const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
   upgrade(db) {
+    if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
     if (!db.objectStoreNames.contains('roots')) {
       const store = db.createObjectStore('roots', { keyPath: 'id' });
       store.createIndex('by-path', 'path', { unique: true });
@@ -92,6 +95,9 @@ const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
       db.createObjectStore('bundles', { keyPath: 'projectId' });
     }
   },
+}).then(async (db) => {
+  await migrateLegacyDatabase(db);
+  return db;
 });
 
 

@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { createContext, createSignal, onCleanup, useContext, type JSX, type Signal } from "solid-js";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { Expanded, getEntityTree, isMask, isSequence } from "@diffusionstudio/runtime";
+import { useWorld } from "@compound/koota-solid";
+import { Expanded, getEntityTree, isMask, isSequence } from "@compound/runtime";
 
 import { useEditor, useTimelineIndex } from "@/engine/hooks";
 import { useTimeline } from "@/context/timeline";

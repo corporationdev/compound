@@ -42,7 +42,7 @@ export type GenerateVideoOptions = {
 export type GenerateVoiceOptions = {
   /** The text to speak. */
   prompt: string;
-  /** Voice id; default the first voice from `dapi voices`. */
+  /** Voice id; default the first voice from `compound voices`. */
   voice?: string;
   seed?: number;
 };

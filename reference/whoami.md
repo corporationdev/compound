@@ -1,4 +1,4 @@
-# `dapi whoami`
+# `compound whoami`
 
 Prints the authenticated account, or `null` if signed out.
 

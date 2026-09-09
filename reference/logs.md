@@ -1,4 +1,4 @@
-# `dapi logs`
+# `compound logs`
 
 Prints recent console output from the running app: everything the devtools console shows, including page logs, worker logs, uncaught errors, and Chromium warnings. Oldest first. The app buffers the last 2000 entries in its main process, so the log survives page reloads and project switches; use this instead of relaunching with `ELECTRON_ENABLE_LOGGING=1` to see renderer-side errors.
 

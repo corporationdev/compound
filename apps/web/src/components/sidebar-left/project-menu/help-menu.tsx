@@ -28,23 +28,23 @@ export function HelpMenu() {
   return (
     <>
       <DropdownMenuGroup>
-        <DropdownMenuItem as="a" href="https://www.diffusion.studio/updates" target="_blank">
+        <DropdownMenuItem as="a" href="https://github.com/corporationdev/compound/releases" target="_blank">
           What’s new
         </DropdownMenuItem>
-        <DropdownMenuItem as="a" href="https://discord.gg/AYySWDhgNK" target="_blank">
-          Discord community
+        <DropdownMenuItem as="a" href="https://github.com/corporationdev/compound" target="_blank">
+          Source code
         </DropdownMenuItem>
       </DropdownMenuGroup>
 
       <DropdownMenuSeparator />
 
       <DropdownMenuGroup>
-        <DropdownMenuItem as="a" href="mailto:support@diffusion.studio" target="_blank">
+        <DropdownMenuItem as="a" href="https://github.com/corporationdev/compound/issues/new" target="_blank">
           Report issue
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={copyUserId}>Copy user id</DropdownMenuItem>
-        <DropdownMenuItem as="a" href="https://discord.gg/AYySWDhgNK" target="_blank">
-          Contact support
+        <DropdownMenuItem as="a" href="https://github.com/corporationdev/compound/issues" target="_blank">
+          Support issues
         </DropdownMenuItem>
       </DropdownMenuGroup>
     </>

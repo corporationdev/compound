@@ -1,10 +1,22 @@
+// Redraw requires the separately supplied vendor tarball documented in 11-redraw.tsx.
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
-    "jsxImportSource": "@diffusionstudio/jsx",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
-    "types": ["@webgpu/types"]
+    "jsxImportSource": "@compound/jsx",
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "@webgpu/types"
+    ]
   },
-  "include": ["*.tsx"]
+  "include": [
+    "*.tsx"
+  ],
+  "exclude": [
+    "11-redraw.tsx"
+  ]
 }

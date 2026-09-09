@@ -1,157 +1,89 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
 import { createSignal, Show } from 'solid-js';
-import { toast } from 'somoto';
-
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/ui/icon';
-import { TextField, TextFieldInput, TextFieldLabel } from '@/components/ui/text-field';
-import { DevAuthCodeInput } from '@/components/dev-auth-code-input';
-import { HeadlessIndicator } from '@/components/headless-indicator';
 import { useAuth } from '@/context/auth';
-
-type OAuthButtonProps = {
-  icon: string;
-  label: string;
-  onClick: () => void;
-};
-
-function OAuthButton(props: OAuthButtonProps) {
-  return (
-    <Button
-      variant="secondary"
-      class="w-full gap-0 px-0.5"
-      onClick={props.onClick}
-    >
-      <Icon name={props.icon} class="size-6" />
-      <span class="min-w-0 flex-1 text-center">{props.label}</span>
-      <span class="size-6 shrink-0" aria-hidden="true" />
-    </Button>
-  );
-}
-
+import { Button } from '@/components/ui/button';
+import { TextField, TextFieldInput, TextFieldLabel } from '@/components/ui/text-field';
+import { Icon } from '@/components/ui/icon';
+import { HeadlessIndicator } from '@/components/headless-indicator';
 export function LoginPage() {
   const auth = useAuth();
   const [email, setEmail] = createSignal('');
-  const [otpSending, setOtpSending] = createSignal(false);
-
-  const handleOtpSubmit = async (e: SubmitEvent) => {
-    e.preventDefault();
-
-    const value = email().trim();
-    if (!value) return;
-
-    setOtpSending(true);
-    const { error } = await auth.signInWithOtp(value);
-    setOtpSending(false);
-
-    if (error) {
-      toast.error(error);
-    } else {
-      toast.success('Check your email for the login link');
+  const [code, setCode] = createSignal('');
+  const [sent, setSent] = createSignal(false);
+  const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal('');
+  const submit = async (event: SubmitEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      if (sent()) await auth.verifyCode(email().trim(), code().trim());
+      else {
+        await auth.sendCode(email().trim());
+        setSent(true);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not sign in');
+    } finally {
+      setBusy(false);
     }
   };
-
   return (
-    <div class="flex flex-col bg-background fixed inset-0 z-999">
+    <div class="fixed inset-0 z-999 flex items-center justify-center bg-background">
       <HeadlessIndicator />
-
-      <Show when={!window.desktop}>
-        <div class="flex items-center gap-1 p-4">
-          <Icon name="diffusion-logo" class="size-6" />
-          <span class="text-sm font-450 text-foreground">Diffusion Studio</span>
-        </div>
-      </Show>
-
-      <div class="flex flex-1 items-center justify-center pb-16">
-        <div class="flex w-70 flex-col gap-3">
-          <div class="flex flex-col gap-3 rounded-xl bg-accent/40 p-4">
-            <div class="flex flex-col gap-4">
-              <div class="flex flex-col gap-1">
-                <h2 class="text-[12px] font-450 text-foreground">
-                  Sign in or sign up
-                </h2>
-                <p class="text-xs text-muted-foreground">
-                  Choose your preferred method
-                </p>
-              </div>
-
-              <div class="flex flex-col gap-3">
-                <OAuthButton
-                  icon="social.google"
-                  label="Continue with Google"
-                  onClick={() => auth.signInWithOAuth('google')}
-                />
-                <OAuthButton
-                  icon="social.github"
-                  label="Continue with GitHub"
-                  onClick={() => auth.signInWithOAuth('github')}
-                />
-              </div>
-
-              <div class="flex items-center justify-center gap-3">
-                <div class="h-px flex-1 bg-border" />
-                <span class="text-xs text-muted-foreground">or</span>
-                <div class="h-px flex-1 bg-border" />
-              </div>
-            </div>
-
-            <form class="flex flex-col gap-3" onSubmit={handleOtpSubmit}>
-              <TextField>
-                <TextFieldLabel
-                  uiSize="compact"
-                  class="text-xs text-muted-foreground"
-                >
-                  Email
-                </TextFieldLabel>
-                <TextFieldInput
-                  uiSize="compact"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email()}
-                  onInput={(e) => setEmail(e.currentTarget.value)}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  onKeyUp={(e) => e.stopPropagation()}
-                />
-              </TextField>
-
-              <Button
-                type="submit"
-                class="w-full"
-                disabled={otpSending() || !email().trim()}
-              >
-                {otpSending() ? 'Sending...' : 'Send magic link'}
-              </Button>
-            </form>
-          </div>
-
-          <DevAuthCodeInput />
-
-          <span class="px-1 text-center text-xs text-muted-foreground">
-            By continuing, you agree to our{' '}
-            <a
-              href="https://www.diffusion.studio/legal/privacy-policy"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline hover:text-foreground"
-            >
-              Privacy Policy
-            </a>{' '}
-            and{' '}
-            <a
-              href="https://www.diffusion.studio/legal/terms-of-service"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline hover:text-foreground"
-            >
-              Terms of Service
-            </a>
-            .
-          </span>
-        </div>
-      </div>
+      <form class="w-80 space-y-4 rounded-xl bg-accent/40 p-6" onSubmit={submit}>
+        <Icon name="compound-logo" class="size-10 rounded-lg" />
+        <h1 class="text-lg font-medium">Sign in to Compound</h1>
+        <p class="text-sm text-muted-foreground">
+          {sent()
+            ? 'Enter the code from your email.'
+            : 'We’ll email you a code. New accounts are created automatically.'}
+        </p>
+        <TextField>
+          <TextFieldLabel>Email</TextFieldLabel>
+          <TextFieldInput
+            type="email"
+            autocomplete="email"
+            required
+            disabled={sent()}
+            value={email()}
+            onInput={(e) => setEmail(e.currentTarget.value)}
+          />
+        </TextField>
+        <Show when={sent()}>
+          <TextField>
+            <TextFieldLabel>Verification code</TextFieldLabel>
+            <TextFieldInput
+              autocomplete="one-time-code"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              required
+              value={code()}
+              onInput={(e) => setCode(e.currentTarget.value)}
+            />
+          </TextField>
+        </Show>
+        <Show when={error() || auth.error()}>
+          <p role="alert" class="text-sm text-destructive">
+            {error() || auth.error()}
+          </p>
+        </Show>
+        <Button type="submit" class="w-full" disabled={busy()}>
+          {busy() ? 'Please wait…' : sent() ? 'Verify code' : 'Send code'}
+        </Button>
+        <Show when={sent()}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy()}
+            onClick={() => {
+              setSent(false);
+              setCode('');
+            }}
+          >
+            Change email or resend code
+          </Button>
+        </Show>
+      </form>
     </div>
   );
 }

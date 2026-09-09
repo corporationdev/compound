@@ -15,7 +15,7 @@ import { mainBridge } from '@/lib/ipc';
 import { track } from '@/lib/analytics';
 import { store } from '@/init';
 
-const SKILLS_COMMAND = 'npx skills add diffusionstudio/skills -g -y --all';
+const SKILLS_COMMAND = 'npx skills add corporationdev/compound -g -y --all';
 
 const [onboardingCompleted, setOnboardingCompleted] = createStoredSignal(
   store.define('onboarding.completed', false),
@@ -73,12 +73,12 @@ function StepButton(props: StepButtonProps) {
 }
 
 /**
- * Post-signup screen for setting up the agent dependencies: the dapi CLI and
+ * Post-signup screen for setting up the agent dependencies: the compound CLI and
  * the agent skills. Shown by AuthGate until dismissed; the dismissal is
  * per-device (same store as the promo banners).
  *
  * On desktop the CLI button links the bundled CLI into PATH via main (the
- * same flow as the "Install dapi Command Line Tool…" menu item); on the web,
+ * same flow as the "Install compound Command Line Tool…" menu item); on the web,
  * where the CLI can't be installed, it offers the desktop app instead.
  */
 export function OnboardingPage() {
@@ -110,12 +110,12 @@ export function OnboardingPage() {
       } else {
         setCliState('todo');
         if (result.status === 'error') {
-          toast('Could not install the dapi CLI', { description: result.error });
+          toast('Could not install the compound CLI', { description: result.error });
         }
       }
     } catch (error) {
       setCliState('todo');
-      toast('Could not install the dapi CLI', {
+      toast('Could not install the compound CLI', {
         description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -171,8 +171,8 @@ export function OnboardingPage() {
     <div class="flex flex-col bg-background fixed inset-0 z-999">
       <Show when={!isDesktop}>
         <div class="flex items-center gap-1 p-4">
-          <Icon name="diffusion-logo" class="size-6" />
-          <span class="text-sm font-450 text-foreground">Diffusion Studio</span>
+          <Icon name="compound-logo" class="size-6" />
+          <span class="text-sm font-450 text-foreground">Compound</span>
         </div>
       </Show>
 
@@ -188,7 +188,7 @@ export function OnboardingPage() {
 
             <div class="flex flex-col gap-3 rounded-xl bg-accent/40 p-4">
               <SetupRow
-                title="dapi CLI"
+                title="compound CLI"
                 description={
                   isDesktop
                     ? 'The command line tool for agents to control the editor.'
@@ -218,7 +218,7 @@ export function OnboardingPage() {
 
               <SetupRow
                 title="Agent skills"
-                description="Instructions that help agents edit videos through dapi."
+                description="Instructions that help agents edit videos through compound."
                 action={
                   isDesktop ? (
                     <StepButton

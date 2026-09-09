@@ -5,10 +5,8 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { useAuth } from "@/context/auth";
 import { cx } from "@/lib/cva";
-import { trpc } from "@/lib/trpc";
-import { For, Show, children, createResource, type JSX } from "solid-js";
+import { For, Show, children, type JSX } from "solid-js";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -160,90 +158,6 @@ export function DashboardFormModal(props: DashboardFormModalProps) {
         </DialogContent>
       </DialogPortal>
     </Dialog>
-  );
-}
-
-type DashboardPlanDetailsProps = {
-  details: readonly {
-    label: string;
-    value: JSX.Element;
-  }[];
-};
-
-export function DashboardPlanDetails(props: DashboardPlanDetailsProps) {
-  return (
-    <div class="flex min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-center md:gap-4">
-      <For each={props.details}>
-        {(detail, index) => (
-          <>
-            <DashboardLabelValue
-              label={detail.label}
-              value={detail.value}
-              labelClass="truncate"
-              valueClass="truncate"
-            />
-            <Show when={index() < props.details.length - 1}>
-              <div class="hidden h-8 w-px shrink-0 bg-border md:block" />
-            </Show>
-          </>
-        )}
-      </For>
-    </div>
-  );
-}
-
-export function DashboardFreePlanDetails() {
-  return (
-    <DashboardPlanDetails
-      details={[
-        { label: "Free", value: "$0.00" },
-        { label: "AI credits", value: "50 trial credits \u00B7 One time only" },
-      ]}
-    />
-  );
-}
-
-const RENEWAL_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
-  month: "long",
-  day: "numeric",
-  year: "numeric",
-});
-
-function formatCurrency(amountCents: number, currency: string) {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(amountCents / 100);
-}
-
-export function DashboardProPlanDetails() {
-  const auth = useAuth();
-  const [summary] = createResource(() => trpc.getSubscriptionSummary.query());
-
-  const priceLabel = () => {
-    const s = summary();
-    if (!s) return "\u2014";
-    const suffix = s.billingPeriod === "year" ? "/yr" : "/mo";
-    return `${formatCurrency(s.amount, s.currency)}${suffix}`;
-  };
-
-  const creditsLabel = () =>
-    `${auth.creditLimit().toLocaleString()} credits/mo`;
-
-  const renewsLabel = () => {
-    const s = summary();
-    if (!s) return "\u2014";
-    return RENEWAL_DATE_FORMAT.format(new Date(s.currentPeriodEnd));
-  };
-
-  return (
-    <DashboardPlanDetails
-      details={[
-        { label: "Pro", value: priceLabel() },
-        { label: "AI credits", value: creditsLabel() },
-        { label: "Renews", value: renewsLabel() },
-      ]}
-    />
   );
 }
 

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://convex.dev/schema.json",
+  "functions": "convex/",
+  "codegen": { "fileType": "ts" }
+}

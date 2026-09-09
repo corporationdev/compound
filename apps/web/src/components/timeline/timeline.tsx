@@ -4,8 +4,8 @@
 
 import { onCleanup, onMount } from 'solid-js';
 import { toast } from 'somoto';
-import { useWorld } from '@diffusionstudio/koota-solid';
-import { FrameRate, framesToSeconds, getActiveEntity } from '@diffusionstudio/runtime';
+import { useWorld } from '@compound/koota-solid';
+import { FrameRate, framesToSeconds, getActiveEntity } from '@compound/runtime';
 import { droppedFiles, importFiles } from '@/engine/asset-actions';
 import { insertAsset } from '@/engine/insert-asset';
 import { insertAssetsInNewScene } from '@/engine/new-scene';

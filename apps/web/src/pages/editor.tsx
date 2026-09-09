@@ -12,8 +12,8 @@ import { useEditorApi } from "@/context/dapi";
 import { RULER_HEIGHT } from "@/engine/timeline";
 import { createEffect, onCleanup, untrack } from 'solid-js';
 import { toast } from 'somoto';
-import { useWorld } from '@diffusionstudio/koota-solid';
-import { mount } from '@diffusionstudio/reconciler';
+import { useWorld } from '@compound/koota-solid';
+import { mount } from '@compound/reconciler';
 import { getDocumentEditor } from '@/engine/editor';
 import { getEditHistory } from '@/engine/history';
 import { setInspectEntries } from '@/engine/inspect';
@@ -21,14 +21,14 @@ import { attachLibrary, isLibraryFile } from '@/engine/library';
 import { attachAi } from '@/utils/gen-ai';
 import { attachProjectConfig, isProjectConfigFile } from '@/engine/project-config';
 import { loadProjectBundle, rememberProjectBundle } from '@/lib/db';
-import { isCacheFile } from '@diffusionstudio/assets';
+import { isCacheFile } from '@compound/assets';
 import { createEditWriter } from '@/projects/edits';
 import { compileProject, watchProject } from '@/projects/host';
 import { captureProjectCover } from '@/projects/cover';
 import { useProject } from "@/context/project";
 import { useEngineContext } from "@/engine";
 
-import type { Mount } from '@diffusionstudio/reconciler';
+import type { Mount } from '@compound/reconciler';
 import type { EditWriter } from '@/projects/edits';
 
 const MIN_CANVAS_HEIGHT = 200;
@@ -59,7 +59,7 @@ export function EditorPage() {
     const library = attachLibrary(world, dir);
     // The generation service over it: what `generate.*` sources resolve through.
     attachAi(world, library, dir);
-    // The project's own settings (package.json `diffusion`), next to the scene.
+    // The project's own settings (package.json `compound`), next to the scene.
     const config = attachProjectConfig(world, dir);
 
     const unmount = (): void => {

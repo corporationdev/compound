@@ -1,4 +1,4 @@
-# `dapi context`
+# `compound context`
 
 Summary of app state: what the project's source cannot say. The composition
 itself — its scenes, what is selected, which scene is active, the work area —
@@ -31,7 +31,7 @@ One JSON object:
 
 With no project open (the app sits at the dashboard) the report is just
 `{ rootDir, projectDir: null }`: there is no playhead, no world, and no fonts
-to speak of. Open one with [`dapi open`](./open.md).
+to speak of. Open one with [`compound open`](./open.md).
 
 `rootDir` is reported whether or not a project is open — it is where a caller
 with nothing open goes to create or find one.
@@ -44,12 +44,12 @@ one a command was run from: check it before writing to source files.
 
 `fontFamilies` is what text can be drawn with right now — loaded into the world,
 not merely named in the source — and always includes the editor default. For
-every family installed on the machine, see [`dapi fonts`](./fonts.md).
+every family installed on the machine, see [`compound fonts`](./fonts.md).
 
 `generations` is how a caller waits for `generate.*` declarations without
 blocking: generation is asynchronous, so poll this until nothing is
 `generating`. A `done` row's `asset` is a library path, ready for
-[`dapi media probe`](./media/probe.md) and its siblings; a `failed` row's
+[`compound media probe`](./media/probe.md) and its siblings; a `failed` row's
 `error` is the same message the element carries as its `error` prop, which is
 what keeps it from being generated again (see
 [jsx/errors.md](./jsx/errors.md#failed-sources)).

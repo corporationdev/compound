@@ -14,17 +14,13 @@ import {
   DropdownMenuPortal,
   DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu";
-import { PromptInput } from "../genai/prompt-input";
 import { ActionBar } from "../genai/action-bar";
-import { Show } from "solid-js";
-import { Tool, ToolType } from "@diffusionstudio/runtime";
-import { useWorld } from "@diffusionstudio/koota-solid";
+import { Tool, ToolType } from "@compound/runtime";
+import { useWorld } from "@compound/koota-solid";
 import { useTool } from "@/engine";
-import { usePromptInput } from "@/context/prompt-input";
 
 export function Toolbar() {
   const world = useWorld();
-  const { promptInputOpen, promptInputConfig, openPromptInput, setPromptInputOpen } = usePromptInput();
   const selectedTool = useTool();
 
   const handleToolChange = (tool: ToolType) => {
@@ -33,12 +29,7 @@ export function Toolbar() {
 
   return (
     <>
-      <Show when={promptInputOpen()}>
-        <PromptInput initialConfig={promptInputConfig()} />
-      </Show>
-      <Show when={!promptInputOpen()}>
-        <ActionBar openPromptInput={openPromptInput} />
-      </Show>
+      <ActionBar />
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-xl p-1.5 bg-background border border-border-strong flex gap-2 items-center z-10">
         <div class="flex gap-1">
           <Tooltip>
@@ -131,22 +122,6 @@ export function Toolbar() {
             <Icon name="tool.text" />
           </TooltipTrigger>
           <TooltipContent shortcut="T">Text</TooltipContent>
-        </Tooltip>
-        <Separator
-          orientation="vertical"
-          class="data-[orientation=vertical]:h-5 rounded-md"
-        />
-        <Tooltip>
-          <TooltipTrigger
-            as={Button}
-            size="icon-square"
-            class={promptInputOpen() ? 'text-foreground' : 'text-muted-foreground'}
-            variant={promptInputOpen() ? 'default' : 'ghost'}
-            onClick={() => setPromptInputOpen(!promptInputOpen())}
-          >
-            <Icon name="ai-generate" class="size-7" />
-          </TooltipTrigger>
-          <TooltipContent>AI generate</TooltipContent>
         </Tooltip>
       </div>
     </>

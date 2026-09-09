@@ -9,11 +9,11 @@
  * them, so a row and its label stay the same height.
  */
 
-import { ClipHeight, Timeline, store } from '@diffusionstudio/runtime';
+import { ClipHeight, Timeline, store } from '@compound/runtime';
 
 import { DEFAULT_CLIP_HEIGHT, KEYFRAME_TRACK_HEIGHT } from './config';
 
-import type { TimelineNode } from '@diffusionstudio/runtime';
+import type { TimelineNode } from '@compound/runtime';
 import type { Entity, World } from 'koota';
 
 /**

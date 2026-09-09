@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Button } from "@/components/ui/button";
-import { For, Show, Match, Switch, createMemo, createResource, createSignal, type Accessor } from "solid-js";
+import { For, Show, Match, Switch, createMemo, createSignal, type Accessor } from "solid-js";
 import {
   formatAspectRatio,
   formatBytes,
@@ -13,15 +13,13 @@ import {
   formatAssetDate
 } from "@/utils/formatters";
 import { AssetInfoPreview } from "./asset-info-preview";
-import { supabase } from "@/lib/supabase";
-import { toClientConfig } from "@/components/genai/use-generation-records";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { assetName } from "@diffusionstudio/assets";
+import { useWorld } from "@compound/koota-solid";
+import { assetName } from "@compound/assets";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
 import { insertAssetAtPlayhead, replaceAssetSource } from "@/engine/asset-actions";
 
-import type { Asset } from "@diffusionstudio/assets";
+import type { Asset } from "@compound/assets";
 
 /** Information about the library asset picked in the assets panel. */
 export function AssetInfoPanel() {
@@ -113,22 +111,6 @@ export function AssetInfoPanel() {
 }
 
 export function useAssetMetadataRows(asset: Accessor<Asset | undefined>) {
-  const generationId = createMemo(() => asset()?.generation?.id ?? null);
-
-  const [config] = createResource(() => generationId(), async (id) => {
-    if (!id || !supabase) return undefined;
-    const { data, error } = await supabase
-      .from("usage_records")
-      .select("config")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) {
-      console.error("[asset-info] Failed to load generation record", error);
-      return undefined;
-    }
-    return toClientConfig(data?.config);
-  });
-
   return createMemo(() => {
     const a = asset();
     if (!a) return [];
@@ -152,9 +134,6 @@ export function useAssetMetadataRows(asset: Accessor<Asset | undefined>) {
         : null;
     const imported = formatAssetDate(a.createdAt);
     const modified = a.stat ? formatAssetDate(a.stat.mtime) : null;
-    const c = config();
-    const prompt = c?.prompt ?? null;
-    const model = c?.model ?? null;
 
     return [
       { label: "Dimensions", value: dimensions },
@@ -168,8 +147,6 @@ export function useAssetMetadataRows(asset: Accessor<Asset | undefined>) {
       { label: "Imported", value: imported },
       { label: "Modified", value: modified },
       { label: "Source", value: a.source },
-      { label: "Prompt", value: prompt },
-      { label: "Model", value: model },
     ];
   });
 }

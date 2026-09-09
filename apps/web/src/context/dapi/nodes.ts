@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { AdjustmentLayer, Geometry, Group, Scene, Source } from "@diffusionstudio/runtime";
-import { parseSource } from "@diffusionstudio/jsx";
+import { AdjustmentLayer, Geometry, Group, Scene, Source } from "@compound/runtime";
+import { parseSource } from "@compound/jsx";
 
 import type { Entity, World } from "koota";
 

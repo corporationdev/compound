@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { createMemo, Show } from 'solid-js';
-import { useTag, useTrait, useWorld } from '@diffusionstudio/koota-solid';
-import { trackProperty } from '@diffusionstudio/reconciler';
+import { useTag, useTrait, useWorld } from '@compound/koota-solid';
+import { trackProperty } from '@compound/reconciler';
 import {
   Cache,
   Computed,
@@ -15,7 +15,7 @@ import {
   findClosestParentGeometry,
   getActiveEntity,
   setPlayhead,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Keyframe } from '@/components/ui/keyframe';
@@ -26,7 +26,7 @@ import { NESTED_INDENT_PX } from './config';
 import { setRowHover } from './hover';
 
 import type { Entity } from 'koota';
-import type { PropertyPath } from '@diffusionstudio/runtime';
+import type { PropertyPath } from '@compound/runtime';
 import type { LayerRowProps } from './layer';
 
 /**

@@ -4,8 +4,8 @@
 
 import { createEffect, createContext, useContext, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { useWorld } from '@diffusionstudio/koota-solid';
-import { Project } from '@diffusionstudio/runtime';
+import { useWorld } from '@compound/koota-solid';
+import { Project } from '@compound/runtime';
 import { useProject } from '@/context/project';
 import { useAuth } from '@/context/auth';
 import { useEngineContext } from '@/engine';
@@ -29,7 +29,7 @@ import { useFullscreenState } from "@/hooks/use-fullscreen-state";
 
 import type { JSX, Accessor } from 'solid-js';
 import type { Navigator } from '@solidjs/router';
-import type { User } from '@supabase/supabase-js';
+import type { AppUser as User } from '@/lib/auth-client';
 
 type EditorApiProviderProps = {
   children: JSX.Element;
@@ -54,7 +54,7 @@ export function EditorApi() {
   const auth = useAuth();
 
   const requireAuth = <I, O>(fn: (data: I) => Promise<O>) => (data: I) => {
-    assert(auth.isAuthenticated(), "Sign in required: AI generation needs a Diffusion Studio account.");
+    assert(auth.isAuthenticated(), "Sign in required: AI generation needs a Compound account.");
     return fn(data);
   };
 
@@ -131,7 +131,7 @@ function createAppRouter({ navigate, getUser, requireAuth }: AppRouterDeps) {
       transcribe: q(handleMediaTranscribe(resolveAsset)),
       filmstrip: q(handleMediaFilmstrip(resolveAsset)),
       waveform: q(handleMediaWaveform(resolveAsset)),
-      listen: q(requireAuth(handleMediaListen(resolveAsset, editorSession))),
+      listen: q(requireAuth(handleMediaListen(resolveAsset))),
     }),
   });
 }

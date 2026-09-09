@@ -1,33 +1,20 @@
+> **Compound fork:** cloud services now use Convex + Better Auth, a Cloudflare Worker, Deepgram, and Gemini. See [setup and secrets](docs/cloud-setup.md). Billing and media generation are removed; local editing and automatic captions remain.
+
 <p align="center">
-  <a href="https://diffusion.studio">
-    <img src="assets/banner.png" alt="Diffusion Studio" width="700" />
+  <a href="https://github.com/corporationdev/compound">
+    <img src="assets/compound-banner.png" alt="Compound — the video editor built for agents" width="700" />
   </a>
 </p>
 
-<p align="center">The professional video editor built for agents</p>
-
 <p align="center">
-  <a href="https://www.diffusion.studio/download"><img src="https://img.shields.io/badge/Download-macOS%20Apple%20Silicon-161616?style=flat&logo=apple&logoColor=F8F8F8&labelColor=000000" alt="Download for macOS (Apple Silicon)" /></a>
-  <a href="https://discord.com/invite/zPQJrNGuFB"><img src="https://img.shields.io/discord/1115673443141156924?style=flat&logo=discord&logoColor=F8F8F8&label=Discord&labelColor=000000&color=161616" alt="Discord" /></a>
-  <a href="https://x.com/diffusionhq"><img src="https://img.shields.io/badge/Follow%20for-Updates-161616?style=flat&logo=x&logoColor=F8F8F8&labelColor=000000" alt="Follow on X" /></a>
-  <a href="https://www.ycombinator.com/companies/diffusion-studio"><img src="https://img.shields.io/badge/Combinator-F24-161616?style=flat&logo=ycombinator&logoColor=F8F8F8&labelColor=000000" alt="Y Combinator F24" /></a>
+  <a href="https://github.com/corporationdev/compound/releases/latest">Download for macOS</a> ·
+  <a href="https://github.com/corporationdev/compound/issues">Support</a> ·
+  <a href="reference/README.md">CLI reference</a>
 </p>
 
-<p align="center">
-  <code>npx skills add diffusionstudio/skills</code>
-</p>
+<p align="center"><code>npx skills add corporationdev/compound</code></p>
 
-<br />
-
-<p align="center">
-  <a href="https://app.diffusion.studio">
-    <img src="assets/desktop-screenshot.png" alt="The Diffusion Studio editor" width="800" />
-  </a>
-</p>
-
-<br />
-
-## Diffusion Studio
+## Compound
 
 Edit videos with Codex, Claude Code, OpenCode, or Pi. Refine any output in a fully featured editing environment.
 
@@ -55,7 +42,7 @@ Beyond finishing a cut, it covers:
 
 ## How it works
 
-Diffusion Studio uses [SolidJS](https://www.solidjs.com) modules as the document source. Think IDE, but it renders a video canvas instead of text.
+Compound uses [SolidJS](https://www.solidjs.com) modules as the document source. Think IDE, but it renders a video canvas instead of text.
 
 Editing works both ways: change something on the canvas and the code updates; change the code and the canvas redraws.
 
@@ -65,9 +52,9 @@ The desktop app includes command-line tools that let agents watch and listen to 
 
 Download the desktop app, it walks you through setting everything up:
 
-<a href="https://www.diffusion.studio/download"><img src="https://img.shields.io/badge/Download-Diffusion%20Studio-161616?style=for-the-badge&logo=apple&logoColor=F8F8F8&labelColor=000000" alt="Download Diffusion Studio" /></a>
+<a href="https://github.com/corporationdev/compound/releases/latest"><img src="https://img.shields.io/badge/Download-Compound-161616?style=for-the-badge&logo=apple&logoColor=F8F8F8&labelColor=000000" alt="Download Compound" /></a>
 
-Use with Claude Code, Codex, Cursor, Copilot, or Gemini CLI. `/editor` is the main skill you'll use. Ask for what you want in plain language. Behind it is `dapi`, the CLI that drives the app.
+Use with Claude Code, Codex, Cursor, Copilot, or Gemini CLI. `/editor` is the main skill you'll use. Ask for what you want in plain language. Behind it is `compound`, the CLI that drives the app.
 
 ## Prompt examples
 
@@ -123,17 +110,9 @@ Use with Claude Code, Codex, Cursor, Copilot, or Gemini CLI. `/editor` is the ma
 
 </details>
 
-## Made with Diffusion Studio
-
-Both were created by prompting. The compositions are published in [diffusionstudio/open-projects](https://github.com/diffusionstudio/open-projects):
-
-| [Launch video](https://github.com/diffusionstudio/open-projects/tree/main/launch-video) | [Raise announcement](https://github.com/diffusionstudio/open-projects/tree/main/raise-announcement) |
-| --- | --- |
-| <img src="assets/launch-video.gif" alt="Launch video" width="420" /> | <img src="assets/raise-announcement.gif" alt="Raise announcement" width="420" /> |
-
 ## Compositions as code
 
-A project is a folder of that JSX: `dapi open <dir>` once, then edit the files. Saving recompiles the entry file and mounts it directly into the editor's ECS.
+A project is a folder of that JSX: `compound open <dir>` once, then edit the files. Saving recompiles the entry file and mounts it directly into the editor's ECS.
 
 Every element carries an `id`, which is how the write-back finds its target: a rect dragged on the canvas, a clip trimmed on the timeline, or a retyped line lands as a prop on the element that authored it.
 
@@ -141,7 +120,7 @@ The root is a `<stage>` holding one `<scene>` per frame you cut in:
 
 ```tsx
 import { For } from "solid-js";
-import { generate } from "@diffusionstudio/jsx";
+import { generate } from "@compound/jsx";
 
 const hero = generate.image({ prompt: "A neon city at night, cinematic", aspectRatio: "16:9" });
 const motion = generate.video({ prompt: "slow camera push-in", startFrame: hero, duration: 5 });
@@ -185,27 +164,27 @@ Everything a mount produces stays a first-class editor node, so a person can pic
 Cutting footage requires understanding it. The CLI ships the inspection tools an agent needs to work with media it cannot watch:
 
 ```sh
-dapi media probe clip.mp4                                # container + codec metadata, like ffprobe
-dapi media grab clip.mp4 -t 0 12 45                      # decode frames to PNGs
-dapi media filmstrip clip.mp4                            # grid of video frames
-dapi media waveform track.mp3                            # audio waveform, silence flagged
-dapi media transcribe interview.wav                      # timed, word-level transcript
-dapi media listen interview.mp4 -p "what is said in the intro?"   # ask a multimodal model
-dapi capture intro -t 0 2 4                              # the frames a render would produce, by scene id
+compound media probe clip.mp4                                # container + codec metadata, like ffprobe
+compound media grab clip.mp4 -t 0 12 45                      # decode frames to PNGs
+compound media filmstrip clip.mp4                            # grid of video frames
+compound media waveform track.mp3                            # audio waveform, silence flagged
+compound media transcribe interview.wav                      # timed, word-level transcript
+compound media listen interview.mp4 -p "what is said in the intro?"   # ask a multimodal model
+compound capture intro -t 0 2 4                              # the frames a render would produce, by scene id
 ```
 
 | Command | Purpose |
 | --- | --- |
-| `dapi open` | Launch the app and open (or create) a project folder, anywhere on disk |
-| `dapi context` | Summary of app state |
-| `dapi capture` | Render frames of a scene, as an export would, to a labelled contact sheet or one PNG per position |
-| `dapi check` | Check a node's subtree for structural mistakes (black-frame gaps, never-visible nodes, failed sources) and report subtree stats |
-| `dapi media …` | Inspect a file by id or path: `probe`, `grab`, `filmstrip`, `waveform`, `transcribe`, `listen` |
-| `dapi models` / `dapi voices` / `dapi fonts` | Discover generation models, speech voices, local fonts |
-| `dapi screenshot` / `dapi logs` | The app itself: capture the window, read recent console output |
-| `dapi fetch` | Download a video from yt/tt/ig |
-| `dapi whoami` | The authenticated account |
-| `dapi report` | Report a bug in the CLI or the app: diagnostics bundled, filed as a GitHub issue via `gh` |
+| `compound open` | Launch the app and open (or create) a project folder, anywhere on disk |
+| `compound context` | Summary of app state |
+| `compound capture` | Render frames of a scene, as an export would, to a labelled contact sheet or one PNG per position |
+| `compound check` | Check a node's subtree for structural mistakes (black-frame gaps, never-visible nodes, failed sources) and report subtree stats |
+| `compound media …` | Inspect a file by id or path: `probe`, `grab`, `filmstrip`, `waveform`, `transcribe`, `listen` |
+| `compound models` / `compound voices` / `compound fonts` | Discover generation models, speech voices, local fonts |
+| `compound screenshot` / `compound logs` | The app itself: capture the window, read recent console output |
+| `compound fetch` | Download a video from yt/tt/ig |
+| `compound whoami` | The authenticated account |
+| `compound report` | Report a bug in the CLI or the app: diagnostics bundled, filed as a GitHub issue via `gh` |
 
 Conventions throughout: single results are one JSON value, collections are JSON Lines, errors go to stderr with exit code `1`. Everything is built to be piped, grepped, and driven by a program.
 
@@ -219,37 +198,37 @@ Conventions throughout: single results are one JSON value, collections are JSON 
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `apps/web` | `@diffusionstudio/web` | The editor UI (Solid + Vite) |
-| `apps/desktop` | `@diffusionstudio/desktop` | Electron shell hosting the editor |
-| `apps/cli` | `@diffusionstudio/cli` | The `dapi` CLI |
-| `packages/runtime` | `@diffusionstudio/runtime` | Headless editor runtime: the koota world, traits, actions, systems, media decoding, capture. No DOM, no Solid |
-| `packages/reconciler` | `@diffusionstudio/reconciler` | Evaluates a compiled project bundle and reconciles its element tree onto runtime entities, via Solid's universal renderer |
-| `packages/jsx` | `@diffusionstudio/jsx` | The authoring API: element vocabulary, types, and generated assets (`generate.*`) |
-| `packages/assets` | `@diffusionstudio/assets` | A project's asset library: the `assets.yml` manifest, content hashing, probing, resolution |
-| `packages/encoder` | `@diffusionstudio/encoder` | Offline video/audio/image encoding over runtime worlds (mediabunny) |
-| `packages/koota-solid` | `@diffusionstudio/koota-solid` | Solid bindings for koota, ported from `@koota/react` |
+| `apps/web` | `@compound/web` | The editor UI (Solid + Vite) |
+| `apps/desktop` | `@compound/desktop` | Electron shell hosting the editor |
+| `apps/cli` | `@compound/cli` | The `compound` CLI |
+| `packages/runtime` | `@compound/runtime` | Headless editor runtime: the koota world, traits, actions, systems, media decoding, capture. No DOM, no Solid |
+| `packages/reconciler` | `@compound/reconciler` | Evaluates a compiled project bundle and reconciles its element tree onto runtime entities, via Solid's universal renderer |
+| `packages/jsx` | `@compound/jsx` | The authoring API: element vocabulary, types, and generated assets (`generate.*`) |
+| `packages/assets` | `@compound/assets` | A project's asset library: the `assets.yml` manifest, content hashing, probing, resolution |
+| `packages/encoder` | `@compound/encoder` | Offline video/audio/image encoding over runtime worlds (mediabunny) |
+| `packages/koota-solid` | `@compound/koota-solid` | Solid bindings for koota, ported from `@koota/react` |
 
 ## Contributing / local setup
 
-Requirements: Node 20+ and npm.
+Requirements: Node 22 and Bun 1.3.11. Cloud setup also requires the 1Password CLI and cloudflared; see [cloud setup](docs/cloud-setup.md).
 
 ```sh
-git clone https://github.com/diffusionstudio/editor.git
-cd editor
-npm install
+git clone https://github.com/corporationdev/compound.git
+cd compound
+bun install
 
-cp apps/web/.env.example apps/web/.env   # required: the app won't run without it
+# Set OP_SERVICE_ACCOUNT_TOKEN in root .env; configure the vault fields first.
 
-npm run dev
+bun run dev
 ```
 
-To put `dapi` on your PATH (macOS/Homebrew layout; adjust the link target for other setups), link it once:
+To put `compound` on your PATH (macOS/Homebrew layout; adjust the link target for other setups), link it once:
 
 ```sh
-npm run symlink:create --workspace=@diffusionstudio/cli
+bun run --cwd apps/cli symlink:create
 ```
 
-The link points at the CLI build, which `npm run dev:desktop` refreshes on every start, so the linked `dapi` always runs the latest code.
+The link points at the CLI build, which `bun run dev:desktop` refreshes on every start, so the linked `compound` always runs the latest code.
 
 Before sending a PR:
 
@@ -262,4 +241,4 @@ npm run lint     # lint all workspaces
 
 [MPL-2.0](LICENSE)
 
-The brand assets in [apps/desktop/assets](apps/desktop/assets) are not covered by this license. Copyright (c) Diffusion Studio Inc. All rights reserved.
+Compound uses its own brand assets. See [NOTICE.md](NOTICE.md) for upstream attribution and [the branding audit](docs/branding-audit.md) for compatibility details.

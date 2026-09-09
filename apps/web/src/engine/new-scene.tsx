@@ -8,14 +8,14 @@
 // would otherwise do. The canvas and the timeline share this; they differ
 // only in where the new scene should end up on screen.
 
-import { Scene as SceneElement, SolidPaint } from '@diffusionstudio/reconciler';
-import { focusRect, getCameraMatrix, getNextName, Root, Source } from '@diffusionstudio/runtime';
+import { Scene as SceneElement, SolidPaint } from '@compound/reconciler';
+import { focusRect, getCameraMatrix, getNextName, Root, Source } from '@compound/runtime';
 
 import { getDocumentEditor } from './editor';
 import { AUDIO_SIZE, insertAsset } from './insert-asset';
 
-import type { Asset } from '@diffusionstudio/assets';
-import type { Rect } from '@diffusionstudio/runtime';
+import type { Asset } from '@compound/assets';
+import type { Rect } from '@compound/runtime';
 import type { Entity, World } from 'koota';
 
 export interface Size {

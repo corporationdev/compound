@@ -9,11 +9,11 @@ export const WebFonts = {
 	},
 	'The Bold Font': {
 		weights: ['500'],
-		url: 'https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/fonts/the-bold-font.ttf',
+		url: new URL('./assets/the-bold-font.ttf', import.meta.url).href,
 	},
 	'Komika Axis': {
 		weights: ['400'],
-		url: 'https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/fonts/komika-axis.ttf',
+		url: new URL('./assets/komika-axis.ttf', import.meta.url).href,
 	},
 	Geologica: {
 		weights: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],

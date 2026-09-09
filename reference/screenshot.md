@@ -1,4 +1,4 @@
-# `dapi screenshot`
+# `compound screenshot`
 
 Captures the entire application window as a PNG: the full UI as the user sees it (panels, timeline, asset library, canvas viewport), at the window's current size. Use it to check what the app itself looks like; to render a node or scene cleanly for composition checks use [`capture`](./capture.md) instead.
 

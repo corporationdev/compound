@@ -3,14 +3,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { createSignal } from "solid-js";
-import { createEncoder, computeOutputSize } from "@diffusionstudio/encoder";
-import { Computed, FrameRate, Workarea } from "@diffusionstudio/runtime";
+import { createEncoder, computeOutputSize } from "@compound/encoder";
+import { Computed, FrameRate, Workarea } from "@compound/runtime";
 
 import { createCapture } from "@/engine/capture";
 import { version } from "../../package.json";
 
 import type { Entity } from "koota";
-import type { EncoderConfig, ExportResult } from "@diffusionstudio/encoder";
+import type { EncoderConfig, ExportResult } from "@compound/encoder";
 import type { Capture } from "@/engine/capture";
 import type { Engine } from "@/engine";
 import type { ExportConfig } from "@/components/sidebar-right/inspector/export-progress";
@@ -91,7 +91,7 @@ export async function renderScene(
     const encoder = await createEncoder(capture.world, {
       ...config,
       target,
-      comment: `Made with Diffusion Studio v${version}`,
+      comment: `Made with Compound v${version}`,
       onProgress(p) {
         const percent = Math.round((p.progress / p.total) * 100);
         setOverlay((prev) =>

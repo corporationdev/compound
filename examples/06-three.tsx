@@ -1,8 +1,8 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* Three.js owning a <surface>: a glTF helmet spun by the playhead.
  *
  *   cp examples/06-three.tsx ~/Projects/three/index.tsx
- *   dapi open ~/Projects/three
+ *   compound open ~/Projects/three
  *
  * `ref={surfaceRef}` assigns the surface's node, whose `element` is its
  * detached canvas; onMount three.js takes it over and renders into it;
@@ -23,8 +23,8 @@
  */
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { useTicker } from "@diffusionstudio/jsx";
-import type { SceneNode } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
+import type { SceneNode } from "@compound/jsx";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";

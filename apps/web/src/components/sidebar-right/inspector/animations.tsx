@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SliderInput } from "@/components/ui/slider-input";
-import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
-import { Animation as AnimationElement } from "@diffusionstudio/reconciler";
+import { useTrait, useWorld } from "@compound/koota-solid";
+import { Animation as AnimationElement } from "@compound/reconciler";
 import {
   Animation,
   AnimationPhase,
@@ -38,7 +38,7 @@ import {
   getIntrinsicPaint,
   isAudio,
   isText,
-} from "@diffusionstudio/runtime";
+} from "@compound/runtime";
 import { useDerived, useEditor } from "@/engine/hooks";
 import { ANIMATION_GROUPS, DEFAULT_ANIMATION, animationOption } from "./animation-types";
 

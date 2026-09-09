@@ -13,7 +13,7 @@ import { SequenceDecoder } from './sequence';
 
 import type { Entity, World } from 'koota';
 import type { KeyframeIndex } from './keyframe-index';
-import type { VideoAsset } from '@diffusionstudio/assets';
+import type { VideoAsset } from '@compound/assets';
 
 
 export type VideoBufferMode = 'discarded' | 'idle' | 'alive';

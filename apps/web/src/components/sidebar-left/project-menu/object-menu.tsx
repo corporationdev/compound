@@ -12,8 +12,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { isGroupLike, isSequence } from "@diffusionstudio/runtime";
+import { useWorld } from "@compound/koota-solid";
+import { isGroupLike, isSequence } from "@compound/runtime";
 import {
   groupSelection,
   ungroupSelection,

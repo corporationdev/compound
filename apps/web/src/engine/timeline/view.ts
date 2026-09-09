@@ -12,7 +12,7 @@
  * controller reports a pan (see `./controller`).
  */
 
-import { Computed, FrameRate, Timeline, getActiveEntity, store } from '@diffusionstudio/runtime';
+import { Computed, FrameRate, Timeline, getActiveEntity, store } from '@compound/runtime';
 
 import { DEFAULT_TIMELINE_RESOLUTION, RULER_HEIGHT, TIMELINE_PADDING_LEFT } from './config';
 

@@ -2,10 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { ConstraintType } from "@diffusionstudio/runtime";
-import { HORIZONTAL_CONSTRAINTS, VERTICAL_CONSTRAINTS } from "@diffusionstudio/reconciler";
+import { ConstraintType } from "@compound/runtime";
+import { HORIZONTAL_CONSTRAINTS, VERTICAL_CONSTRAINTS } from "@compound/reconciler";
 
-import type { HorizontalConstraint, VerticalConstraint } from "@diffusionstudio/jsx";
+import type { HorizontalConstraint, VerticalConstraint } from "@compound/jsx";
 
 export type Constraint = {
   key: ConstraintType;

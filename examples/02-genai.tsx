@@ -1,9 +1,9 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* Multi-stage generation: text-to-image keyframes, image-to-video motion,
  * a text-to-speech voiceover, generated ambience, and captions on top.
  *
  *   cp examples/02-genai.tsx ~/Projects/genai/index.tsx
- *   dapi open ~/Projects/genai
+ *   compound open ~/Projects/genai
  *
  * `generate.*` declarations are pure values; nothing generates until commit.
  * Refs form a dependency graph (keyframe -> matching second keyframe -> two
@@ -11,11 +11,11 @@
  * until every asset lands. <captions> reads the finished scene audio after
  * generation, so caption timing matches the voiceover. Consumes credits;
  * results are cached per session, so re-mounting unchanged specs is free.
- * Discover models and voices with `dapi models <type>` and `dapi voices`;
+ * Discover models and voices with `compound models <type>` and `compound voices`;
  * omitted here, so each stage uses the default model.
  */
 
-import { generate } from "@diffusionstudio/jsx";
+import { generate } from "@compound/jsx";
 
 const SEED = 7;
 

@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Stages the dapi CLI into apps/desktop/cli so electron-forge can ship it as
+// Stages the compound CLI into apps/desktop/cli so electron-forge can ship it as
 // an app resource (Contents/Resources/cli). The staged layout:
-//   cli/dapi.js        bundled CLI (built by apps/cli)
+//   cli/compound.js        bundled CLI (built by apps/cli)
 //   cli/node_modules   deps the bundle keeps external (esbuild, babel)
-//   cli/bin/dapi       shell wrapper, the file that gets linked into PATH
+//   cli/bin/compound       shell wrapper, the file that gets linked into PATH
 
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -28,13 +28,13 @@ const cliPkg = JSON.parse(readFileSync(join(cliDir, "package.json"), "utf8"));
 rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(join(stageDir, "bin"), { recursive: true });
 
-cpSync(join(cliDir, "dist", "index.js"), join(stageDir, "dapi.js"));
+cpSync(join(cliDir, "dist", "index.js"), join(stageDir, "compound.js"));
 
 writeFileSync(
   join(stageDir, "package.json"),
   JSON.stringify(
     {
-      name: "dapi-runtime",
+      name: "compound-runtime",
       private: true,
       dependencies: Object.fromEntries(EXTERNALS.map((name) => [name, cliPkg.dependencies[name]])),
     },
@@ -61,11 +61,11 @@ while [ -L "$SELF" ]; do
   esac
 done
 DIR="$(cd "$(dirname "$SELF")" && pwd)"
-export DIFFUSION_APP_PATH="$(cd "$DIR/../../../.." && pwd)"
-ELECTRON_RUN_AS_NODE=1 exec "$DIR/../../../MacOS/Diffusion Studio" "$DIR/../dapi.js" "$@"
+export COMPOUND_APP_PATH="$(cd "$DIR/../../../.." && pwd)"
+ELECTRON_RUN_AS_NODE=1 exec "$DIR/../../../MacOS/Compound" "$DIR/../compound.js" "$@"
 `;
-writeFileSync(join(stageDir, "bin", "dapi"), wrapper);
-chmodSync(join(stageDir, "bin", "dapi"), 0o755);
+writeFileSync(join(stageDir, "bin", "compound"), wrapper);
+chmodSync(join(stageDir, "bin", "compound"), 0o755);
 
 // Mach-O files inside Resources are not reached by the app-bundle signing
 // pass, and notarization rejects unsigned executables; sign them here.
@@ -87,4 +87,4 @@ if (process.platform === "darwin" && !process.env.SKIP_SIGN) {
   }
 }
 
-console.log(`stage-cli: staged dapi at ${stageDir}`);
+console.log(`stage-cli: staged compound at ${stageDir}`);

@@ -13,16 +13,16 @@ const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package
 
 const config: ForgeConfig = {
   packagerConfig: {
-    name: 'Diffusion Studio',
-    appBundleId: 'studio.diffusion.editor',
+    name: 'Compound',
+    appBundleId: 'dev.corporation.compound',
     appCategoryType: 'public.app-category.video',
     appVersion: version,
     icon: './assets/icon',
-    protocols: [{ name: 'Diffusion Studio', schemes: ['diffusion'] }],
     prune: false,
     ignore: (path) =>
       path !== '' &&
       path !== '/package.json' &&
+      path !== '/runtime-config.json' &&
       path !== '/dist' &&
       !path.startsWith('/dist/') &&
       path !== '/web' &&
@@ -43,13 +43,13 @@ const config: ForgeConfig = {
   makers: [
     new MakerZIP({}, ['darwin']),
     new MakerDMG({
-      name: `Diffusion-Studio-${process.arch}`,
+      name: `Compound-${process.arch}`,
       icon: './assets/icon.icns',
       // Dark, on-brand window; @2x sibling is picked up automatically for retina.
       background: './assets/dmg-background.png',
       iconSize: 120,
       additionalDMGOptions: {
-        'background-color': '#1c1c1c',
+        'background-color': '#f7f7f5',
         window: { size: { width: 658, height: 498 } },
       },
       contents: (opts) => [
@@ -60,7 +60,7 @@ const config: ForgeConfig = {
   ],
   publishers: [
     new PublisherGithub({
-      repository: { owner: 'diffusionstudio', name: 'editor' },
+      repository: { owner: 'corporationdev', name: 'compound' },
       draft: true,
     }),
   ],

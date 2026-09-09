@@ -2,9 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { basename, dirname } from "@diffusionstudio/assets";
-import { usePromptInput } from "@/context/prompt-input";
-import { createDefaultConfig } from "@/components/genai/prompt-input";
+import { basename, dirname } from "@compound/assets";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
@@ -33,7 +31,7 @@ import { useAssetSelection } from "@/engine/hooks";
 import { droppedFiles, importFiles, pickAndImport } from "@/engine/asset-actions";
 import { isInputTarget } from "@/utils";
 
-import type { AssetLibrary } from "@diffusionstudio/assets";
+import type { AssetLibrary } from "@compound/assets";
 
 /** The ancestors of a folder path, root excluded, nearest last. */
 function ancestorsOf(path: string): string[] {
@@ -48,7 +46,6 @@ export function Assets() {
 
   const library = useLibrary();
   const { id: selectedAssetId, select: setSelectedAssetId } = useAssetSelection();
-  const { openPromptInput } = usePromptInput();
   const [query, setQuery] = createSignal("");
   const [assetFilter, setAssetFilter] = createSignal<AssetFilter>("ALL");
   const [isDragging, setIsDragging] = createSignal(false);
@@ -503,15 +500,11 @@ export function Assets() {
                   Add media
                 </span>
                 <p class="text-xxs text-muted-foreground text-center">
-                  Drag here, import from your computer,{"\n"}
-                  or, generate something new with AI.
+                  Drag here or import from your computer.
                 </p>
               </div>
               <div class="flex flex-col gap-2 w-full">
-                <Button variant="secondary" class="w-full" onClick={() => openPromptInput(createDefaultConfig("IMAGE"))}>
-                  Generate with AI
-                </Button>
-                <Button variant="default" class="w-full" onClick={handleImportAssets}>
+                        <Button variant="default" class="w-full" onClick={handleImportAssets}>
                   Import media
                 </Button>
               </div>

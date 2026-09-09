@@ -1,0 +1,12 @@
+diff --git a/node_modules/@electron-forge/core-utils/dist/electron-version.js b/node_modules/@electron-forge/core-utils/dist/electron-version.js
+--- a/node_modules/@electron-forge/core-utils/dist/electron-version.js
++++ b/node_modules/@electron-forge/core-utils/dist/electron-version.js
+@@ -19,1 +19,1 @@
+-    const lockPath = await (0, find_up_1.default)(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'], { cwd: dir, type: 'file' });
++    const lockPath = await (0, find_up_1.default)(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb'], { cwd: dir, type: 'file' });
+diff --git a/node_modules/@electron-forge/core-utils/src/electron-version.ts b/node_modules/@electron-forge/core-utils/src/electron-version.ts
+--- a/node_modules/@electron-forge/core-utils/src/electron-version.ts
++++ b/node_modules/@electron-forge/core-utils/src/electron-version.ts
+@@ -27,1 +27,1 @@
+-    ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
++    ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb'],

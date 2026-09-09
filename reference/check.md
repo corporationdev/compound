@@ -1,4 +1,4 @@
-# `dapi check <id>`
+# `compound check <id>`
 
 Checks a node's subtree for obvious structural mistakes, without rendering: spans of the node's play window where **no visual is scheduled** (likely black frames), children that never become visible, zero-duration or fully transparent nodes, and assets that failed to load or generate. Alongside the issues it reports subtree stats — node count by kind, nesting depth, and played duration — so it doubles as a quick structural summary of a scene.
 

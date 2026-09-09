@@ -2,13 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { derivePeaks } from '@diffusionstudio/assets';
+import { derivePeaks } from '@compound/assets';
 
 import { Library, WaveformHandle, AssetId } from '../traits';
 import { getAsset, getAssetFile } from '../actions/assets';
 
 import type { Entity, World } from 'koota';
-import type { AssetCache, AudioAsset, VideoAsset } from '@diffusionstudio/assets';
+import type { AssetCache, AudioAsset, VideoAsset } from '@compound/assets';
 
 /**
  * What a waveform paint's entity holds while it is on screen: the peaks of

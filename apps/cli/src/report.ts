@@ -5,7 +5,7 @@
 import { spawn } from "node:child_process";
 import { arch, platform, release } from "node:os";
 
-const REPO = "diffusionstudio/editor";
+const REPO = "corporationdev/compound";
 
 export const GH_MISSING =
   "gh (GitHub CLI) is not installed, so the issue cannot be filed. Install it from https://cli.github.com, run `gh auth login`, then retry.";
@@ -25,7 +25,7 @@ function fence(language: string, content: string): string {
 
 function environmentTable(input: IssueInput): string {
   const rows: Array<[string, string]> = [
-    ["dapi", input.version],
+    ["compound", input.version],
     ["platform", `${platform()} ${release()} (${arch()})`],
     ["node", process.version],
     ["app", input.appStatus],
@@ -44,7 +44,7 @@ export function buildIssueBody(input: IssueInput): string {
   return `${sections.join("\n\n")}\n`;
 }
 
-// --repo is explicit because dapi runs from the user's project, not a checkout
+// --repo is explicit because compound runs from the user's project, not a checkout
 // of the editor; the body goes over stdin so a long log tail can't blow the
 // argv size limit.
 export function createIssue(title: string, body: string): Promise<string> {

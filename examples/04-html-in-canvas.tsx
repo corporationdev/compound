@@ -1,8 +1,8 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* An AI prompt box as real HTML, centered in the frame.
  *
  *   cp examples/04-html-in-canvas.tsx ~/Projects/html-in-canvas/index.tsx
- *   dapi open ~/Projects/html-in-canvas
+ *   compound open ~/Projects/html-in-canvas
  *
  * Requires Chromium's html-in-canvas API (chrome://flags/#canvas-draw-element);
  * without it the mount fails with an explicit error. The <html> children are
@@ -13,7 +13,7 @@
  */
 
 import { createMemo } from "solid-js";
-import { useTicker } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
 
 const PROMPT = "Cut a 30 second teaser from these clips, punchy captions, synthwave score";
 const CHARS_PER_SECOND = 12;

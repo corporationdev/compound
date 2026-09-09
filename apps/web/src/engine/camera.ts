@@ -16,7 +16,7 @@ import {
 	getSelection,
 	setCameraZoom,
 	zoomCameraBy,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 
 import { getDocumentEditor } from './editor';
 

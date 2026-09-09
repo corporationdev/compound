@@ -1,4 +1,4 @@
-# `dapi media grab <path>`
+# `compound media grab <path>`
 
 Decodes one or more frames of a video asset at the given times and merges them into **contact sheets**: up to 12 frames per PNG, each cell labelled with its timecode and drawn as large as the sheet allows, so a handful of frames arrives as one high-resolution picture instead of a directory to open one by one. `--separate` writes a PNG per frame instead. Like [`capture`](../capture.md), but grabs the asset's own pixels (unlike `capture`, which renders the composited node). Renders locally; no credits. Past ~12 frames, [`media filmstrip`](./filmstrip.md) is the cheaper way to scan a clip.
 
@@ -13,7 +13,7 @@ Decodes one or more frames of a video asset at the given times and merges them i
 - `-S, --separate`: write one PNG per frame instead of merging them into contact sheets (optional). The frames keep their own resolution and alpha, and each file is named after its timecode (e.g. `01s12f.png`).
 - `--per-sheet <n>`: frames per contact sheet, 1 to 12 (optional; default as many as fit). Fewer frames per sheet means a larger cell each. Sheets are balanced, so 13 frames become 7 + 6 rather than 12 + 1.
 - `--uncapped`: lift the 100-frame safety cap (optional). Without it, requesting more than 100 frames (via `--count` or `--time`) is rejected.
-- `-o, --output <dir>`: directory to write the PNGs into (optional; default a fresh `dapi-grab-*` directory in the system temp directory, so runs never overwrite each other). Writing into the same directory twice overwrites images whose name matches; with `--separate`, requested times that land on the same frame share one file.
+- `-o, --output <dir>`: directory to write the PNGs into (optional; default a fresh `compound-grab-*` directory in the system temp directory, so runs never overwrite each other). Writing into the same directory twice overwrites images whose name matches; with `--separate`, requested times that land on the same frame share one file.
 
 ## Timecodes
 

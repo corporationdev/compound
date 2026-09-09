@@ -1,4 +1,4 @@
-# `dapi fetch <url>`
+# `compound fetch <url>`
 
 Downloads a video with [yt-dlp](https://github.com/yt-dlp/yt-dlp). Does not require the app to be running. yt-dlp is not bundled: install it separately (`brew install yt-dlp`, or `pipx install yt-dlp`). If it is not on `PATH`, the command exits `1` with an install hint; set `YT_DLP_PATH` to point at a specific binary.
 
@@ -19,7 +19,7 @@ This writes the file to disk only; it does not touch the open project.
 Forward raw yt-dlp flags after `--`; they are appended verbatim:
 
 ```sh
-dapi fetch https://youtu.be/xyz -f "bv*+ba/b" -- --sponsorblock-remove all --limit-rate 2M
+compound fetch https://youtu.be/xyz -f "bv*+ba/b" -- --sponsorblock-remove all --limit-rate 2M
 ```
 
 ## Output

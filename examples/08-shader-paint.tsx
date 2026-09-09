@@ -1,9 +1,9 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* A shader paint post-processing a video: chromatic aberration pulsing with
  * the playhead plus a vignette, driven by two uniforms.
  *
  *   cp examples/08-shader-paint.tsx ~/Projects/shader-paint/index.tsx
- *   dapi open ~/Projects/shader-paint
+ *   compound open ~/Projects/shader-paint
  *
  * <shaderPaint> applies its WGSL to the media paint directly below it in the
  * paint stack (here: the paint created by the video's `src`). The engine

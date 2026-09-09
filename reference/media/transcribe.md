@@ -1,4 +1,7 @@
-# `dapi media transcribe <path>`
+# `compound media transcribe <path>`
+
+Uses Deepgram directly through Compound’s Worker, preserving its word timestamps. Prepared audio is limited to 100 MiB. No forced alignment or secondary transcription model is used.
+
 
 Transcribes the speech in a video or audio asset and returns the timed transcript. Word-level start/end times are in **seconds** (source/content time).
 

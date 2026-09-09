@@ -17,8 +17,8 @@ import {
   verticalConstraintName,
   verticalConstraints,
 } from "./constants";
-import { useTrait } from "@diffusionstudio/koota-solid";
-import { Constraint, ConstraintType } from "@diffusionstudio/runtime";
+import { useTrait } from "@compound/koota-solid";
+import { Constraint, ConstraintType } from "@compound/runtime";
 import { useEditor } from "@/engine/hooks";
 
 import type { Entity } from "koota";

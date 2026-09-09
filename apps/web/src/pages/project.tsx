@@ -6,7 +6,6 @@ import { Show, createEffect, createMemo, createResource } from 'solid-js';
 import { Navigate, useNavigate } from '@solidjs/router';
 import { EditorPage } from './editor';
 import { LayoutProvider } from "@/context/layout";
-import { PromptInputProvider } from "@/context/prompt-input";
 import { EditorApiProvider } from '@/context/dapi';
 import { ExportProvider } from '@/context/export';
 import { ProjectProvider } from '@/context/project';
@@ -58,11 +57,9 @@ export function ProjectPage() {
               <EditorApiProvider>
                 <TimelineProvider>
                   <ExportProvider>
-                    <PromptInputProvider>
                       <LayoutProvider>
                         <EditorPage />
                       </LayoutProvider>
-                    </PromptInputProvider>
                   </ExportProvider>
                 </TimelineProvider>
               </EditorApiProvider>

@@ -16,7 +16,7 @@ import {
   isSequence,
   isShape,
   isText,
-} from "@diffusionstudio/runtime";
+} from "@compound/runtime";
 import { useAssetSelection, useSelection, useTool } from "@/engine/hooks";
 import { InspectorHeader } from "./inspector-header";
 import { BackgroundSettings } from "./background";

@@ -19,12 +19,12 @@ import { ColorOpacityPicker } from "@/components/ui/color-opacity-picker";
 import { ControlledTextField } from "@/components/ui/text-field";
 import { SegmentedIconTabs } from "@/components/ui/segmented-icon-tabs";
 import { Keyframe } from "@/components/ui/keyframe";
-import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
-import { Computed, StrokeJoin, StrokeStyle, colorToHex } from "@diffusionstudio/runtime";
+import { useTrait, useWorld } from "@compound/koota-solid";
+import { Computed, StrokeJoin, StrokeStyle, colorToHex } from "@compound/runtime";
 import { useDerived, useEditor } from "@/engine/hooks";
 import { syncKeyframe } from "@/engine/keyframes";
 
-import type { StrokeJoin as StrokeJoinName } from "@diffusionstudio/jsx";
+import type { StrokeJoin as StrokeJoinName } from "@compound/jsx";
 import type { Entity } from "koota";
 
 const JOIN_SEGMENTS: { value: StrokeJoinName; icon: string; label: string }[] = [

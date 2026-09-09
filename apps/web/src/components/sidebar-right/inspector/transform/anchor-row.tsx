@@ -12,8 +12,8 @@ import {
   ContextMenuContent,
   ContextMenuItem,
 } from "@/components/ui/context-menu";
-import { useTrait } from "@diffusionstudio/koota-solid";
-import { Anchor } from "@diffusionstudio/runtime";
+import { useTrait } from "@compound/koota-solid";
+import { Anchor } from "@compound/runtime";
 import { AnchorPointPicker } from "./anchor-picker";
 
 import type { Entity } from "koota";

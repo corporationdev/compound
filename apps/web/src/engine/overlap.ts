@@ -15,7 +15,7 @@
  * they are covered entirely, and split in two when the drop lands inside one.
  */
 
-import { ChildOf, Computed, Geometry, Group, Sequential, getParentNode, isGroup, store } from '@diffusionstudio/runtime';
+import { ChildOf, Computed, Geometry, Group, Sequential, getParentNode, isGroup, store } from '@compound/runtime';
 import { Or } from 'koota';
 
 import { getDocumentEditor } from './editor';

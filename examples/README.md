@@ -7,7 +7,7 @@ entry and open that folder:
 
 ```sh
 cp examples/01-basics.tsx ~/Projects/basics/index.tsx
-dapi open ~/Projects/basics
+compound open ~/Projects/basics
 ```
 
 | Example | Shows |

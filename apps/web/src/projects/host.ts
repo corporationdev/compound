@@ -139,7 +139,7 @@ export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
  * given an `index.tsx` holding an empty stage — and nothing else. Remembered
  * as a single-project root unless it lives under the active root (where the
  * ordinary resolution already finds it), so it stays reachable by name or id
- * across relaunches. How `dapi open <path>` lands anywhere on disk.
+ * across relaunches. How `compound open <path>` lands anywhere on disk.
  */
 export async function openProjectFolder(dir: string): Promise<ProjectInfo> {
 	await ready;
@@ -201,7 +201,7 @@ export function writeProject(dir: string, edits: SourceEdit[]): Promise<WriteRes
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_WRITE, { dir, edits });
 }
 
-/** The project's config (the `diffusion` field of its package.json), unparsed; null when absent. */
+/** The project's config (the `compound` field of its package.json), unparsed; null when absent. */
 export function readProjectConfig(dir: string): Promise<unknown> {
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_CONFIG_READ, { dir });
 }

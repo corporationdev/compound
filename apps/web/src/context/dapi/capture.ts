@@ -9,14 +9,14 @@ import {
   planSheet,
   planSheetSizes,
   sheetTimecode,
-} from "@diffusionstudio/encoder";
+} from "@compound/encoder";
 
-import { getParentNode, isScene, Source } from "@diffusionstudio/runtime";
+import { getParentNode, isScene, Source } from "@compound/runtime";
 
 import { createCapture } from "@/engine/capture";
 import { resolveNode } from "./nodes";
 
-import type { CaptureRequest, CaptureResult, TimecodedImage } from "@diffusionstudio/cli/channels";
+import type { CaptureRequest, CaptureResult, TimecodedImage } from "@compound/cli/channels";
 import type { EditorSession } from "./session";
 
 // Ceiling on the height a sheet cell renders a node at.

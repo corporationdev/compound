@@ -8,9 +8,9 @@
 
 import {
 	aabbsIntersect, getEntityBounds, getEntityChildren, getViewport, Hidden, Root, screenToWorld,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 
-import type { AABB, Point } from '@diffusionstudio/runtime';
+import type { AABB, Point } from '@compound/runtime';
 import type { World } from 'koota';
 
 /** The visible part of the canvas in document space, or null before a surface is mounted. */

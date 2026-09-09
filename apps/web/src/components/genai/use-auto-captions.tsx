@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { createMemo } from "solid-js";
-import { Captions, authoredElement } from "@diffusionstudio/reconciler";
-import { Caption, getEntityTree, isScene } from "@diffusionstudio/runtime";
-import { useWorld } from "@diffusionstudio/koota-solid";
+import { Captions, authoredElement } from "@compound/reconciler";
+import { Caption, getEntityTree, isScene } from "@compound/runtime";
+import { useWorld } from "@compound/koota-solid";
 import { useEditor, useSelection } from "@/engine/hooks";
 import { toast } from "somoto";
 

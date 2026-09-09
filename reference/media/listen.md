@@ -1,4 +1,7 @@
-# `dapi media listen <path>`
+# `compound media listen <path>`
+
+Uses Gemini through Compound’s Worker. Prepared media is limited to 100 MiB and requests time out after four minutes; choose a shorter window for large files.
+
 
 Puts a multimodal model in front of an audio track and returns its answer. With no prompt it returns a general description of what is heard; with `--prompt` it answers that question about the audio (e.g. "who is speaking?", "what music is playing?", "summarize what is said"). Accepts an audio file or a video, but only the audio track is analyzed by default. Alias: `watch`.
 

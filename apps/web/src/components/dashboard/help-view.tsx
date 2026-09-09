@@ -76,11 +76,11 @@ export function DashboardHelpView() {
         <DashboardDividedStack>
           <DashboardHelpExternalRow
             label="What's new"
-            href="https://www.diffusion.studio/updates"
+            href="https://github.com/corporationdev/compound/releases"
           />
           <DashboardHelpExternalRow
-            label="Discord community"
-            href="https://discord.gg/AYySWDhgNK"
+            label="Source code"
+            href="https://github.com/corporationdev/compound"
           />
         </DashboardDividedStack>
       </DashboardSurfaceSection>
@@ -92,11 +92,11 @@ export function DashboardHelpView() {
           </Show>
           <DashboardHelpExternalRow
             label="Report issue"
-            href="mailto:support@diffusion.studio"
+            href="https://github.com/corporationdev/compound/issues/new"
           />
           <DashboardHelpExternalRow
-            label="Contact support"
-            href="https://discord.gg/AYySWDhgNK"
+            label="Support issues"
+            href="https://github.com/corporationdev/compound/issues"
           />
         </DashboardDividedStack>
       </DashboardSurfaceSection>

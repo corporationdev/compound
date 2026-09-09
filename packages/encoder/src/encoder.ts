@@ -20,7 +20,7 @@ import {
 	Position, Offset, Rotation, Scale, Skew,
 	Time, FrameRate, RenderSurface, AudioEngine, Root,
 	FramePromises,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 
 import { TargetBuffer } from './buffer';
 import { createOutputFormat } from './format';

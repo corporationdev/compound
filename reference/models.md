@@ -1,4 +1,7 @@
-# `dapi models [type]`
+# `compound models [type]`
+
+> Compound: cloud media generation and transforms are unavailable. Import media files instead. Model and voice listings are empty. The API descriptions below document the upstream authoring contract.
+
 
 Lists the generation models available for a media type, including each model's capabilities. Use it to discover valid model ids and the per-model constraints (durations, aspect ratios, features) to set on an asset declaration (see [jsx/generate.md](./jsx/generate.md)).
 

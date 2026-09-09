@@ -13,8 +13,8 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { Keyframe } from "@/components/ui/keyframe";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { Computed } from "@diffusionstudio/runtime";
+import { useWorld } from "@compound/koota-solid";
+import { Computed } from "@compound/runtime";
 import { useDerived, useEditor } from "@/engine/hooks";
 import { syncKeyframe } from "@/engine/keyframes";
 

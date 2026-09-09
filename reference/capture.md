@@ -1,4 +1,4 @@
-# `dapi capture <id> [-t, --time <time...>]`
+# `compound capture <id> [-t, --time <time...>]`
 
 Renders single frames of a scene at one or more timeline positions and merges them into **contact sheets**: up to 12 positions per PNG, each cell labelled with the timecode of the frame actually rendered and drawn as large as the sheet allows, so a few positions arrive as one high-resolution picture instead of a directory to open one by one. `--separate` writes a PNG per position instead.
 
@@ -12,7 +12,7 @@ Scenes only: a single element renders inside its scene, so capture the scene at 
 - `-t, --time <time...>`: one or more positions to capture, relative to the export's first frame — the workarea's start, so `0` is the export's frame 0 — each a `Time` value (optional; default `0`)
 - `-S, --separate`: write one PNG per position instead of merging them into contact sheets (optional). Each is rendered at 720p height and named after its timecode (e.g. `01s12f.png`).
 - `--per-sheet <n>`: positions per contact sheet, 1 to 12 (optional; default as many as fit). Fewer positions per sheet means a larger cell each. Sheets are balanced, so 13 positions become 7 + 6 rather than 12 + 1.
-- `-o, --output <dir>`: directory to write the PNGs into (optional; default a fresh `dapi-capture-*` directory in the system temp directory, so runs never overwrite each other). Writing into the same directory twice overwrites images whose name matches; with `--separate`, requested times that land on the same frame share one file.
+- `-o, --output <dir>`: directory to write the PNGs into (optional; default a fresh `compound-capture-*` directory in the system temp directory, so runs never overwrite each other). Writing into the same directory twice overwrites images whose name matches; with `--separate`, requested times that land on the same frame share one file.
 
 ## Timecodes
 
@@ -36,11 +36,11 @@ Sheets are opaque: a scene's transparent background composites onto flat grey, a
 JSON Lines, one object per written image: a contact sheet by default, a position with `--separate`.
 
 ```ts
-{ timecode: string; path: string }   // e.g. { "timecode": "0f-01s15f", "path": "/tmp/dapi-capture-3f2c1a8e/0f-01s15f.png" }
+{ timecode: string; path: string }   // e.g. { "timecode": "0f-01s15f", "path": "/tmp/compound-capture-3f2c1a8e/0f-01s15f.png" }
 ```
 
 A sheet's timecode is the span it covers; a single position's is its own. Sheets come in timeline order, and their cells in the order the positions were requested in.
 
 ## Errors
 
-Exits non-zero if no project is open (`No project open` — run `dapi open <dir>` first), the id is unknown, the id is ambiguous (two files use it — pass `file:id`), the id names a node that is not a scene (the error names the scene to capture instead), `--per-sheet` is outside 1 to 12, or a PNG can't be written.
+Exits non-zero if no project is open (`No project open` — run `compound open <dir>` first), the id is unknown, the id is ambiguous (two files use it — pass `file:id`), the id names a node that is not a scene (the error names the scene to capture instead), `--per-sheet` is outside 1 to 12, or a PNG can't be written.
