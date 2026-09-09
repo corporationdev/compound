@@ -1,4 +1,4 @@
-# `dapi media waveform <path>`
+# `compound media waveform <path>`
 
 Renders the audio track of a video or audio file as an amplitude **waveform** PNG, written to a file in the system temp directory: loudness over time drawn from decoded audio peaks, with a timestamp ruler. Silent stretches are highlighted in red. Renders locally; no credits. Alias: `wave`.
 

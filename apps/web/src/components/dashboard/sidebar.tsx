@@ -50,10 +50,10 @@ export function DashboardSidebarHeader() {
     // Extra top padding on the macOS desktop build clears the traffic lights
     // (hiddenInset title bar), except in fullscreen where they are gone.
     <div class="flex flex-col items-start gap-3 p-4 [[data-platform=darwin]:not([data-fullscreen=true])_&]:pt-14">
-      <Icon name="diffusion-logo-large" class="size-6 text-muted-foreground" />
+      <Icon name="compound-logo" class="size-6 text-muted-foreground" />
       <div class="flex w-full flex-col items-start gap-1 text-muted-foreground">
         <p class="w-full text-2xl leading-5 font-450 text-muted-foreground">
-          Diffusion Studio
+          Compound
         </p>
         <div class="flex w-full items-center py-0.5">
           <p class="w-full overflow-hidden text-xxs whitespace-nowrap text-ellipsis text-muted-foreground opacity-50">
@@ -99,10 +99,10 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
 
   const displayName = () => {
     const user = auth.user();
-    return user?.user_metadata?.full_name || user?.email || "User";
+    return user?.name || user?.email || "User";
   };
 
-  const planLabel = () => (auth.isPro() ? "Pro Plan" : "Free Plan");
+
 
   const initial = () => displayName().charAt(0).toUpperCase();
   const avatarUrl = useAvatar();
@@ -136,7 +136,7 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
             {displayName()}
           </span>
           <span class="truncate text-xxs text-muted-foreground">
-            {planLabel()}
+            {auth.user()?.email}
           </span>
         </div>
       </button>

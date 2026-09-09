@@ -4,28 +4,18 @@
 
 import {
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { usePromptInput } from "@/context/prompt-input";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { Tool, ToolType } from "@diffusionstudio/runtime";
+import { useWorld } from "@compound/koota-solid";
+import { Tool, ToolType } from "@compound/runtime";
 
 export function ToolMenu() {
-  const { setPromptInputOpen } = usePromptInput();
   const world = useWorld();
   const setTool = (value: ToolType) => world.set(Tool, { value });
 
   return (
     <>
-      <DropdownMenuGroup>
-        <DropdownMenuItem onSelect={() => setPromptInputOpen(true)}>
-          Generate with AI...
-        </DropdownMenuItem>
-      </DropdownMenuGroup>
-
-      <DropdownMenuSeparator />
 
       <DropdownMenuGroup>
         <DropdownMenuItem onSelect={() => setTool(ToolType.SCENE)}>

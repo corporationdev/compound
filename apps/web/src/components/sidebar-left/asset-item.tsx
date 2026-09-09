@@ -4,8 +4,8 @@
 
 import { createSignal, onMount, onCleanup, Show, createMemo } from "solid-js";
 import { toast } from "somoto";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { assetName } from "@diffusionstudio/assets";
+import { useWorld } from "@compound/koota-solid";
+import { assetName } from "@compound/assets";
 import { insertAssetAtPlayhead, replaceAssetSource, saveAssetAs } from "@/engine/asset-actions";
 import {
   ContextMenu,
@@ -21,7 +21,7 @@ import { formatAssetDuration } from "@/utils";
 import { useLibrary } from "@/engine/library";
 import { ASSET_DRAG_TYPE } from "./folder-item";
 
-import type { Asset } from "@diffusionstudio/assets";
+import type { Asset } from "@compound/assets";
 
 export type LazyAssetItemProps = {
   asset: Asset;

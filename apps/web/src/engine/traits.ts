@@ -5,13 +5,13 @@
 /**
  * Editor state on the world, next to the runtime's own singletons: what the
  * pointer and keyboard are doing, and what the HUD is drawing because of it.
- * None of it belongs in `@diffusionstudio/runtime` (a headless world has no
+ * None of it belongs in `@compound/runtime` (a headless world has no
  * pointer), and none of it is authored, so it never reaches the source.
  */
 
 import { trait } from 'koota';
 
-import type { CanvasPointerEvent, Point } from '@diffusionstudio/runtime';
+import type { CanvasPointerEvent, Point } from '@compound/runtime';
 import type { ProjectConfig as ProjectConfigStore } from './project-config';
 
 export type PointerPhase = 'pressed' | 'lifted';
@@ -86,7 +86,7 @@ export const PointerEvents = trait({ queue: () => [] as CanvasPointerEvent[] });
 export const AssetSelection = trait({ id: null as string | null });
 
 /**
- * The config of the project on disk (its package.json `diffusion` field),
+ * The config of the project on disk (its package.json `compound` field),
  * attached while a project is open; see `./project-config`. The handle only,
  * like Library: the values are its own reactive state.
  */

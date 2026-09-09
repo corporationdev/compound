@@ -21,7 +21,7 @@ What the editor writes is what it changed. Elements it inserted or moved are wri
 A project can subscribe to the timeline instead of reaching for wall-clock timers:
 
 ```tsx
-import { useTicker } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
 
 export default function Project() {
   const { time, frame } = useTicker();
@@ -55,7 +55,7 @@ The values respect play, pause, scrubbing, looping, and playback speed, which wa
 The host's rasterization density, as one reactive accessor: how many device pixels one composition pixel is drawn with, camera zoom excluded.
 
 ```tsx
-import { useResolution } from "@diffusionstudio/jsx";
+import { useResolution } from "@compound/jsx";
 
 const resolution = useResolution();
 ```

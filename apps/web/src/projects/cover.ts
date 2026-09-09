@@ -4,7 +4,7 @@
 
 import { createSignal } from 'solid-js';
 
-import { CACHE_DIR } from '@diffusionstudio/assets';
+import { CACHE_DIR } from '@compound/assets';
 
 import { createProjectFS } from './fs';
 import { getProject, isDesktop } from './host';

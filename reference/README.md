@@ -1,10 +1,10 @@
-# dapi CLI Reference
+# compound CLI Reference
 
-Reference for `dapi`, the Diffusion Studio CLI. Every canvas and project command talks to the running app over a local socket. Responses are JSON written to stdout; errors are human-readable messages on stderr with a non-zero exit.
+Reference for `compound`, the Compound CLI. Every canvas and project command talks to the running app over a local socket. Responses are JSON written to stdout; errors are human-readable messages on stderr with a non-zero exit.
 
 Each feature command has its own file (linked below). The JSX code syntax specified in [jsx/](./jsx/README.md) is **pseudo-SVG**, mirroring SVG's shape-and-paint model with the editor's own tags and props rather than the SVG spec.
 
-A project is a folder of that JSX, and **the source is the document**: the app compiles the entry file and renders every element into an editable node, and edits made on the canvas are written back to the element that authored them. So the loop is `dapi open <dir>` once, then edit the files — there is no command that pushes content into the app. What the commands do is read the running app ([`context`](./context.md), [`capture`](./capture.md), [`logs`](./logs.md)), inspect media, and list what a declaration may name.
+A project is a folder of that JSX, and **the source is the document**: the app compiles the entry file and renders every element into an editable node, and edits made on the canvas are written back to the element that authored them. So the loop is `compound open <dir>` once, then edit the files — there is no command that pushes content into the app. What the commands do is read the running app ([`context`](./context.md), [`capture`](./capture.md), [`logs`](./logs.md)), inspect media, and list what a declaration may name.
 
 ## Groups
 
@@ -16,47 +16,47 @@ A project is a folder of that JSX, and **the source is the document**: the app c
 
 How the surface is divided:
 
-- AI asset generation (image / video / speech / audio) is declared in the project module (`generate.*`, see [jsx/generate.md](./jsx/generate.md)). `models` and `voices` list what those declarations can reference.
+- Compound supports cloud transcription and Gemini analysis. Import other media from files; cloud generation and transforms are unavailable. `models` and `voices` return empty lists.
 - Inspecting an existing asset (probe / transcribe / listen / filmstrip / waveform / grab) lives under `media`.
 
 ## Commands
 
 ### App
 
-- [`dapi whoami`](./whoami.md): print the authenticated account
-- [`dapi logs`](./logs.md): recent console output from the running app
-- [`dapi screenshot`](./screenshot.md): capture the entire application window as a PNG
-- [`dapi report`](./report.md): file a GitHub issue about a bug in the CLI or the app, with diagnostics attached
+- [`compound whoami`](./whoami.md): print the authenticated account
+- [`compound logs`](./logs.md): recent console output from the running app
+- [`compound screenshot`](./screenshot.md): capture the entire application window as a PNG
+- [`compound report`](./report.md): file a GitHub issue about a bug in the CLI or the app, with diagnostics attached
 
 ### Document
 
-- [`dapi open`](./open.md): launch the app and open (or create) a project folder, anywhere on disk
-- [`dapi context`](./context.md): which project the app has open, where its playhead sits, its registered fonts, and where its generations stand
-- [`dapi capture`](./capture.md): render frames of a scene, as an export would, to a labelled contact sheet or one PNG per position
-- [`dapi check`](./check.md): check a node's subtree for structural mistakes (black-frame gaps, never-visible nodes, failed sources) and report subtree stats
-- [`dapi export`](./export.md): encode a scene to a video file, with the settings saved in the project's `package.json`
+- [`compound open`](./open.md): launch the app and open (or create) a project folder, anywhere on disk
+- [`compound context`](./context.md): which project the app has open, where its playhead sits, its registered fonts, and where its generations stand
+- [`compound capture`](./capture.md): render frames of a scene, as an export would, to a labelled contact sheet or one PNG per position
+- [`compound check`](./check.md): check a node's subtree for structural mistakes (black-frame gaps, never-visible nodes, failed sources) and report subtree stats
+- [`compound export`](./export.md): encode a scene to a video file, with the settings saved in the project's `package.json`
 
 ### Media
 
-- [`dapi media probe`](./media/probe.md): container and track metadata
-- [`dapi media transcribe`](./media/transcribe.md): timed speech transcript
-- [`dapi media grab`](./media/grab.md): decode video frames to a labelled contact sheet, or one PNG per frame
-- [`dapi media filmstrip`](./media/filmstrip.md): grid of video frames as a PNG
-- [`dapi media waveform`](./media/waveform.md): audio waveform PNG with silence highlighting
-- [`dapi media listen`](./media/listen.md): AI description of an audio track
+- [`compound media probe`](./media/probe.md): container and track metadata
+- [`compound media transcribe`](./media/transcribe.md): timed speech transcript
+- [`compound media grab`](./media/grab.md): decode video frames to a labelled contact sheet, or one PNG per frame
+- [`compound media filmstrip`](./media/filmstrip.md): grid of video frames as a PNG
+- [`compound media waveform`](./media/waveform.md): audio waveform PNG with silence highlighting
+- [`compound media listen`](./media/listen.md): AI description of an audio track
 
 ### Generation reference
 
-- [`dapi models`](./models.md): list generation models and constraints
-- [`dapi voices`](./voices.md): list speech voices
+- [`compound models`](./models.md): list generation models and constraints
+- [`compound voices`](./voices.md): list speech voices
 
 ### Fonts
 
-- [`dapi fonts`](./fonts.md): list local fonts
+- [`compound fonts`](./fonts.md): list local fonts
 
 ### Download
 
-- [`dapi fetch`](./fetch.md): download a video with yt-dlp (installed separately)
+- [`compound fetch`](./fetch.md): download a video with yt-dlp (installed separately)
 
 ## Shared types
 
@@ -74,4 +74,4 @@ Time inputs take the `Time` format unless noted otherwise. Times in **outputs** 
 - **Unix-style names are canonical.** Commands without a natural Unix equivalent (`context`, `whoami`) keep their descriptive names.
 - **Stderr:** human-readable error messages.
 - **Exit codes:** `0` on success, `1` on any error (missing file, app not running, invalid input, IPC error).
-- **App must be running:** every command except `fonts` and `fetch` talks to the open Diffusion Studio instance. If the app isn't running, the CLI prints an instruction to launch it and exits `1`. `report` is the one command that reads from the app but tolerates its absence, recording it in the issue instead of failing.
+- **App must be running:** every command except `fonts` and `fetch` talks to the open Compound instance. If the app isn't running, the CLI prints an instruction to launch it and exits `1`. `report` is the one command that reads from the app but tolerates its absence, recording it in the issue instead of failing.

@@ -14,9 +14,9 @@ export default defineConfig(({ mode }) => {
   // The desktop app bundles this build; missing client env would silently ship with auth disabled.
   if (mode === 'desktop') {
     const env = loadEnv(mode, __dirname, '')
-    for (const key of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']) {
+    for (const key of ['VITE_CONVEX_URL', 'VITE_CONVEX_SITE_URL', 'VITE_SERVER_URL']) {
       if (!env[key]) {
-        throw new Error(`${key} is not set. Copy apps/web/.env.example to apps/web/.env before building the desktop app.`)
+        throw new Error(`${key} is not set. Run bun run setup before building the desktop app.`)
       }
     }
   }

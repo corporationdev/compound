@@ -1,0 +1,23 @@
+name: Check
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run test:cloud
+      - run: bun test scripts/preview.test.ts
+      - run: bun test apps/web/test/project-roots.test.ts
+      - run: bun run test:branding
+      - run: bun run build
+      - run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload

@@ -5,13 +5,13 @@
 /**
  * The half of the font story that needs a browser the runtime cannot assume:
  * the machine's own families, behind the Local Font Access API. Web fonts and
- * loading live in `@diffusionstudio/runtime` (`getWebFonts`, `loadWebFont`),
+ * loading live in `@compound/runtime` (`getWebFonts`, `loadWebFont`),
  * which the CLI shares.
  */
 
-import { FontStyle } from '@diffusionstudio/runtime';
+import { FontStyle } from '@compound/runtime';
 
-import type { FontSources } from '@diffusionstudio/runtime';
+import type { FontSources } from '@compound/runtime';
 
 interface LocalFont {
 	family: string;

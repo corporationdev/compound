@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { Command } from "commander";
 import { version } from "../../../package.json";
-import { parseTime, TIME_FPS } from "@diffusionstudio/jsx";
+import { parseTime, TIME_FPS } from "@compound/jsx";
 import { editor, errnoCode, EXPORT_TIMEOUT_MS, GENERATE_TIMEOUT_MS, waitForCliSocket } from "./cli-client";
 import { listLocalFonts } from "./fonts";
 import { buildIssueBody, createIssue } from "./report";
@@ -22,7 +22,7 @@ import type { AssetRef, FrameQuality, LogEntry, LogLevel, TimecodedImage } from 
 const GENERATE = { context: { timeoutMs: GENERATE_TIMEOUT_MS } };
 const EXPORT = { context: { timeoutMs: EXPORT_TIMEOUT_MS } };
 
-const APP_NAME = "Diffusion Studio";
+const APP_NAME = "Compound";
 
 function handleSocketError(e: unknown): never {
   const code = errnoCode(e);
@@ -104,7 +104,7 @@ async function mediaFrame(ref: string, opts: MediaFrameOptions): Promise<void> {
 
   const perSheet = parsePerSheet(opts.perSheet, opts.separate);
   const target = resolveAssetRef(ref);
-  const dir = opts.output ?? join(tmpdir(), `dapi-grab-${randomUUID().slice(0, 8)}`);
+  const dir = opts.output ?? join(tmpdir(), `compound-grab-${randomUUID().slice(0, 8)}`);
   mkdirSync(dir, { recursive: true });
   try {
     const images = await editor.media.frame.query({
@@ -290,7 +290,7 @@ async function captureNode(id: string, opts: CaptureOptions): Promise<void> {
   const frames = times.map((t) => Math.round(t * TIME_FPS));
   const perSheet = parsePerSheet(opts.perSheet, opts.separate);
 
-  const dir = opts.output ?? join(tmpdir(), `dapi-capture-${randomUUID().slice(0, 8)}`);
+  const dir = opts.output ?? join(tmpdir(), `compound-capture-${randomUUID().slice(0, 8)}`);
   mkdirSync(dir, { recursive: true });
   try {
     const images = await editor.capture.query(
@@ -414,7 +414,7 @@ function formatLogEntry(entry: LogEntry): string {
 
 type ScreenshotOptions = { output?: string };
 
-// `diffusion-studio_2026-07-31_08-55-12.png`
+// `compound_2026-07-31_08-55-12.png`
 function screenshotFilename(taken: Date, attempt: number): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   const date = [taken.getFullYear(), pad(taken.getMonth() + 1), pad(taken.getDate())].join("-");
@@ -604,11 +604,10 @@ async function fetch(url: string, opts: FetchCliOptions, raw: string[]): Promise
 const program = new Command();
 
 program
-  .name("dapi")
+  .name("compound")
   .description(
-    `The Diffusion Studio CLI: understand, generate, and edit footage.
-Analyze video/audio/images, generate them with AI, and compose assets.
-Use for any media analysis, media generation, or video editing task. No ffmpeg needed.`,
+    `The Compound CLI: inspect media, edit compositions, and export video.
+Controls the local Compound desktop app. Transcription and analysis use your signed-in cloud account.`,
   )
   .version(version);
 
@@ -644,7 +643,7 @@ program
 program
   .command("export")
   .description(
-    `Encode a scene to a video file — the same render the app's export runs, covering the scene's workarea. Settings come from the scene's \`diffusion.export.<id>\` entry in the project's package.json (the entry the app's export panel writes); a scene without one exports with the defaults (1080p H.264 MP4, AAC audio). The [output] extension picks the container, overriding the configured format. Prints one JSON object with the written path and the settings used. One export runs at a time; progress shows in the app.`,
+    `Encode a scene to a video file — the same render the app's export runs, covering the scene's workarea. Settings come from the scene's \`compound.export.<id>\` entry in the project's package.json (the entry the app's export panel writes); a scene without one exports with the defaults (1080p H.264 MP4, AAC audio). The [output] extension picks the container, overriding the configured format. Prints one JSON object with the written path and the settings used. One export runs at a time; progress shows in the app.`,
   )
   .argument("<id>", 'scene id to export or `file:id` when two files use the same id')
   .argument(
@@ -780,11 +779,11 @@ program
   .command("report")
   .alias("issue")
   .description(
-    `Report a bug in dapi or the app itself. Files a GitHub issue on diffusionstudio/editor with diagnostics attached (dapi version, platform, recent app logs) and prints its URL. Submits immediately and publicly through the gh CLI, which must be installed and authenticated; there is no review step, so only report real defects and check the attached logs for anything private.`,
+    `Report a bug in compound or the app itself. Files a GitHub issue on corporationdev/compound with diagnostics attached (compound version, platform, recent app logs) and prints its URL. Submits immediately and publicly through the gh CLI, which must be installed and authenticated; there is no review step, so only report real defects and check the attached logs for anything private.`,
   )
   .argument("<title>", "one-line summary of the problem")
   .option("-b, --body <text>", "what happened, in markdown: expected vs actual, and anything the diagnostics won't show")
-  .option("-c, --command <cmd...>", "the dapi command(s) that reproduce it, in order; repeatable")
+  .option("-c, --command <cmd...>", "the compound command(s) that reproduce it, in order; repeatable")
   .option("--logs <n>", `trailing app log entries to attach (0 to omit; default: ${ISSUE_LOG_TAIL})`)
   .action((title: string, opts: IssueOptions) => reportIssue(title, opts));
 
@@ -810,7 +809,7 @@ program
   .option("-f, --format <selector>", `yt-dlp format selector (default: prefer mp4), e.g. "bv*+ba/b"`)
   .option("-a, --audio", "extract audio only (yt-dlp -x)")
   .allowExcessArguments()
-  .addHelpText("after", `\nForward raw yt-dlp flags after --, e.g. dapi fetch <url> -- --sponsorblock-remove all`)
+  .addHelpText("after", `\nForward raw yt-dlp flags after --, e.g. compound fetch <url> -- --sponsorblock-remove all`)
   .action((url: string, opts: FetchCliOptions, cmd: Command) => fetch(url, opts, cmd.args.slice(1)));
 
 // Explicit argv convention: the packaged wrapper runs this bundle on

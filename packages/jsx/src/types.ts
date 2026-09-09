@@ -395,7 +395,7 @@ type ColorProps = {
  * changes.
  */
 type FontProps = {
-  /** A family available on the machine (`dapi fonts`). */
+  /** A family available on the machine (`compound fonts`). */
   fontFamily?: string;
   /** Font size, px. */
   fontSize?: number;

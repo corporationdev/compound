@@ -1,4 +1,4 @@
-# `dapi export <id> [output]`
+# `compound export <id> [output]`
 
 Encodes a scene to a video file — the full render the app's own export runs: the scene re-rendered from a fresh mount at its own size, the workarea from start to end, video and audio, streamed to the output file as it encodes. What [`capture`](./capture.md) shows one frame of, `export` writes all of.
 
@@ -13,11 +13,11 @@ Renders take as long as the scene demands (the CLI waits up to 60 minutes). The 
 
 ## Settings
 
-The scene's entry under `diffusion.export.<id>` in the project's `package.json`:
+The scene's entry under `compound.export.<id>` in the project's `package.json`:
 
 ```jsonc
 {
-  "diffusion": {
+  "compound": {
     "export": {
       "intro": {
         "format": "mp4",                    // mp4 | webm | ogg | mov
@@ -65,4 +65,4 @@ The echoed `config` is the confirmation of what a `package.json` edit actually d
 
 ## Errors
 
-Exits non-zero if no project is open (`No project open` — run `dapi open <dir>` first), the id is unknown or ambiguous (pass `file:id`), the id names a node that is not a scene (the error names the scene to export instead), the output path lacks a container extension, the entry's format is unknown, the configuration is unencodable on this machine (codec × resolution × bitrate — the error says what to lower), another export is already running, or the export is canceled in the app. A failed or canceled export deletes the partial file.
+Exits non-zero if no project is open (`No project open` — run `compound open <dir>` first), the id is unknown or ambiguous (pass `file:id`), the id names a node that is not a scene (the error names the scene to export instead), the output path lacks a container extension, the entry's format is unknown, the configuration is unencodable on this machine (codec × resolution × bitrate — the error says what to lower), another export is already running, or the export is canceled in the app. A failed or canceled export deletes the partial file.

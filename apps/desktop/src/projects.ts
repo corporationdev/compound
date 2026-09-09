@@ -15,6 +15,7 @@ import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
 import { isHeadless } from "./cli-server";
+import { cloudConfig } from "./cloud";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import { applyEdits, editLabel, stampProject } from "./edit";
@@ -26,13 +27,13 @@ import type { SourceContext } from "./edit";
 export const ENTRY_FILES = ["index.tsx", "index.ts", "index.jsx", "index.js"];
 
 /** The module compiled project code imports its JSX runtime from. */
-const RUNTIME_MODULE = "@diffusionstudio/jsx";
+const RUNTIME_MODULE = "@compound/jsx";
 
 /**
  * Imports left for the renderer to resolve against its own module instances
  * (one solid-js reactive graph, one JSX host).
  */
-const EXTERNAL = ["solid-js", "solid-js/*", RUNTIME_MODULE];
+const EXTERNAL = ["solid-js", "solid-js/*", RUNTIME_MODULE, "@diffusionstudio/jsx"];
 
 const BUILD_OPTIONS: BuildOptions = {
   bundle: true,
@@ -91,7 +92,7 @@ async function writePackage(dir: string, pkg: PackageJson): Promise<void> {
 // folder is what the disk calls it, and renaming moves both. Neither can be
 // the project's identity, so the record carries an id that nothing renames —
 // it is what the app's URLs point at, and what the editor keys the open world
-// by. Top level rather than inside `diffusion`, which `writeConfig` replaces
+// by. Top level rather than inside `compound`, which `writeConfig` replaces
 // whole. A `nanoid()`: 21 url-safe characters, so it takes no encoding to be
 // a path segment.
 
@@ -155,14 +156,15 @@ export const getProject = (dir: string): Promise<ProjectInfo | null> => describe
  * sync services leave alone: iCloud's "Desktop & Documents Folders" covers
  * only those two, and OneDrive's Known Folder Move only Desktop, Documents,
  * and Pictures. It also needs no macOS permission prompt, which Documents and
- * Desktop do. Created on demand, so a user who never makes a project never
- * gets the folder.
+ * Desktop do. Created at startup for the selected stage: compound in
+ * production, compound-<stage> in development and preview.
  *
  * Null when it turns out to be synced after all and the user would rather
  * pick somewhere else — the caller falls back to `pickRoot`.
  */
 export async function defaultRoot(window: BrowserWindow | null): Promise<string | null> {
-  const dir = join(app.getPath("videos"), "Diffusion Studio");
+  const { projectsFolderName } = await cloudConfig();
+  const dir = join(app.getPath("videos"), projectsFolderName);
   if (!(await confirmCloudLocation(window, dir, "Choose another folder"))) return null;
   await mkdir(dir, { recursive: true });
   return dir;
@@ -466,38 +468,38 @@ function packageName(name: string): string {
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^[-_.]+|[-_.]+$/g, "")
     .slice(0, 214);
-  return cleaned || "diffusion-project";
+  return cleaned || "compound-project";
 }
 
 // Types only: the editor supplies the runtime when it mounts the project.
-const JSX_VERSION = "latest";
+const JSX_VERSION = "file:.compound/jsx";
 const SOLID_VERSION = "^1.9.10";
 
 /**
- * The dapi surface as npm scripts: the CLI is how a project is inspected and
+ * The compound surface as npm scripts: the CLI is how a project is inspected and
  * cut, so its commands belong in the record of the project they act on —
  * `npm run` prints the menu, `npm run <name> -- <args>` runs one. Named after
  * the command rather than its path (`grab`, not `media:grab`): the `media`
  * subcommands have no top-level namesakes to collide with.
  */
 const SCRIPTS: Record<string, string> = {
-  open: "dapi open .",
-  context: "dapi context",
-  capture: "dapi capture",
-  probe: "dapi media probe",
-  transcribe: "dapi media transcribe",
-  grab: "dapi media grab",
-  filmstrip: "dapi media filmstrip",
-  waveform: "dapi media waveform",
-  listen: "dapi media listen",
-  models: "dapi models",
-  voices: "dapi voices",
-  fonts: "dapi fonts",
-  whoami: "dapi whoami",
-  logs: "dapi logs",
-  screenshot: "dapi screenshot",
-  report: "dapi report",
-  fetch: "dapi fetch",
+  open: "compound open .",
+  context: "compound context",
+  capture: "compound capture",
+  probe: "compound media probe",
+  transcribe: "compound media transcribe",
+  grab: "compound media grab",
+  filmstrip: "compound media filmstrip",
+  waveform: "compound media waveform",
+  listen: "compound media listen",
+  models: "compound models",
+  voices: "compound voices",
+  fonts: "compound fonts",
+  whoami: "compound whoami",
+  logs: "compound logs",
+  screenshot: "compound screenshot",
+  report: "compound report",
+  fetch: "compound fetch",
 };
 
 const packageJson = (name: string, displayName: string): PackageJson => ({
@@ -509,7 +511,7 @@ const packageJson = (name: string, displayName: string): PackageJson => ({
   main: "index.tsx",
   scripts: { ...SCRIPTS },
   devDependencies: {
-    "@diffusionstudio/jsx": JSX_VERSION,
+    "@compound/jsx": JSX_VERSION,
     "solid-js": SOLID_VERSION,
   },
 });
@@ -521,7 +523,7 @@ const TSCONFIG = `{
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "jsxImportSource": "@diffusionstudio/jsx",
+    "jsxImportSource": "@compound/jsx",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
@@ -533,7 +535,7 @@ const TSCONFIG = `{
 /** What a project folder produces but should not check in: installs, derived data (thumbnails, waveforms), and the app-owned docs. */
 const GITIGNORE = `node_modules/
 cache/
-.diffusion/
+.compound/
 `;
 
 const STARTER = `export default function Project() {
@@ -559,7 +561,7 @@ const EMPTY_MANIFEST = { version: 1, folders: [], assets: [] };
  */
 const readme = (displayName: string): string => `# ${displayName}
 
-A Diffusion Studio project: a video composition authored as code. The folder is
+A Compound project: a video composition authored as code. The folder is
 a plain npm package whose entry file is a [Solid](https://www.solidjs.com)
 component; the app compiles it and renders every element into an editable node
 on the canvas.
@@ -569,13 +571,13 @@ on the canvas.
 | Path | What it is |
 | ---- | ---------- |
 | \`index.tsx\` | The entry. Its default export renders the composition. |
-| \`package.json\` | The project record: \`projectId\` (its identity, kept across renames), \`displayName\` (the name shown in the app), \`main\` (the entry), \`diffusion\` (how each scene is exported), and the dapi commands as scripts. |
+| \`package.json\` | The project record: \`projectId\` (its identity, kept across renames), \`displayName\` (the name shown in the app), \`main\` (the entry), \`compound\` (how each scene is exported), and the compound commands as scripts. |
 | \`tsconfig.json\` | Types for the composition tags, through \`jsxImportSource\`. |
 | \`assets.yml\` | The asset library: for every asset its library path, where its bytes are, and what it was found to be. Written by the app; hand edits are read on the next load. |
 | \`assets/\` | The library's files: put one here and it is taken in while the app watches, and the app writes its own here too — generations under \`assets/generated/\`. Media imported through the app is linked where it lies instead, never copied. |
 | \`cache/\` | Derived data (thumbnails, waveforms). Disposable, and not checked in. |
-| \`AGENTS.md\` | The agent entry point: what to read in \`.diffusion/docs/\` and how to work here. |
-| \`.diffusion/\` | App-owned. \`docs/\` is the authoring reference and examples for the installed app version; the app regenerates it, and it is not checked in. |
+| \`AGENTS.md\` | The agent entry point: what to read in \`.compound/docs/\` and how to work here. |
+| \`.compound/\` | App-owned. \`jsx/\` supplies the local authoring types; \`docs/\` is the authoring reference and examples for the installed app version; the app regenerates it, and it is not checked in. |
 
 ## Authoring
 
@@ -620,10 +622,9 @@ export default function Project() {
   and the gradient paints, \`<stroke>\`, \`<shadow>\`, \`<effect>\`.
 - \`src\` takes a library path (\`"b-roll/drone.mp4"\` — the portable form, it
   survives the file being relinked), an asset id, a URL, or an absolute path.
-- Generated assets are declared rather than fetched: \`src={generate.image({ prompt })}\`,
-  and \`generate.video\`, \`generate.voice\`, \`generate.audio\`. They are produced on
-  mount, in dependency order. \`dapi context\` reports where each stands:
-  generating, failed with the reason, or done with the asset path it landed as.
+- Compound supports automatic captions via Deepgram and media analysis via Gemini.
+  Cloud image/video/voice/audio generation and source transforms are unavailable;
+  import media files instead. Model and voice listings are empty.
 - Solid is fully available while mounting: \`<For>\`, \`<Show>\`, \`createMemo\`, and
   \`useTicker()\` for values that follow the playhead.
 - npm packages work as they normally do. The folder is a real npm package, so
@@ -636,48 +637,48 @@ yourself with \`npx tsc --noEmit\`.
 
 ## Commands
 
-Every dapi command is a script here: \`npm run\` lists them, and
+Every compound command is a script here: \`npm run\` lists them, and
 \`npm run <name> -- <args>\` runs one (\`npm run grab -- b-roll/drone.mp4 -c 6\`).
 All of them talk to the running app, except \`fonts\` and \`fetch\`.
 
 | Script | Command | What it does |
 | ------ | ------- | ------------ |
-| \`open\` | \`dapi open .\` | Launch the app with this project open. |
-| \`context\` | \`dapi context\` | Which project the app has open, where its playhead sits, its fonts, where its generations stand. |
-| \`capture\` | \`dapi capture <id>\` | Render frames of a scene, as an export would, to labelled PNG contact sheets. |
-| \`probe\` | \`dapi media probe <id\\|path>\` | Container and per-track metadata, without decoding. |
-| \`transcribe\` | \`dapi media transcribe <id\\|path>\` | Timed speech transcript, word by word. |
-| \`grab\` | \`dapi media grab <id\\|path>\` | Decode frames of a video to labelled PNG contact sheets. |
-| \`filmstrip\` | \`dapi media filmstrip <id\\|path>\` | Thumbnail grid across a window of a video. |
-| \`waveform\` | \`dapi media waveform <id\\|path>\` | Loudness over time, with the silences marked. |
-| \`listen\` | \`dapi media listen <id\\|path>\` | Ask a multimodal model what is in an audio track. |
-| \`models\` | \`dapi models [type]\` | Generation models and their per-model constraints. |
-| \`voices\` | \`dapi voices\` | Speech voices for \`generate.voice\`. |
-| \`fonts\` | \`dapi fonts\` | Local font families, valid as \`fontFamily\`. |
-| \`whoami\` | \`dapi whoami\` | The signed-in account. |
-| \`logs\` | \`dapi logs\` | Recent console output from the app. |
-| \`screenshot\` | \`dapi screenshot\` | The whole app window as a PNG. |
-| \`report\` | \`dapi report <title>\` | File a bug against the editor, with diagnostics attached. |
-| \`fetch\` | \`dapi fetch <url>\` | Download a video with yt-dlp (installed separately). |
+| \`open\` | \`compound open .\` | Launch the app with this project open. |
+| \`context\` | \`compound context\` | Which project the app has open, where its playhead sits, its fonts, where its generations stand. |
+| \`capture\` | \`compound capture <id>\` | Render frames of a scene, as an export would, to labelled PNG contact sheets. |
+| \`probe\` | \`compound media probe <id\\|path>\` | Container and per-track metadata, without decoding. |
+| \`transcribe\` | \`compound media transcribe <id\\|path>\` | Timed speech transcript, word by word. |
+| \`grab\` | \`compound media grab <id\\|path>\` | Decode frames of a video to labelled PNG contact sheets. |
+| \`filmstrip\` | \`compound media filmstrip <id\\|path>\` | Thumbnail grid across a window of a video. |
+| \`waveform\` | \`compound media waveform <id\\|path>\` | Loudness over time, with the silences marked. |
+| \`listen\` | \`compound media listen <id\\|path>\` | Ask a multimodal model what is in an audio track. |
+| \`models\` | \`compound models [type]\` | Generation models and their per-model constraints. |
+| \`voices\` | \`compound voices\` | Speech voices for \`generate.voice\`. |
+| \`fonts\` | \`compound fonts\` | Local font families, valid as \`fontFamily\`. |
+| \`whoami\` | \`compound whoami\` | The signed-in account. |
+| \`logs\` | \`compound logs\` | Recent console output from the app. |
+| \`screenshot\` | \`compound screenshot\` | The whole app window as a PNG. |
+| \`report\` | \`compound report <title>\` | File a bug against the editor, with diagnostics attached. |
+| \`fetch\` | \`compound fetch <url>\` | Download a video with yt-dlp (installed separately). |
 
 ## Reference
 
-- [JSX reference](https://github.com/diffusionstudio/editor/blob/main/reference/jsx/README.md): elements, timing, paints, generation, captions
-- [CLI reference](https://github.com/diffusionstudio/editor/blob/main/reference/README.md): every command, its options and its output
-- [Examples](https://github.com/diffusionstudio/editor/tree/main/examples): runnable compositions to read
+- [JSX reference](https://github.com/corporationdev/compound/blob/main/reference/jsx/README.md): elements, timing, paints, generation, captions
+- [CLI reference](https://github.com/corporationdev/compound/blob/main/reference/README.md): every command, its options and its output
+- [Examples](https://github.com/corporationdev/compound/tree/main/examples): runnable compositions to read
 `;
 
 /**
  * The agent entry point, written once like the README: the file coding agents
  * load without being asked, and therefore the one place a project is reliably
  * discovered from. Loaded into context whole, so it stays a thin index into
- * `.diffusion/docs` rather than the docs themselves — and being the author's
+ * `.compound/docs` rather than the docs themselves — and being the author's
  * file after the first write, an agent can append project conventions to it
  * while the paths it points at stay put.
  */
 const AGENTS = `# Authoring this project
 
-A Diffusion Studio project: a video composition authored as code. The entry
+A Compound project: a video composition authored as code. The entry
 (\`index.tsx\`) default-exports a Solid component that renders a \`<stage>\`;
 the app compiles it and renders every element into an editable node on the
 canvas. The source is the document in both directions: saving recompiles and
@@ -686,22 +687,22 @@ on the element they were authored as.
 
 ## Docs
 
-\`.diffusion/docs/\` holds the authoring reference and runnable examples for
+\`.compound/docs/\` holds the authoring reference and runnable examples for
 the installed app version. The app regenerates it on version changes: read it,
 never edit it, and trust it over memory.
 
 | Read | For |
 | ---- | --- |
-| \`.diffusion/docs/reference/jsx/README.md\` | The JSX contract — elements, props, pipeline. Start here. |
-| \`.diffusion/docs/reference/jsx/timing.md\` | \`start\`/\`end\`/\`sourceIn\`/\`sourceOut\`, and the time formats. |
-| \`.diffusion/docs/reference/jsx/generate.md\` | Declaring AI-generated assets (\`generate.*\`). |
-| \`.diffusion/docs/reference/jsx/variables.md\` | \`@inspect\` variables: annotated consts as live inspector controls. |
-| \`.diffusion/docs/reference/README.md\` | Every dapi command, its options and its output. |
-| \`.diffusion/docs/examples/\` | Complete compositions, basics through shaders. |
+| \`.compound/docs/reference/jsx/README.md\` | The JSX contract — elements, props, pipeline. Start here. |
+| \`.compound/docs/reference/jsx/timing.md\` | \`start\`/\`end\`/\`sourceIn\`/\`sourceOut\`, and the time formats. |
+| \`.compound/docs/reference/jsx/generate.md\` | Declaring AI-generated assets (\`generate.*\`). |
+| \`.compound/docs/reference/jsx/variables.md\` | \`@inspect\` variables: annotated consts as live inspector controls. |
+| \`.compound/docs/reference/README.md\` | Every compound command, its options and its output. |
+| \`.compound/docs/examples/\` | Complete compositions, basics through shaders. |
 
 ## Working here
 
-- Every dapi command is an npm script: \`npm run\` lists them, and
+- Every compound command is an npm script: \`npm run\` lists them, and
   \`npm run <name> -- <args>\` runs one.
 - \`npm run context\` reports what the app has open, where its playhead sits,
   and where generations stand.
@@ -725,7 +726,7 @@ never edit it, and trust it over memory.
  * folder is regenerated wholesale, which is why it gets a namespace of its
  * own instead of files among the author's.
  */
-const APP_DIR = ".diffusion";
+const APP_DIR = ".compound";
 
 /** Repo housekeeping that has no business in a project's copy of the docs. */
 const DOCS_SKIP = new Set(["tsconfig.json", ".DS_Store"]);
@@ -741,7 +742,7 @@ function docsSources(): string {
 }
 
 /**
- * Copies the authoring reference and examples into `.diffusion/docs`, stamped
+ * Copies the authoring reference and examples into `.compound/docs`, stamped
  * with the app version and refreshed whenever the stamp stops matching. Docs
  * that outlive the app they sit next to would lie about it, so unlike the
  * rest of the scaffold this is rewritten, not written once. The stamp only
@@ -753,11 +754,17 @@ async function syncDocs(dir: string): Promise<void> {
   const stampFile = join(docsDir, ".version");
   const version = app.getVersion();
   try {
-    if ((await readFile(stampFile, "utf8")).trim() === version) return;
+    if ((await readFile(stampFile, "utf8")).trim() === version &&
+        await exists(join(dir, APP_DIR, "jsx", "package.json"))) return;
   } catch {
     // No stamp: never synced, or a copy that did not finish. Full copy below.
   }
   const source = docsSources();
+  // Ship the renamed authoring package locally; it need not be published to npm.
+  await cp(join(source, "packages", "jsx"), join(dir, APP_DIR, "jsx"), {
+    recursive: true,
+    filter: (path) => !["node_modules", "dist", ".DS_Store"].includes(basename(path)),
+  });
   await rm(docsDir, { recursive: true, force: true });
   await mkdir(docsDir, { recursive: true });
   for (const name of ["reference", "examples"]) {
@@ -790,7 +797,7 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
   if (typeof next.displayName !== "string") next.displayName = displayName;
   if (typeof next.main !== "string") next.main = entry;
   // The commands are a menu rather than a record: a project that keeps its own
-  // scripts is left with them, one with none is given the dapi surface.
+  // scripts is left with them, one with none is given the compound surface.
   if (typeof next.scripts !== "object" || next.scripts === null) next.scripts = { ...SCRIPTS };
   if (
     next.projectId !== pkg.projectId ||
@@ -806,7 +813,7 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
 /**
  * Turns `dir` into a starter TypeScript project: files the project owns are
  * written once, so opening an up-to-date project writes nothing. Types come
- * from @diffusionstudio/jsx (jsxImportSource), installed by the project.
+ * from @compound/jsx (jsxImportSource), installed by the project.
  */
 export async function scaffold(dir: string, displayName = basename(dir)): Promise<void> {
   const name = basename(dir);
@@ -843,7 +850,7 @@ export async function scaffold(dir: string, displayName = basename(dir)): Promis
  * `index.tsx` holding an empty stage. Nothing else; a project is its JSX, and
  * the record, manifest, and the rest of the scaffold appear lazily, each when
  * something first needs it. A folder that is already a project comes back
- * untouched. How `dapi open <path>` opens a folder anywhere on disk.
+ * untouched. How `compound open <path>` opens a folder anywhere on disk.
  */
 export async function initProject(window: BrowserWindow | null, dir: string): Promise<ProjectInfo> {
   if (!(await confirmCloudLocation(window, dir, "Cancel"))) {
@@ -1108,7 +1115,7 @@ export async function writeManifest(dir: string, manifest: unknown): Promise<voi
   const text = stringifyYaml(manifest, { lineWidth: 0 });
   markSelfWrite(dir, MANIFEST_FILE);
   markSelfWrite(dir, `.${MANIFEST_FILE}.tmp`);
-  await writeFile(temp, `# Diffusion Studio asset library. Edited by the app; hand edits are read on the next load.
+  await writeFile(temp, `# Compound asset library. Edited by the app; hand edits are read on the next load.
 ${text}`, "utf8");
   await rename(temp, path);
 }
@@ -1117,12 +1124,12 @@ ${text}`, "utf8");
 // Config
 
 /** The package.json field the project's config lives under. */
-const CONFIG_FIELD = "diffusion";
+const CONFIG_FIELD = "compound";
 
-/** The project's config (package.json `diffusion`), or null when there is none. */
+/** The project's config (package.json `compound`), or null when there is none. */
 export async function readConfig(dir: string): Promise<unknown> {
   const pkg = await readPackage(dir);
-  return pkg?.[CONFIG_FIELD] ?? null;
+  return pkg?.[CONFIG_FIELD] ?? pkg?.diffusion ?? null;
 }
 
 /**
@@ -1133,6 +1140,8 @@ export async function readConfig(dir: string): Promise<unknown> {
 export async function writeConfig(dir: string, config: unknown): Promise<void> {
   const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
   const next: PackageJson = { ...pkg };
+  // Migrate on save so an old export setting cannot reappear after clearing it.
+  delete next.diffusion;
   if (config === null || config === undefined) delete next[CONFIG_FIELD];
   else next[CONFIG_FIELD] = config;
   markSelfWrite(dir, "package.json");

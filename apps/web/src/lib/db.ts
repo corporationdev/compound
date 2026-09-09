@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { openDB } from 'idb';
+import { migrateLegacyDatabase } from './db-migration';
 import type * as idb from 'idb';
 import { nanoid } from 'nanoid';
 
@@ -25,7 +26,7 @@ export function generateProjectName(): string {
 /**
  * What a root's path points at: a folder of project folders ('multi', the
  * dashboard's kind), or one project folder that is itself the root ('single',
- * how `dapi open <path>` registers a project living anywhere on disk).
+ * how `compound open <path>` registers a project living anywhere on disk).
  */
 export type ProjectRootKind = 'multi' | 'single';
 
@@ -64,6 +65,7 @@ export interface ProjectBundle {
 }
 
 export interface GlobalDBSchema extends idb.DBSchema {
+  meta: { key: string; value: boolean | string };
   roots: {
     value: ProjectRoot;
     key: string;
@@ -78,11 +80,12 @@ export interface GlobalDBSchema extends idb.DBSchema {
   };
 }
 
-const DB_NAME = 'diffusion-studio-idb';
-const DB_VERSION = 2;
+const DB_NAME = 'compound-idb';
+const DB_VERSION = 3;
 
 const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
   upgrade(db) {
+    if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
     if (!db.objectStoreNames.contains('roots')) {
       const store = db.createObjectStore('roots', { keyPath: 'id' });
       store.createIndex('by-path', 'path', { unique: true });
@@ -92,6 +95,9 @@ const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
       db.createObjectStore('bundles', { keyPath: 'projectId' });
     }
   },
+}).then(async (db) => {
+  await migrateLegacyDatabase(db);
+  return db;
 });
 
 
@@ -107,7 +113,7 @@ const folderLabel = (path: string): string => path.split(/[\\/]/).filter(Boolean
  * makes it the active one. The kind is the caller's to say: a path re-opened
  * another way takes the new kind.
  */
-export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 'multi'): Promise<ProjectRoot> {
+export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 'multi', stage?: string): Promise<ProjectRoot> {
   const db = await dbPromise;
   const now = new Date().toISOString();
   const existing = await db.getFromIndex('roots', 'by-path', path);
@@ -117,6 +123,7 @@ export async function rememberProjectRoot(path: string, kind: ProjectRootKind = 
     : { id: nanoid(), path, name: folderLabel(path), kind, createdAt: now, lastUsedAt: now };
 
   await db.put('roots', root);
+  if (kind === 'multi' && stage) await db.put('meta', path, `project-root:${stage}`);
   return root;
 }
 
@@ -132,8 +139,19 @@ export async function listProjectRoots(kind?: ProjectRootKind): Promise<ProjectR
  * when there is none. Single-project roots never qualify — making one active
  * would point the dashboard (and "new project") into a project folder.
  */
-export async function lastUsedProjectRoot(): Promise<ProjectRoot | null> {
+export async function lastUsedProjectRoot(stage?: string): Promise<ProjectRoot | null> {
   const db = await dbPromise;
+  if (stage) {
+    const path = await db.get('meta', `project-root:${stage}`);
+    if (typeof path === 'string') {
+      const root = await db.getFromIndex('roots', 'by-path', path);
+      return root && normalizeRoot(root).kind === 'multi' ? normalizeRoot(root) : null;
+    }
+    // Preserve the existing selection for the first stage after upgrading.
+    // Later stages start with their own default, rather than reusing that root.
+    if (await db.get('meta', 'project-root:legacy-adopted')) return null;
+    await db.put('meta', true, 'project-root:legacy-adopted');
+  }
   let cursor = await db
     .transaction('roots', 'readonly')
     .store.index('by-last-used')
@@ -141,7 +159,10 @@ export async function lastUsedProjectRoot(): Promise<ProjectRoot | null> {
 
   while (cursor) {
     const root = normalizeRoot(cursor.value);
-    if (root.kind === 'multi') return root;
+    if (root.kind === 'multi') {
+      if (stage) await db.put('meta', root.path, `project-root:${stage}`);
+      return root;
+    }
     cursor = await cursor.continue();
   }
   return null;

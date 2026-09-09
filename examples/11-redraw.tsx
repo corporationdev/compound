@@ -1,4 +1,4 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* Redraw on a <surface>: the "hello" write-on stroke from redraw's docs.
  *
  * Redraw (redraw.dev) is a 2D renderer on WebGPU: a Library declares custom
@@ -22,7 +22,7 @@
  *   npm i ./vendors/redraw-1.3.0.tgz typegpu@0.11.3
  *   npm i -D unplugin-typegpu@0.11.3
  *   echo '{ "plugins": ["unplugin-typegpu/babel"] }' > babel.config.json
- *   dapi open ~/Projects/hello-redraw
+ *   compound open ~/Projects/hello-redraw
  *
  * Redraw's pipeline renders into a storage texture, so the surface's
  * swapchain is configured rgba8unorm + STORAGE_BINDING (always
@@ -47,7 +47,7 @@
  */
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { useResolution, useTicker } from "@diffusionstudio/jsx";
+import { useResolution, useTicker } from "@compound/jsx";
 import {
   Color,
   Paint,
@@ -59,7 +59,7 @@ import {
   fitPath,
 } from "redraw";
 import { d, std } from "typegpu";
-import type { SceneNode } from "@diffusionstudio/jsx";
+import type { SceneNode } from "@compound/jsx";
 
 // The handwritten "hello" script from the docs, as SVG path data.
 const helloPath =

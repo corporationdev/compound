@@ -1,0 +1,22 @@
+{
+  "name": "@compound/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "dev": "bun ../../scripts/infra.ts dev",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "convex": "^1.33.1",
+    "aws4fetch": "^1.0.20",
+    "zod": "^4.2.1",
+    "@compound/backend": "workspace:*",
+    "@compound/config": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "@cloudflare/workers-types": "^4.20260501.0",
+    "@types/bun": "^1.3.0"
+  }
+}

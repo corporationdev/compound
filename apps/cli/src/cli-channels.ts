@@ -121,7 +121,7 @@ export type CheckResult = {
 
 export type ExportFormat = "mp4" | "webm" | "ogg" | "mov";
 
-// The settings shape mirrors the scene's `diffusion.export.<id>` entry in the
+// The settings shape mirrors the scene's `compound.export.<id>` entry in the
 // project's package.json (see the web app's engine/project-config), spelled
 // out here so the wire seam stays dependency-free. Codecs are strings on the
 // wire; the app validates them against what the encoder accepts.

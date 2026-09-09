@@ -15,9 +15,9 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { ItemRow } from "@/components/ui/item-row";
 import { PanelSection } from "@/components/ui/panel-section";
-import { useHas } from "@diffusionstudio/koota-solid";
-import { Shadow as ShadowElement } from "@diffusionstudio/reconciler";
-import { Cache, Computed, Hidden, colorToHex } from "@diffusionstudio/runtime";
+import { useHas } from "@compound/koota-solid";
+import { Shadow as ShadowElement } from "@compound/reconciler";
+import { Cache, Computed, Hidden, colorToHex } from "@compound/runtime";
 import { useDerived, useEditor } from "@/engine/hooks";
 import { ShadowInspector } from "./shadow-inspector";
 

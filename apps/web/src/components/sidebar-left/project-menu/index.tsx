@@ -25,7 +25,6 @@ import { FileMenu } from "./file-menu";
 import { EditMenu } from "./edit-menu";
 import { ViewMenu } from "./view-menu";
 import { ToolMenu } from "./tool-menu";
-import { AiCreditsMenu } from "./ai-credits-menu";
 import { HelpMenu } from "./help-menu";
 
 export function ProjectMenu() {
@@ -67,7 +66,7 @@ export function ProjectMenu() {
           type="button"
           class="flex items-center gap-0 h-7 rounded-md text-muted-foreground outline-none focus-ring hover:text-foreground data-expanded:text-foreground"
         >
-          <Icon name="diffusion-logo" class="size-6" />
+          <Icon name="compound-logo" class="size-6" />
           <div class="flex items-center justify-center overflow-clip h-6 w-4">
             <Icon name="chevron-down" class="size-6" />
           </div>
@@ -124,14 +123,6 @@ export function ProjectMenu() {
             <DropdownMenuSeparator />
 
             <DropdownMenuGroup>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>AI credits</DropdownMenuSubTrigger>
-                <DropdownMenuPortal>
-                  <DropdownMenuSubContent class="w-[188px]">
-                    <AiCreditsMenu />
-                  </DropdownMenuSubContent>
-                </DropdownMenuPortal>
-              </DropdownMenuSub>
 
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>Help</DropdownMenuSubTrigger>

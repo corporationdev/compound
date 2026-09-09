@@ -1,11 +1,11 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* `@inspect` variables: annotate a top-level const and the editor's right
  * sidebar grows a control for it (stage level, under the background picker).
  * Moving the control moves the composition live — no remount — and the value
  * it settles on is written back into the initializer below.
  *
  *   cp examples/09-inspect-variables.tsx ~/Projects/inspect/index.tsx
- *   dapi open ~/Projects/inspect
+ *   compound open ~/Projects/inspect
  *
  * See reference/jsx/variables.md for the full annotation grammar.
  */

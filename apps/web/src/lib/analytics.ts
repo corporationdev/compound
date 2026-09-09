@@ -31,7 +31,7 @@ const domains = import.meta.env.VITE_UMAMI_DOMAINS ?? '';
 let initialized = false;
 
 export function initAnalytics(): void {
-  if (initialized) return;
+  if (initialized || !websiteId || !scriptUrl) return;
   initialized = true;
 
   const script = document.createElement("script");

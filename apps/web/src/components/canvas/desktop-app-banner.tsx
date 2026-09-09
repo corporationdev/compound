@@ -11,7 +11,7 @@ import { downloadDesktopApp } from "@/lib/desktop-app";
 import { track } from "@/lib/analytics";
 import { store } from "@/init";
 
-const BANNER_IMAGE = new URL("@/assets/images/desktop-app-banner.png", import.meta.url).href;
+const BANNER_IMAGE = new URL("@/assets/images/compound-logo.png", import.meta.url).href;
 
 /**
  * Dismissible promo for the desktop app, pinned to the bottom left of the
@@ -33,8 +33,8 @@ export function DesktopAppBanner() {
   return (
     <Show when={!dismissed() && !isDesktop}>
       <div class="absolute bottom-4 left-4 z-10 flex w-[220px] flex-col gap-1 rounded-md border border-border bg-background pb-3 shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12)]">
-        <div class="relative aspect-[220/122] w-full overflow-hidden rounded-t-md">
-          <img src={BANNER_IMAGE} alt="" class="pointer-events-none size-full object-cover" />
+        <div class="relative flex aspect-[220/122] w-full items-center justify-center overflow-hidden rounded-t-md bg-[#f7f7f5]">
+          <img src={BANNER_IMAGE} alt="Compound" class="pointer-events-none size-20 rounded-xl object-contain" />
           <button
             type="button"
             aria-label="Dismiss"

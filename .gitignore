@@ -40,3 +40,12 @@ out/
 skills-lock.json
 .agents
 .claude
+# Generated Compound runtime configuration and local secrets
+.generated/
+.alchemy/
+.wrangler/
+.dev.vars*
+apps/desktop/runtime-config.json
+.env.*
+!.env.example
+!.env.op

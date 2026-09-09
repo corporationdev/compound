@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { canEncodeVideo } from "mediabunny";
-import { computeOutputSize } from "@diffusionstudio/encoder";
-import { Computed, FrameRate, getParentNode, isScene, Source, Workarea } from "@diffusionstudio/runtime";
+import { computeOutputSize } from "@compound/encoder";
+import { Computed, FrameRate, getParentNode, isScene, Source, Workarea } from "@compound/runtime";
 
 import { renderOverlay, renderScene } from "@/context/render";
 import { ElectronWritableFileHandle } from "@/lib/electron-file-writable";
@@ -18,7 +18,7 @@ import { mainBridge } from "@/lib/ipc";
 import { MAIN_CHANNELS } from "@desktop/main-channels";
 import { resolveNode } from "./nodes";
 
-import type { ExportRequest, ExportResult, ExportSettings } from "@diffusionstudio/cli/channels";
+import type { ExportRequest, ExportResult, ExportSettings } from "@compound/cli/channels";
 import type { ContainerFormat, ExportConfig } from "@/engine/project-config";
 import type { EditorSession } from "./session";
 
@@ -60,7 +60,7 @@ export function handleExport(session: () => EditorSession) {
       );
     }
 
-    // The scene's entry in the project's package.json (`diffusion.export.<id>`)
+    // The scene's entry in the project's package.json (`compound.export.<id>`)
     // — the same one the app's export panel writes — so a CLI export
     // reproduces the in-app one; a scene without an entry uses the default
     // template, the way ⌘E does. `template` is only the preset's label.

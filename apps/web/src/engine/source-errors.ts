@@ -19,8 +19,8 @@
  * an asset that has since been put back should simply load.
  */
 
-import { SourceError } from '@diffusionstudio/runtime';
-import { authoredElement } from '@diffusionstudio/reconciler';
+import { SourceError } from '@compound/runtime';
+import { authoredElement } from '@compound/reconciler';
 
 import { getDocumentEditor, isLooped } from './editor';
 

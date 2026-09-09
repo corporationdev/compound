@@ -13,13 +13,13 @@ async function installCliFromMenu() {
   if (result.status === "installed") {
     await dialog.showMessageBox({
       type: "info",
-      message: "The dapi command line tool was installed.",
-      detail: `Linked at ${CLI_LINK_PATH}. Run "dapi --help" in a terminal to get started.`,
+      message: "The compound command line tool was installed.",
+      detail: `Linked at ${CLI_LINK_PATH}. Run "compound --help" in a terminal to get started.`,
     });
   } else {
     await dialog.showMessageBox({
       type: "error",
-      message: "Could not install the dapi command line tool.",
+      message: "Could not install the compound command line tool.",
       detail: result.error,
     });
   }
@@ -35,7 +35,7 @@ export function setupAppMenu() {
         { role: "about" },
         { type: "separator" },
         {
-          label: "Install dapi Command Line Tool…",
+          label: "Install compound Command Line Tool…",
           enabled: app.isPackaged,
           click: installCliFromMenu,
         },

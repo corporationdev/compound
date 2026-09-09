@@ -1,27 +1,27 @@
 {
-  "name": "@diffusionstudio/desktop",
+  "name": "@compound/desktop",
   "private": true,
   "version": "0.204.2",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/diffusionstudio/editor.git"
+    "url": "https://github.com/corporationdev/compound.git"
   },
   "main": "dist/main.js",
   "scripts": {
     "build:preload": "esbuild src/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload.js",
     "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --external:esbuild --external:@babel/core --external:@babel/preset-typescript --external:babel-preset-solid --outfile=dist/main.js",
     "build:native": "node scripts/build-native.mjs",
-    "build": "npm run check && npm run build:main && npm run build:preload && npm run build:native",
-    "build:web": "npm --prefix ../web run build:desktop",
-    "stage:cli": "npm --prefix ../cli run build && node scripts/stage-cli.mjs",
+    "build": "bun run check && bun run build:main && bun run build:preload && bun run build:native",
+    "build:web": "bun run --cwd ../web build:desktop",
+    "stage:cli": "bun run --cwd ../cli build && node scripts/stage-cli.mjs",
     "stage:docs": "node scripts/stage-docs.mjs",
     "stage:skills": "node scripts/stage-skills.mjs",
     "check": "tsc --noEmit",
-    "dev": "npm run build && electron-forge start",
-    "package": "npm run build && npm run build:web && npm run stage:cli && npm run stage:docs && npm run stage:skills && electron-forge package",
-    "make": "npm run build && npm run build:web && npm run stage:cli && npm run stage:docs && npm run stage:skills && electron-forge make",
-    "publish": "npm run build && npm run build:web && npm run stage:cli && npm run stage:docs && npm run stage:skills && electron-forge publish",
+    "dev": "bun run build && electron-forge start",
+    "package": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge package",
+    "make": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge make",
+    "publish": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge publish",
     "make:icns": "sh scripts/make-icns.sh"
   },
   "devDependencies": {
@@ -35,15 +35,15 @@
     "typescript": "~5.9.3"
   },
   "dependencies": {
+    "@compound/config": "workspace:*",
     "@babel/core": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
-    "@diffusionstudio/cli": "*",
-    "@diffusionstudio/jsx": "*",
+    "@compound/cli": "*",
+    "@compound/jsx": "*",
     "babel-preset-solid": "^1.9.12",
     "esbuild": "^0.28.1",
     "nanoid": "^6.0.1",
     "ts-morph": "^28.0.0",
-    "update-electron-app": "^3.0.0",
     "yaml": "^2.9.0"
   }
 }

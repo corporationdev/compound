@@ -131,7 +131,7 @@ export function installSkills(): SkillsInstallResult {
   if (source.includes("/AppTranslocation/")) {
     return {
       status: "error",
-      error: "Move Diffusion Studio to the Applications folder and relaunch it, then try again.",
+      error: "Move Compound to the Applications folder and relaunch it, then try again.",
     };
   }
   const skills = stagedSkillNames();
@@ -159,7 +159,7 @@ export function installSkills(): SkillsInstallResult {
 /**
  * Launch-time self-heal: links created by installSkills break when the app
  * moves or was translocated when they were made. Any symlink that targets a
- * Diffusion Studio bundle but not the running app's resources is repointed.
+ * Compound bundle but not the running app's resources is repointed.
  * Links owned by the skills CLI and copied installs are left alone.
  */
 export function healSkillsLinks(): void {
@@ -177,7 +177,7 @@ export function healSkillsLinks(): void {
       } catch {
         continue; // missing, or not a symlink
       }
-      const ours = target.includes("Diffusion Studio") || target.includes("/AppTranslocation/");
+      const ours = target.includes("Compound") || target.includes("Diffusion Studio") || target.includes("/AppTranslocation/");
       const current = join(source, name);
       if (!ours || target === current) continue;
       try {

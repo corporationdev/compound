@@ -1,4 +1,4 @@
-# `dapi media probe <path>`
+# `compound media probe <path>`
 
 Reads the container and per-track technical metadata of an asset; like `ffprobe`, but demuxed locally with mediabunny. Reports the container format, duration, metadata tags, and every track's codec parameters without decoding any media. Reads locally; no credits.
 

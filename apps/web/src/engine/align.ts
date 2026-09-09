@@ -24,7 +24,7 @@ import {
   isScene,
   store,
   transformPoint,
-} from "@diffusionstudio/runtime";
+} from "@compound/runtime";
 import { Or } from "koota";
 import { getDocumentEditor } from "./editor";
 import { syncKeyframe } from "./keyframes";

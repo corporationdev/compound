@@ -4,14 +4,14 @@
 
 import { Index } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useTag } from '@diffusionstudio/koota-solid';
-import { Selected } from '@diffusionstudio/runtime';
+import { useTag } from '@compound/koota-solid';
+import { Selected } from '@compound/runtime';
 import { KeyframeLayer } from './keyframe';
 import { NodeLayer } from './node';
 import { SubItemLayer } from './sub-item';
 
 import type { Component } from 'solid-js';
-import type { TimelineNode, TimelineNodeKind } from '@diffusionstudio/runtime';
+import type { TimelineNode, TimelineNodeKind } from '@compound/runtime';
 
 type LayerProps = {
   layer: TimelineNode;

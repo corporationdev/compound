@@ -37,6 +37,6 @@ export const setEditorSession = setSession;
 /** The session, or the failure a CLI caller can act on. */
 export function requireEditorSession(): EditorSession {
   const current = session();
-  assert(current, "No project open — run `dapi open <dir>` first.");
+  assert(current, "No project open — run `compound open <dir>` first.");
   return current;
 }

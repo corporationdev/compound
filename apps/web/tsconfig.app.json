@@ -14,7 +14,8 @@
       "vite/client",
       "@types/audioworklet",
       "@types/wicg-file-system-access",
-      "@webgpu/types"
+      "@webgpu/types",
+      "node"
     ],
     "allowImportingTsExtensions": true,
     "jsx": "preserve",

@@ -7,9 +7,9 @@
 // through these via an envelope carrying the logical MAIN_CHANNELS name and
 // (for requests) a UUID for correlation.
 //
-// CLI traffic uses a separate wire pair (CLI_WIRE in @diffusionstudio/cli/protocol);
+// CLI traffic uses a separate wire pair (CLI_WIRE in @compound/cli/protocol);
 // main forwards it opaquely without inspecting channel names.
-import type { LogEntry, ScreenshotResult } from "@diffusionstudio/cli/protocol";
+import type { LogEntry, ScreenshotResult } from "@compound/cli/protocol";
 import type { SourceEdit, WriteResult } from "./edit";
 
 export const MAIN_WIRE = {
@@ -26,11 +26,13 @@ export type MainWireChannel = (typeof MAIN_WIRE)[keyof typeof MAIN_WIRE];
 // Renderer-state queries used to live here; they now answer CLI requests
 // directly via the CLI bridge.
 export const MAIN_CHANNELS = {
+  CLOUD_CONFIG: "cloud:config",
+  CLOUD_AUTH: "cloud:auth",
+  CLOUD_MEDIA: "cloud:media",
+  CLOUD_UPLOAD: "cloud:upload",
   // Renderer→Main requests
   APP_OPEN_EXTERNAL: "app:open-external",
   APP_SHOW_IN_FOLDER: "app:show-in-folder",
-  AUTH_GET_PENDING_CALLBACK: "auth:get-pending-callback",
-  CHECKOUT_GET_PENDING_CALLBACK: "checkout:get-pending-callback",
   CLI_IS_INSTALLED: "cli:is-installed",
   CLI_INSTALL: "cli:install",
   SKILLS_IS_INSTALLED: "skills:is-installed",
@@ -68,8 +70,6 @@ export const MAIN_CHANNELS = {
   PROJECTS_FS_REAL_PATH: "projects:fs-real-path",
 
   // Main→Renderer events
-  AUTH_CALLBACK: "auth:callback",
-  CHECKOUT_CALLBACK: "checkout:callback",
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
   HEADLESS_MODE: "headless:mode",
   PROJECTS_CHANGED: "projects:changed",
@@ -105,7 +105,7 @@ export type CompileResult =
   | { ok: true; code: string }
   | { ok: false; error: string };
 
-// Outcome of linking the bundled dapi CLI into PATH. "cancelled" means the
+// Outcome of linking the bundled compound CLI into PATH. "cancelled" means the
 // user dismissed the macOS admin prompt — not an error, not installed.
 export type CliInstallResult =
   | { status: "installed" }
@@ -121,16 +121,18 @@ export type { SourceEdit, WriteResult };
 
 export type MainChannel = (typeof MAIN_CHANNELS)[keyof typeof MAIN_CHANNELS];
 
-// Events fed by a `diffusion://` deep link. Main routes each link to exactly
+// Events fed by a `compound://` deep link. Main routes each link to exactly
 // one of these by its host, so auth and checkout never consume each other's.
-export type DeepLinkChannel =
-  | typeof MAIN_CHANNELS.AUTH_CALLBACK
-  | typeof MAIN_CHANNELS.CHECKOUT_CALLBACK;
 
+export type CloudAuthOperation = 'sendCode' | 'verifyCode' | 'session' | 'token' | 'signOut' | 'updateUser' | 'deleteUser' | 'requestEmailChange' | 'changeEmail';
+export type CloudConfig = { stage: string; projectsFolderName: string; convexUrl: string; authUrl: string; serverUrl: string };
 export type MainRequestMap = {
+  [MAIN_CHANNELS.CLOUD_CONFIG]: { request: void; response: CloudConfig };
+  [MAIN_CHANNELS.CLOUD_AUTH]: { request: { operation: CloudAuthOperation; body?: Record<string, unknown> }; response: unknown };
+  [MAIN_CHANNELS.CLOUD_MEDIA]: { request: { path: string; body: Record<string, unknown> }; response: unknown };
+  [MAIN_CHANNELS.CLOUD_UPLOAD]: { request: { contentType: string; bytes: Uint8Array }; response: { uploadId: string } };
+
   [MAIN_CHANNELS.APP_OPEN_EXTERNAL]: { request: { url: string }; response: void };
-  [MAIN_CHANNELS.AUTH_GET_PENDING_CALLBACK]: { request: void; response: string | null };
-  [MAIN_CHANNELS.CHECKOUT_GET_PENDING_CALLBACK]: { request: void; response: string | null };
   [MAIN_CHANNELS.CLI_IS_INSTALLED]: { request: void; response: boolean };
   [MAIN_CHANNELS.CLI_INSTALL]: { request: void; response: CliInstallResult };
   [MAIN_CHANNELS.SKILLS_IS_INSTALLED]: { request: void; response: boolean };
@@ -191,7 +193,7 @@ export type MainRequestMap = {
   // The asset manifest (`assets.yml`) as plain data; null when there is none.
   [MAIN_CHANNELS.PROJECTS_MANIFEST_READ]: { request: { dir: string }; response: unknown };
   [MAIN_CHANNELS.PROJECTS_MANIFEST_WRITE]: { request: { dir: string; manifest: unknown }; response: void };
-  // The project's config: the `diffusion` field of its package.json, as
+  // The project's config: the `compound` field of its package.json, as
   // parsed (null when absent). The renderer owns its shape; see
   // `engine/project-config` in the web app.
   [MAIN_CHANNELS.PROJECTS_CONFIG_READ]: { request: { dir: string }; response: unknown };
@@ -217,8 +219,6 @@ export type FsStat = { size: number; mtime: number };
 export type MainRequestChannel = keyof MainRequestMap;
 
 export type MainEventMap = {
-  [MAIN_CHANNELS.AUTH_CALLBACK]: { url: string };
-  [MAIN_CHANNELS.CHECKOUT_CALLBACK]: { url: string };
   [MAIN_CHANNELS.WINDOW_FULLSCREEN_CHANGE]: { fullscreen: boolean };
   [MAIN_CHANNELS.HEADLESS_MODE]: { active: boolean };
   // A file inside a watched project folder changed (path relative to `dir`).

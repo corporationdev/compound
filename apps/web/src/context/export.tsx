@@ -5,9 +5,9 @@
 import { createContext, useContext, onCleanup, onMount } from "solid-js";
 import { toast } from "somoto";
 import { canEncodeVideo } from "mediabunny";
-import { useWorld } from "@diffusionstudio/koota-solid";
-import { computeOutputSize } from "@diffusionstudio/encoder";
-import { Computed, FrameRate, getActiveEntity } from "@diffusionstudio/runtime";
+import { useWorld } from "@compound/koota-solid";
+import { computeOutputSize } from "@compound/encoder";
+import { Computed, FrameRate, getActiveEntity } from "@compound/runtime";
 import { assert, downloadObject, isInputTarget } from "@/utils";
 import { useEngineContext } from "@/engine";
 import { useProject } from "@/context/project";

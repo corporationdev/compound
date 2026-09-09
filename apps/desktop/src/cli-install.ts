@@ -8,11 +8,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { CliInstallResult } from "./main-channels";
 
-export const CLI_LINK_PATH = "/usr/local/bin/dapi";
+export const CLI_LINK_PATH = "/usr/local/bin/compound";
 
 // The dev workflow links the workspace build into Homebrew's bin instead
 // (`symlink:create` in apps/cli), so both locations count as installed.
-const DEV_LINK_PATH = "/opt/homebrew/bin/dapi";
+const DEV_LINK_PATH = "/opt/homebrew/bin/compound";
 
 export function isCliInstalled(): boolean {
   return existsSync(CLI_LINK_PATH) || existsSync(DEV_LINK_PATH);
@@ -21,7 +21,7 @@ export function isCliInstalled(): boolean {
 // Linking into /usr/local/bin needs elevation; osascript shows the standard
 // macOS admin prompt so the app itself never asks for credentials.
 function linkCli(): Promise<void> {
-  const wrapper = join(process.resourcesPath, "cli", "bin", "dapi");
+  const wrapper = join(process.resourcesPath, "cli", "bin", "compound");
   const shell = `mkdir -p /usr/local/bin && ln -sf '${wrapper}' '${CLI_LINK_PATH}'`;
   const script = `do shell script "${shell.replaceAll('"', '\\"')}" with administrator privileges`;
   return new Promise((resolve, reject) => {
@@ -33,7 +33,7 @@ export async function installCli(): Promise<CliInstallResult> {
   if (!app.isPackaged) {
     return {
       status: "error",
-      error: "Installing the CLI is only available in the packaged app. Use `npm run symlink:create` in development.",
+      error: "Installing the CLI is only available in the packaged app. Use `bun run --cwd apps/cli symlink:create` from the repository root in development.",
     };
   }
   try {

@@ -1,8 +1,8 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* Anime.js timeline scrubbed by the playhead: one clock, two render worlds.
  *
  *   cp examples/05-anime-timeline.tsx ~/Projects/anime-timeline/index.tsx
- *   dapi open ~/Projects/anime-timeline
+ *   compound open ~/Projects/anime-timeline
  *
  * Needs the html-in-canvas API (see 04-html-in-canvas.tsx). A paused anime.js
  * timeline tweens plain-object targets; a createEffect seeks it to the
@@ -15,7 +15,7 @@
 import { createEffect } from "solid-js";
 import { createStore } from "solid-js/store";
 import { createTimeline } from "animejs";
-import { useTicker } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
 
 const chip = { x: -160, y: 190, rotation: -90, cornerRadius: 12, opacity: 0 };
 const card = { rise: 90, opacity: 0, progress: 0, hue: 210 };

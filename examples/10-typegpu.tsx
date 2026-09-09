@@ -1,4 +1,4 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* TypeGPU on a <surface>: an underwater caustics shader written in TypeScript.
  *
  * The shader is TypeGPU's caustics example (docs.swmansion.com/TypeGPU,
@@ -14,7 +14,7 @@
  *   cd ~/Projects/caustics
  *   npm i typegpu @typegpu/noise && npm i -D unplugin-typegpu
  *   echo '{ "plugins": ["unplugin-typegpu/babel"] }' > babel.config.json
- *   dapi open ~/Projects/caustics
+ *   compound open ~/Projects/caustics
  *
  * Device lifecycle mirrors 07-webgpu.tsx: setup is async and held so exports
  * wait for the pipeline, a signal wakes the draw effect once it exists, and
@@ -28,10 +28,10 @@
  */
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { useTicker } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
 import { tgpu, d, std } from "typegpu";
 import { perlin3d } from "@typegpu/noise";
-import type { SceneNode } from "@diffusionstudio/jsx";
+import type { SceneNode } from "@compound/jsx";
 
 const mainVertex = tgpu.vertexFn({
   in: { vertexIndex: d.builtin.vertexIndex },

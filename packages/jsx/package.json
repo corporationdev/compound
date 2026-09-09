@@ -1,7 +1,7 @@
 {
-  "name": "@diffusionstudio/jsx",
+  "name": "@compound/jsx",
   "version": "0.204.0",
-  "description": "Types and authoring API for Diffusion Studio compositions: the JSX element vocabulary, declarative generated assets (`generate.*`), and the hooks the editor implements when a project is mounted via `dapi mount`.",
+  "description": "Types and authoring API for Compound compositions: the JSX element vocabulary, declarative generated assets (`generate.*`), and the hooks the editor implements when a project is mounted via `compound mount`.",
   "license": "MPL-2.0",
   "type": "module",
   "sideEffects": false,
@@ -24,7 +24,7 @@
     "postpack": "node scripts/postpack.mjs"
   },
   "keywords": [
-    "diffusion-studio",
+    "compound",
     "solid-js",
     "jsx",
     "generative-ai",

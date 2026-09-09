@@ -9,7 +9,7 @@
  * controller itself never paints.
  */
 
-import { getTimelineView } from '@diffusionstudio/runtime';
+import { getTimelineView } from '@compound/runtime';
 
 import { assert, clamp } from '@/utils';
 import { getDocumentEditor } from '@/engine/editor';

@@ -17,15 +17,13 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Separator } from "@/components/ui/separator";
 import { LazyAssetItem } from "@/components/sidebar-left/asset-item";
-import { usePromptInput } from "@/context/prompt-input";
-import { createDefaultConfig } from "@/components/genai/prompt-input";
-import { assetName } from "@diffusionstudio/assets";
-import { useTrait } from "@diffusionstudio/koota-solid";
-import { AssetId, isScene } from "@diffusionstudio/runtime";
+import { assetName } from "@compound/assets";
+import { useTrait } from "@compound/koota-solid";
+import { AssetId, isScene } from "@compound/runtime";
 import { useLibrary } from "@/engine/library";
 import { pickAndImport } from "@/engine/asset-actions";
 
-import type { Asset } from "@diffusionstudio/assets";
+import type { Asset } from "@compound/assets";
 import type { Entity } from "koota";
 
 type AssetFilter = "ALL" | "IMAGE" | "VIDEO";
@@ -54,7 +52,6 @@ export type AssetFillPickerProps = {
  * same way it can from the sidebar.
  */
 export function AssetFillPicker(props: AssetFillPickerProps) {
-  const { openPromptInput } = usePromptInput();
   const library = useLibrary();
 
   const [query, setQuery] = createSignal("");
@@ -174,13 +171,6 @@ export function AssetFillPicker(props: AssetFillPickerProps) {
       </div>
 
       <div class="flex flex-col gap-2 px-4 pb-4 pt-3">
-        <Button
-          variant="secondary"
-          class="w-full"
-          onClick={() => openPromptInput(createDefaultConfig("IMAGE"))}
-        >
-          Generate with AI
-        </Button>
         <Button class="w-full" onClick={() => void handleImportAssets()}>
           Import from computer
         </Button>

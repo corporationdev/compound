@@ -1,0 +1,35 @@
+name: Deploy cloud
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        type: choice
+        options: [dev, preview, prod]
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: cloud-${{ inputs.stage }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - run: bun run check && bun run test:cloud
+      - uses: 1password/install-cli-action@v1
+      - name: Inject secrets, sync Convex, and deploy Alchemy
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          COMPOUND_STAGE: ${{ inputs.stage }}
+        run: |
+          bun run setup --stage "$COMPOUND_STAGE"
+          bun run deploy --stage "$COMPOUND_STAGE"

@@ -4,7 +4,7 @@
 
 import { Show, createMemo, createResource, createSignal } from "solid-js";
 import { canEncodeVideo } from "mediabunny";
-import { computeOutputSize } from "@diffusionstudio/encoder";
+import { computeOutputSize } from "@compound/encoder";
 import { PanelSection } from "@/components/ui/panel-section";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -29,8 +29,8 @@ import { Switch, SwitchControl, SwitchInput, SwitchThumb } from "@/components/ui
 import { Separator } from "@/components/ui/separator";
 import { SliderInput } from "@/components/ui/slider-input";
 import { formatBytes, formatDuration } from "@/utils/formatters";
-import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
-import { Computed, FrameRate, Source } from "@diffusionstudio/runtime";
+import { useTrait, useWorld } from "@compound/koota-solid";
+import { Computed, FrameRate, Source } from "@compound/runtime";
 import { useDerived } from "@/engine/hooks";
 import { useProjectConfig } from "@/engine/project-config";
 import { useExport } from "@/context/export";
@@ -92,7 +92,7 @@ function templateSettings(id: string): ProjectExportConfig | null {
 /**
  * How the selected scene is exported. Project configuration rather than
  * part of the composition: read from and written through the project config
- * (package.json `diffusion.export.<scene id>`, see
+ * (package.json `compound.export.<scene id>`, see
  * `@/engine/project-config`). The row and the floating inspector both read
  * the same accessor, so they never disagree.
  */

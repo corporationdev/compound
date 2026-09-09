@@ -1,9 +1,9 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* Declarative animation: useTicker exposes the playhead as reactive
  * accessors, createMemo derives values from it, and props consume the memos.
  *
  *   cp examples/03-ticker.tsx ~/Projects/ticker/index.tsx
- *   dapi open ~/Projects/ticker
+ *   compound open ~/Projects/ticker
  *
  * No timers, no imperative draw loop: each memo recomputes once per tick and
  * every consumer below reads the cached value. Press play; scrubbing works
@@ -12,7 +12,7 @@
  */
 
 import { createMemo } from "solid-js";
-import { useTicker } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
 
 const LOOP = 4; // seconds per revolution
 

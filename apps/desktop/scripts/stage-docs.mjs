@@ -6,7 +6,7 @@
 // them as an app resource (Contents/Resources/docs). The layout mirrors the
 // repo — reference/ beside examples/ — because the relative links between the
 // pages assume it. scaffold() copies the tree into each project's
-// .diffusion/docs, so what an agent reads in a project is exactly what was
+// .compound/docs, so what an agent reads in a project is exactly what was
 // staged here (see src/projects.ts).
 
 import { cpSync, mkdirSync, rmSync } from "node:fs";
@@ -22,5 +22,9 @@ mkdirSync(stageDir, { recursive: true });
 for (const name of ["reference", "examples"]) {
   cpSync(join(repoRoot, name), join(stageDir, name), { recursive: true });
 }
+cpSync(join(repoRoot, "packages", "jsx"), join(stageDir, "packages", "jsx"), {
+  recursive: true,
+  filter: (path) => !["node_modules", "dist", ".DS_Store"].includes(path.split(/[\\/]/).pop()),
+});
 
 console.log(`stage-docs: staged docs at ${stageDir}`);

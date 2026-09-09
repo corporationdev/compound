@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { AssetId, Computed, Fonts, FrameRate, Generating, getActiveEntity, Library, Name, PendingSource, Source, SourceError } from "@diffusionstudio/runtime";
+import { AssetId, Computed, Fonts, FrameRate, Generating, getActiveEntity, Library, Name, PendingSource, Source, SourceError } from "@compound/runtime";
 
 import { getProjectsRoot } from "@/projects";
 
@@ -11,7 +11,7 @@ import type { Entity, World } from "koota";
 import type { EditorSession } from "./session";
 
 /**
- * What `dapi context` reports: what the project's source cannot say. The JSX is
+ * What `compound context` reports: what the project's source cannot say. The JSX is
  * the composition — its scenes, what is selected, which scene is active, the
  * work area are all in the file, and a caller that wants them reads it. What is
  * left over is which folder projects live under, which project folder the app
@@ -53,7 +53,7 @@ type GenerationRow = {
   /** What the generation failed with, on `failed` rows. */
   error?: string;
   /** The library path the generation landed as, on `done` rows — ready for
-   *  `dapi media probe` and its siblings. */
+   *  `compound media probe` and its siblings. */
   asset?: string;
 };
 

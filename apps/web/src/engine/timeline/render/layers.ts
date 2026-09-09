@@ -12,7 +12,7 @@ import {
 	Sequential,
 	buildTimelineLayers,
 	store,
-} from '@diffusionstudio/runtime';
+} from '@compound/runtime';
 import { Or } from 'koota';
 
 import { getNodeHeight, getRowTransform, getSubtreeHeight } from '../layout';
@@ -22,7 +22,7 @@ import { getClipAlpha, renderClip } from './clip';
 import { renderKeyframeTrack } from './keyframes';
 
 import type { Entity, World } from 'koota';
-import type { TimelineNode } from '@diffusionstudio/runtime';
+import type { TimelineNode } from '@compound/runtime';
 import type { RowCursor } from '../layout';
 import type { TimelineSurfaceState } from '../surface';
 

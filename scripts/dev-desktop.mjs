@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // One command to develop the desktop app from source. It:
-//   1. builds the CLI, so a linked `dapi` (see symlink:create) runs the
+//   1. builds the CLI, so a linked `compound` (see symlink:create) runs the
 //      latest code and the app's headless server matches it;
 //   2. starts the web dev server (Vite on :5173), first reclaiming the port
 //      from a Vite left behind by an earlier run that did not come down;
@@ -133,9 +133,9 @@ async function reclaimPort(port) {
   }
 }
 
-// 1. Build the CLI (blocking) so `dapi` and the app agree on the latest code.
+// 1. Build the CLI (blocking) so `compound` and the app agree on the latest code.
 console.log("[dev:desktop] building CLI…");
-execFileSync("npm", ["run", "build", "--workspace=@diffusionstudio/cli"], { stdio: "inherit" });
+execFileSync("bun", ["run", "--cwd", "apps/cli", "build"], { stdio: "inherit" });
 
 // 2. Start the web dev server, on a port that is free.
 await reclaimPort(DEV_PORT);
@@ -151,6 +151,6 @@ try {
   shutdown(1);
 }
 console.log("[dev:desktop] building desktop app…");
-execFileSync("npm", ["run", "build", "--workspace=@diffusionstudio/desktop"], { stdio: "inherit" });
+execFileSync("bun", ["run", "--cwd", "apps/desktop", "build"], { stdio: "inherit" });
 console.log("[dev:desktop] starting desktop app…");
 run("desktop", "electron-forge", ["start"], join(ROOT, "apps", "desktop"));

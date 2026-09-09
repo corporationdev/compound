@@ -1,8 +1,8 @@
-/* @jsxImportSource @diffusionstudio/jsx */
+/* @jsxImportSource @compound/jsx */
 /* WebGPU owning a <surface>: a triangle whose colors cycle with the playhead.
  *
  *   cp examples/07-webgpu.tsx ~/Projects/webgpu/index.tsx
- *   dapi open ~/Projects/webgpu
+ *   compound open ~/Projects/webgpu
  *
  * `ref={surfaceRef}` assigns the surface's node, whose `element` is its
  * detached canvas; onMount a WebGPU context takes it over, and the engine
@@ -18,8 +18,8 @@
  */
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { useTicker } from "@diffusionstudio/jsx";
-import type { SceneNode } from "@diffusionstudio/jsx";
+import { useTicker } from "@compound/jsx";
+import type { SceneNode } from "@compound/jsx";
 
 const SHADER = /* wgsl */ `
   @group(0) @binding(0) var<uniform> time: f32;

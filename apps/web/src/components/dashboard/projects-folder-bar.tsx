@@ -18,7 +18,7 @@ import { isDesktop, pickProjectsRoot, projectsRoot, rootsReady } from "@/project
 export function DashboardProjectsFolderBar() {
   // Blank rather than "No folder selected" until the database has answered:
   // the root arrives a tick after the bar first renders.
-  const rootLabel = () => (rootsReady() ? projectsRoot() ?? "No folder selected" : "");
+  const rootLabel = () => (rootsReady() ? projectsRoot() ?? "No folder selected" : "Setting up project folder…");
   const hasRoot = () => !!projectsRoot();
 
   const handleChange = async () => {
@@ -64,7 +64,7 @@ export function DashboardProjectsFolderBar() {
                 Reveal in finder
               </Button>
             </Show>
-            <Button variant="secondary" onClick={handleChange}>
+            <Button variant="secondary" onClick={handleChange} disabled={!rootsReady()}>
               {hasRoot() ? "Change..." : "Choose folder..."}
             </Button>
           </div>
