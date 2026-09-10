@@ -4,7 +4,8 @@
 
 // Cuts a release: bumps the single global version in the root and all app
 // package.jsons, refreshes the lockfile, commits, and tags. The Release workflow
-// calls this automatically and pushes the refs; local use prints a push command.
+// calls this on a detached checkout and pushes only the tag; local use prints
+// a push command. Fetch origin's tags before cutting a release locally.
 // Usage: bun run release <patch|minor|major|x.y.z>
 
 import { execFileSync } from "node:child_process";
@@ -33,7 +34,16 @@ if (git("status", "--porcelain")) {
   process.exit(1);
 }
 
-const current = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+const compareVersions = (a, b) => {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+};
+// Release commits live on tags, so main's package version can lag behind them.
+const versions = [JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version,
+  ...git("tag", "--list", "v*").split("\n")
+    .filter(tag => /^v\d+\.\d+\.\d+$/.test(tag)).map(tag => tag.slice(1))];
+const current = versions.sort(compareVersions).at(-1);
 
 let next;
 if (/^\d+\.\d+\.\d+$/.test(arg)) {
@@ -50,6 +60,10 @@ if (/^\d+\.\d+\.\d+$/.test(arg)) {
 }
 
 const tag = `v${next}`;
+if (compareVersions(next, current) <= 0) {
+  console.error(`Version ${next} must be newer than ${current}.`);
+  process.exit(1);
+}
 if (git("tag", "--list", tag)) {
   console.error(`Tag ${tag} already exists.`);
   process.exit(1);
@@ -72,4 +86,5 @@ git("commit", "-m", tag);
 git("tag", tag);
 
 console.log(`\n${current} -> ${next}`);
-console.log(`Release with: git push origin HEAD ${tag}`);
+const branch = git("branch", "--show-current");
+console.log(`Release with: git push origin ${branch ? "HEAD " : ""}${tag}`);

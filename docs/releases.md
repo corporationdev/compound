@@ -34,12 +34,18 @@ Open **GitHub → Actions → Release → Run workflow**:
 2. Choose **patch** (the default), **minor**, or **major**.
 3. Click **Run workflow**.
 
-The workflow bumps the shared version, commits it to `main`, and creates the
-version tag automatically. No local commands or manual tags are needed. Re-running
-the same workflow run reuses its tag instead of bumping the version again.
-The GitHub Actions token must be allowed to push the version commit to `main`;
-branch protection rules still apply. The version commit uses the workflow token,
-so it does not start another release or production deployment.
+The workflow bumps the shared version on a detached checkout and pushes only the
+version tag. It never advances `main`, so cutting a release does not make local
+development branches diverge. The next version comes from the highest stable
+release tag or the checkout's package version, whichever is newer; package
+versions on `main` may therefore lag behind published installers. The tagged
+checkout contains matching versions in all four package manifests.
+
+No local commands or manual tags are needed. Re-running the same workflow run
+reuses its tag instead of bumping the version again. The GitHub Actions token
+needs permission to create release tags and GitHub releases, and tag protection
+rules still apply. Tags created with the workflow token do not start a second
+workflow; the same run builds and publishes the tagged checkout.
 
 The job then builds one universal
 Mac app, signs and notarizes it, checks both architectures and the bundled CLI,
