@@ -41,6 +41,15 @@ export interface AssetGeneration {
 	id?: string | null;
 }
 
+/** Stable catalog identity and imported defaults; never a signed media URL. */
+export interface AssetCatalogSource {
+	sourceId: string;
+	checksum: string;
+	title: string;
+	kind: 'music' | 'sfx';
+	sourceRange?: { sourceStartUs: number; sourceEndUs: number };
+}
+
 interface AssetBase {
 	/** Short content hash; identity of the asset. */
 	id: string;
@@ -60,6 +69,7 @@ interface AssetBase {
 	mimeType: string;
 	stat?: AssetStat;
 	generation?: AssetGeneration;
+	catalogSources?: AssetCatalogSource[];
 	/**
 	 * Resolved on the fly for a `src` that names a path or URL outside the
 	 * library; lives in memory only and is never written to the manifest.

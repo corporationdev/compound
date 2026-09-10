@@ -6,5 +6,10 @@ and `.ts` import suffixes are removed for Compound's TypeScript configuration.
 The implementation otherwise remains upstream code, under the adjacent MIT license.
 
 The server itself is installed from the locked npm package by stage-chat.mjs.
+Compound starts it with its Electron executable in `ELECTRON_RUN_AS_NODE` mode,
+as T3's desktop app does; no standalone Node runtime is bundled.
+JavaScript is packaged in `chat-runtime/app.asar`; native dependencies and the
+resource monitor remain alongside it. The unused SDK-bundled Claude executables
+are excluded because T3 passes the user's installed Claude path to its SDK.
 Upgrade the server lock, these sources, and the protocol integration test together.
 Do not substitute a floating T3 version or the unrelated reference checkout.

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { basename, dirname } from "@compound/assets";
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
 import {
@@ -40,7 +40,7 @@ function ancestorsOf(path: string): string[] {
   return chain;
 }
 
-export function Assets() {
+export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () => void; active?: boolean }) {
   let root: HTMLDivElement | undefined;
   let dragCounter = 0;
 
@@ -274,6 +274,7 @@ export function Assets() {
    * the same folder the buttons import into.
    */
   const handleShortcut = (event: KeyboardEvent) => {
+    if (props.active === false) return;
     if (!(event.metaKey || event.ctrlKey) || isInputTarget(event)) return;
     const key = event.key.toLowerCase();
 
@@ -305,9 +306,9 @@ export function Assets() {
       ref={root}
       onKeyDown={handleKeyDown}
     >
-      <div class="h-12 shrink-0 flex items-center gap-2 px-4 border-y border-border">
+      <div class="h-12 shrink-0 flex items-center gap-1 px-2 border-y border-border">
         <div class="flex-1 min-w-0 flex items-center gap-0.5 text-[12px] leading-5 font-strong text-foreground">
-          <Show when={currentFolder() !== ""}>
+          <Show when={currentFolder() !== "" && !props.navigation}>
             <Button
               size="icon"
               variant="ghost"
@@ -317,13 +318,13 @@ export function Assets() {
               <Icon name="chevron-left" class="text-muted-foreground" />
             </Button>
           </Show>
-          <span class="truncate">
+          <Show when={props.navigation} fallback={<span class="truncate">
             {panelTitle()}
             <span class="ml-1 text-muted-foreground">({itemCount()})</span>
-          </span>
+          </span>}>{props.navigation}</Show>
         </div>
         <div class="flex items-center gap-1 shrink-0">
-          <Show when={hasAssets()}>
+          <Show when={hasAssets() || props.navigation}>
             <DropdownMenu placement="bottom-start">
               <Tooltip>
                 <TooltipTrigger<typeof DropdownMenuTrigger>
@@ -396,6 +397,9 @@ export function Assets() {
                   Import assets
                   <DropdownMenuShortcut>⌘I</DropdownMenuShortcut>
                 </DropdownMenuItem>
+                <Show when={props.onBrowseLibrary}>
+                  <DropdownMenuItem tone="neutral" onSelect={props.onBrowseLibrary}>Browse library</DropdownMenuItem>
+                </Show>
                 <DropdownMenuItem tone="neutral" onSelect={handleCreateFolder}>
                   Create folder
                   <DropdownMenuShortcut>⇧⌘N</DropdownMenuShortcut>

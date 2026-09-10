@@ -698,6 +698,7 @@ never edit it, and trust it over memory.
 | \`.compound/docs/reference/jsx/generate.md\` | Declaring AI-generated assets (\`generate.*\`). |
 | \`.compound/docs/reference/jsx/variables.md\` | \`@inspect\` variables: annotated consts as live inspector controls. |
 | \`.compound/docs/reference/README.md\` | Every compound command, its options and its output. |
+| \`.compound/docs/reference/library.md\` | Browse music/SFX with an empty search, inspect, import, and place audio. |
 | \`.compound/docs/examples/\` | Complete compositions, basics through shaders. |
 
 ## Working here
@@ -755,7 +756,8 @@ async function syncDocs(dir: string): Promise<void> {
   const version = app.getVersion();
   try {
     if ((await readFile(stampFile, "utf8")).trim() === version &&
-        await exists(join(dir, APP_DIR, "jsx", "package.json"))) return;
+        await exists(join(dir, APP_DIR, "jsx", "package.json")) &&
+        await exists(join(docsDir, "reference", "library.md"))) return;
   } catch {
     // No stamp: never synced, or a copy that did not finish. Full copy below.
   }

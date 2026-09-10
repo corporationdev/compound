@@ -12,7 +12,8 @@ export async function mediaRequest<T>(
     | 'transcribe'
     | 'transcribe-status'
     | 'transcribe-cancel'
-    | 'analyze',
+    | 'analyze'
+    | `catalog-${'list' | 'get' | 'artwork' | 'search' | 'search-status' | 'resolve' | 'prepare' | 'playback' | 'save' | 'remove' | 'upload-url' | 'upload-finish'}`,
   body: Record<string, unknown>,
   accessToken?: string,
 ): Promise<T> {

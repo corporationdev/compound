@@ -8,7 +8,7 @@ const directory = await mkdtemp(join(tmpdir(), 'compound-auth-test-'));
 // No safeStorage mock: login must work without accessing the OS credential store.
 mock.module('electron', () => ({ app: { getAppPath: () => directory } }));
 const originalFetch = globalThis.fetch;
-const { authRequest, mediaRequest, uploadMedia } = await import('../src/cloud');
+const { authRequest, mediaRequest, uploadMedia, readCatalogArtwork } = await import('../src/cloud');
 const values = new Map<string, string>();
 const authUrl = 'https://test.convex.site';
 const storageKey = `compound:${authUrl}:native-session`;
@@ -33,6 +33,40 @@ afterAll(async () => {
   globalThis.fetch = originalFetch;
   mock.restore();
   await rm(directory, { recursive: true, force: true });
+});
+
+test('desktop artwork resolves an authenticated server URL and transports bytes without forwarding credentials', async () => {
+  const requests: string[] = [];
+  globalThis.fetch = (async (url, init) => {
+    requests.push(String(url));
+    if (String(url) === 'https://media.example.com/media/catalog-artwork') {
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer access-token');
+      expect(JSON.parse(String(init?.body))).toEqual({ sourceId: 'song-a' });
+      return Response.json({ url: 'https://objects.example.com/artwork.jpg?signature=temporary' });
+    }
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+    expect(init?.credentials).toBe('omit'); expect(init?.redirect).toBe('error');
+    return new Response(new Uint8Array([255, 216, 255, 217]), { headers: { 'Content-Type': 'image/jpeg' } });
+  }) as typeof fetch;
+  expect(await readCatalogArtwork('song-a', 'access-token')).toEqual(new Uint8Array([255, 216, 255, 217]));
+  expect(requests).toHaveLength(2);
+  await expect(readCatalogArtwork('song-a', null)).rejects.toThrow('Sign in required');
+  expect(requests).toHaveLength(2);
+});
+
+test('desktop artwork keeps missing images empty and rejects invalid or oversized image responses', async () => {
+  let imageRequests = 0, mode = 'missing';
+  globalThis.fetch = (async url => {
+    if (String(url).startsWith('https://media.example.com/')) return Response.json({ url: mode === 'missing' ? null : 'https://objects.example.com/artwork.jpg' });
+    imageRequests++;
+    if (mode === 'large') return new Response(new Uint8Array(3_000_001), { headers: { 'Content-Type': 'image/jpeg' } });
+    if (mode === 'html') return new Response('<html>Expired URL</html>', { headers: { 'Content-Type': 'text/html' } });
+    return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } });
+  }) as typeof fetch;
+  expect(await readCatalogArtwork('song-a', 'token')).toBeNull(); expect(imageRequests).toBe(0);
+  mode = 'large'; await expect(readCatalogArtwork('song-a', 'token')).rejects.toThrow('exceeds 3 MB');
+  mode = 'html'; await expect(readCatalogArtwork('song-a', 'token')).rejects.toThrow('Invalid artwork response');
+  mode = 'bad-jpeg'; await expect(readCatalogArtwork('song-a', 'token')).rejects.toThrow('not a JPEG');
 });
 
 test('login saves the signed session in localStorage and restores it after a renderer restart', async () => {

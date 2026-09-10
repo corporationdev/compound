@@ -130,6 +130,7 @@ async function mediaFrame(ref: string, opts: MediaFrameOptions): Promise<void> {
  * through for the app to resolve. Library paths need an open project.
  */
 function resolveAssetRef(ref: string): AssetRef {
+  if (ref.startsWith("library:")) return { path: ref };
   const absPath = isAbsolute(ref) ? ref : resolve(process.cwd(), ref);
   if (existsSync(absPath)) return { path: absPath };
   if (isAbsolute(ref)) {
@@ -143,7 +144,7 @@ async function mediaProbe(ref: string): Promise<void> {
   const target = resolveAssetRef(ref);
   const stop = startSpinner("Probing asset");
   try {
-    const result = await editor.media.probe.query(target);
+    const result = await editor.media.probe.query(target, ref.startsWith("library:") ? GENERATE : undefined);
     stop();
     console.log(JSON.stringify(result));
   } catch (e) {
@@ -273,7 +274,7 @@ async function mediaWaveform(ref: string, opts: MediaPreviewOptions): Promise<vo
   mkdirSync(dirname(resolve(path)), { recursive: true });
   const stop = startSpinner("Rendering waveform");
   try {
-    const { base64, ...rest } = await editor.media.waveform.query({ ...target, start, end, scale });
+    const { base64, ...rest } = await editor.media.waveform.query({ ...target, start, end, scale }, ref.startsWith("library:") ? GENERATE : undefined);
     stop();
     writeFileSync(path, Buffer.from(base64, "base64"));
     console.log(JSON.stringify({ path, ...rest }));
@@ -666,11 +667,49 @@ program
   .argument("<id>", 'node id to check or `file:id` when two files use the same id')
   .action((id: string) => checkNode(id));
 
+const library = program.command("library").description(
+  "Find music and sound effects in your library and the shared catalog. For general selection, search without a query to browse every description; import a source ID, then place the returned local path in project JSX.",
+);
+
+async function libraryCommand(run: () => Promise<unknown>, label: string): Promise<void> {
+  const stop = startSpinner(label);
+  try { const result = await run(); stop(); console.log(JSON.stringify(result)); }
+  catch (error) { stop(); handleSocketError(error); }
+}
+
+library.command("search")
+  .description("Search the combined library. Omitted, empty, or whitespace-only queries browse ALL items of this kind, following every page. For general music/SFX selection, browse first and read descriptions and recommended source ranges. --expand includes external discovery. Returns one JSON object with items, count, complete, and expanded; times are seconds.")
+  .argument("[query]", "title or keyword filter; omit to browse everything")
+  .requiredOption("--kind <kind>", "music or sfx")
+  .option("--expand", "include external discovery; requires at least two query characters")
+  .action((query: string | undefined, opts: { kind: string; expand?: boolean }) => {
+    if (opts.kind !== "music" && opts.kind !== "sfx") { console.error("--kind must be music or sfx"); process.exit(1); }
+    const kind = opts.kind;
+    const text = (query ?? "").trim();
+    if (text.length > 120 || (opts.expand && text.length < 2)) { console.error("Search supports up to 120 characters; --expand needs at least two. Omit --expand to browse the library."); process.exit(1); }
+    return libraryCommand(() => editor.library.search.query({ kind, query: text, expand: opts.expand }, GENERATE), "Searching library");
+  });
+
+library.command("get").description("Read a source's description, preparation status, duration, and recommended source range without downloading. Times are seconds.")
+  .argument("<source-id>", "exact source ID from search or resolve")
+  .action((sourceId: string) => libraryCommand(() => editor.library.get.query({ sourceId }), "Reading library item"));
+
+library.command("resolve").description("Resolve an exact supported music link to a source ID without downloading or importing it.")
+  .argument("<url>", "music link")
+  .action((url: string) => libraryCommand(() => editor.library.resolve.query({ url }, GENERATE), "Resolving music link"));
+
+library.command("import").description("Import a source into the target project's assets, reusing cached audio and existing assets. Returns assetId, path, localPath, and recommended sourceRange in seconds. Edit JSX to place it; this command does not insert a timeline clip or save personal library membership. Uncached audio may take about 40 seconds to prepare. Retry the same source ID after a timeout; completed preparation is reused.")
+  .argument("<source-id>", "exact source ID from search or resolve")
+  .action((sourceId: string) => libraryCommand(async () => {
+    try { return await editor.library.import.mutate({ sourceId }, GENERATE); }
+    catch (error) { throw new Error(`Library import ${sourceId}: ${(error as Error).message}. Retry the same source ID to reuse completed work.`, { cause: error }); }
+  }, "Importing audio (uncached preparation may take about 40 seconds)"));
+
 const media = program
   .command("media")
   .alias("m")
   .description(
-    "Inspect a media file by path, without adding it to the project: probe metadata, transcribe speech, grab frames, render visual previews, and analyze with multimodal models. Local files work with or without an open project; library paths need one.",
+    "Inspect a media file by path or library:<source-id>, without adding it to the project: probe metadata, transcribe speech, grab frames, render visual previews, and analyze with multimodal models. Local files work without an open project. Project-relative asset paths need a target project; library:<source-id> needs only the signed-in app.",
   );
 
 media
@@ -727,7 +766,7 @@ media
   .description(
     `Render the audio track of a video or audio file as a waveform PNG (local render, no credits) with a timestamp ruler: loudness over time, with silent stretches highlighted in red. A fast, token-efficient audio track preview; the silent spans are also returned as second ranges.`,
   )
-  .argument("<path>", "local video or audio file path to preview")
+  .argument("<path>", "local video/audio path or library:<source-id> to preview")
   .option("-s, --start <time>", `start of the window to preview — seconds, "45f" frames, or "MM:SS" (default: 0)`)
   .option("-e, --end <time>", `end of the window to preview — seconds, "45f" frames, or "MM:SS" (default: asset duration)`)
   .option("-x, --scale <factor>", "scale factor for the waveform; smaller fits more rows and columns, larger fits fewer (default: 1)")
@@ -739,7 +778,7 @@ media
   .description(
     `Prompt a multimodal model for a semantic analysis of an audio track and print its answer. Shines on audio semantics (the name of the music playing, who is speaking, the spoken content with second-granularity timestamps). Accepts an audio file or a video; by default only the audio track is analyzed.`,
   )
-  .argument("<path>", "local video or audio file path to analyze")
+  .argument("<path>", "local video/audio path or library:<source-id> to analyze")
   .option("-p, --prompt <str>", "question or instruction to guide the analysis")
   .option("-s, --start <time>", `start of the segment to analyze — seconds, "45f" frames, or "MM:SS" (default: 0); timestamps in the analysis are relative to this point`)
   .option("-e, --end <time>", `end of the segment to analyze — seconds, "45f" frames, or "MM:SS" (default: media duration)`)

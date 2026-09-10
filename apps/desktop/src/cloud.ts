@@ -1,6 +1,9 @@
 import { app } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { CatalogMedia, CatalogKind } from '@compound/backend/catalog';
+import { MAX_CATALOG_UPLOAD_BYTES } from '@compound/backend/catalog';
+import { downloadCatalogArtwork } from '@compound/backend/catalog-artwork';
 import { projectsFolderNameForStage, validateStage } from '@compound/config/runtime';
 import type { CloudAuthOperation, CloudAuthResult, CloudConfig } from './main-channels';
 
@@ -79,7 +82,7 @@ export async function authRequest(
   return { data, sessionToken };
 }
 export async function mediaRequest(path: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
-  if (!['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze'].includes(path))
+  if (!['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish'].includes(path))
     throw new Error('Unknown media operation');
   if (!token) throw new Error('Sign in required');
   const config = await cloudConfig();
@@ -92,6 +95,44 @@ export async function mediaRequest(path: string, body: Record<string, unknown>, 
   const result = (await response.json()) as { error?: string };
   if (!response.ok) throw new Error(result.error ?? 'Media request failed');
   return result;
+}
+
+export async function uploadCatalogAudio(data: { title: string; kind: CatalogKind; mimeType: string; bytes: Uint8Array; token: string | null }) {
+  if (!data.bytes.byteLength || data.bytes.byteLength > MAX_CATALOG_UPLOAD_BYTES) throw new Error('Upload audio up to 100 MiB');
+  const upload = await mediaRequest('catalog-upload-url', { title: data.title, kind: data.kind, mimeType: data.mimeType, size: data.bytes.byteLength }, data.token) as { sourceId: string; url: string };
+  const response = await fetch(upload.url, { method: 'PUT', headers: { 'Content-Type': data.mimeType }, body: data.bytes as Uint8Array<ArrayBuffer>, signal: AbortSignal.timeout(240000) });
+  if (!response.ok) throw new Error('Library upload failed');
+  await response.body?.cancel();
+  await mediaRequest('catalog-upload-finish', { sourceId: upload.sourceId }, data.token);
+  return { sourceId: upload.sourceId };
+}
+
+export async function readCatalogAudio(sourceId: string, token: string | null) {
+  const media = await mediaRequest('catalog-playback', { sourceId }, token) as CatalogMedia;
+  const response = await fetch(media.url, { signal: AbortSignal.timeout(120000) });
+  if (!response.ok || !response.body) throw new Error('Could not download library audio');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > MAX_CATALOG_UPLOAD_BYTES) throw new Error('Library audio exceeds 100 MiB');
+      chunks.push(value);
+    }
+  } finally { await reader.cancel(); }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  return { media, bytes };
+}
+export async function readCatalogArtwork(sourceId: string, token: string | null) {
+  // Resolve the URL on the authenticated server, never from renderer input.
+  // The main process transports bytes only; caching stays in IndexedDB.
+  const { url } = await mediaRequest('catalog-artwork', { sourceId }, token) as { url: string | null };
+  return url === null ? null : downloadCatalogArtwork(url);
 }
 export async function uploadMedia(contentType: string, bytes: Uint8Array, token: string | null) {
   if (

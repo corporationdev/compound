@@ -1,6 +1,6 @@
 # Media library implementation plan
 
-Status: proposed; implementation has not started. Based on the working trees inspected on September 9, 2026.
+Status: core implementation and development catalog seed complete. See [media-library.md](media-library.md) for the implemented contract and current validation. This document retains the broader design; CLI commands, generation, and advanced filtering are deferred.
 
 The library is one searchable pool of Compound's curated media, the signed-in user's uploads and saved media, and external search results. Project remains the collection of files available to one edit. The user confirmed that Compound should initially reuse PostBob's curated selection.
 
@@ -10,15 +10,15 @@ Replace the Assets heading with Project / Library tabs. Keep + and the filter/se
 
 In Project, + offers Import files and Browse library. In Library, + offers Upload audio and Add from link. Uploads go to the account's personal library; they are not automatically attached to the project. Add from link uses the same exact-source resolver as pasting a URL into search. The filter control holds source filters, saved-only, duration, and sorting; avoid offering mood/BPM filters until the metadata supports them.
 
-V1 includes curated music and SFX, private audio uploads, saving discovered tracks, YouTube search and exact links, MyInstants SFX search and exact links, auditioning, source-range selection, project import, timeline drag/drop, and CLI parity. Video/image library views, collections, semantic search, and generation are subsequent work. The underlying media records can support images/video without showing unfinished controls.
+V1 includes curated music and SFX, private audio uploads, saving discovered tracks, YouTube search and exact links, SFX search, auditioning, source-range selection, project import, and timeline drag/drop. CLI commands are deferred at the user's request; keep the service boundary reusable. Video/image library views, collections, semantic search, and generation are subsequent work.
 
 **2. One search with progressive results**
 
 An empty search browses curated items and personal items together. Use the curated manifest's order for the initial curated selection and surface recently added/used personal items without hiding the starter tracks. Provide pagination from the start.
 
-Typing debounces a fast query over curated and personal titles, descriptions, and supported tags. Enter or the search button submits that same query to external providers as well: YouTube for Music, MyInstants for Sound effects. There is no source-mode switch. The placeholder says "Search music or paste a YouTube link" in Music. Explain the submission behavior with a short hint only while typing.
+Typing debounces a fast query over curated and personal titles and descriptions. An explicit button after the results submits that query to YouTube for Music or MyInstants for Sound effects. Enter does not start external keyword search. Music links show an explicit Open this link button; Enter can resolve a Music link. Sound effects is search-only and uses provider-neutral labels. There is no source-mode switch.
 
-Show library matches immediately; merge external results into the same list as they arrive. Preserve selection and scroll position when results update. Keep the selected preview item stable even if a new query no longer matches it. If external search fails, retain local matches and show "YouTube search unavailable — Retry"; a partial result is not an empty successful search.
+Show library matches immediately; merge external results into the same list as they arrive. Preserve selection and scroll position when results update. Keep the selected preview item stable even if a new query no longer matches it. If external search fails, retain local matches and show "Catalog search unavailable — Retry"; a partial result is not an empty successful search.
 
 Use canonical source identity to merge duplicates: the same YouTube video can be curated, saved, and returned by search, but appears once. Display all applicable membership states on that result. Order exact title matches ahead of weak matches; use personal membership, curation, availability, and recency as boosts. Initially use deterministic lexical ranking and provider rank, not embeddings. Reserve capacity for external matches so a full first page of library matches cannot silently suppress them, which PostBob's current concatenate-and-slice implementation can do.
 
@@ -114,7 +114,7 @@ Reusing the selection does not require a live dependency on PostBob's production
 
 Preserve original source attribution and any known license/usage metadata; label the collection Curated rather than implying it is royalty-free. Curated inclusion and provider availability do not establish music rights. Unsupported or unavailable entries should be reported rather than silently substituted with a similarly titled video.
 
-**9. CLI contract**
+**9. Future CLI contract (deferred)**
 
 Add account-scoped library commands and project-scoped assets commands to the existing app router. All commands below are proposed, not currently implemented. Library operations work while no project is open, as long as the app is running and signed in. Keep current --project/cwd targeting for project operations; never select a different visible project implicitly.
 

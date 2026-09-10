@@ -22,6 +22,7 @@ import { handleCheck } from "./check";
 import { handleExport } from "./export";
 import { handleLogs } from "./logs";
 import { handleModels } from "./models";
+import { handleLibrarySearch, handleLibraryGet, handleLibraryResolve, handleLibraryImport, resolveLibraryMedia } from './library';
 import { handleVoices } from "./voices";
 import { cliBridge } from '@/lib/ipc';
 import { createRouterCaller } from '@/lib/cli-rpc';
@@ -119,6 +120,7 @@ type AppRouterDeps = {
 
 function createAppRouter({ navigate, getUser, requireAuth }: AppRouterDeps) {
   const resolveAsset = (target?: CliProjectTarget) => async (path: string) => {
+    if (path.startsWith('library:')) return resolveLibraryMedia(path.slice('library:'.length));
     if (!target?.dir && !target?.ref) return createAssetResolver(() => null)(path);
     const project = await resolveTarget(target);
     const session = await attachedSession(project);
@@ -149,6 +151,12 @@ function createAppRouter({ navigate, getUser, requireAuth }: AppRouterDeps) {
     logs: q(handleLogs()),
     screenshot: q0(handleWindowScreenshot()),
     voices: q0(handleVoices()),
+    library: t.router({
+      search: q(handleLibrarySearch),
+      get: q(handleLibraryGet),
+      resolve: q(handleLibraryResolve),
+      import: m((data: { sourceId: string }, { target }) => handleLibraryImport(data, target)),
+    }),
     media: t.router({
       probe: q((data: Parameters<ReturnType<typeof handleMediaProbe>>[0], { target }) => handleMediaProbe(resolveAsset(target))(data)),
       frame: q((data: Parameters<ReturnType<typeof handleMediaFrame>>[0], { target }) => handleMediaFrame(resolveAsset(target))(data)),

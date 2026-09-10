@@ -3,6 +3,7 @@ import {
   authClient,
   convex,
   getToken,
+  invalidateToken,
   nativeAuth,
   readUser,
   requireBrowserConfig,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/auth-client';
 import { mainBridge } from '@/lib/ipc';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
+import { setCatalogCacheScope } from '@/lib/catalog-cache';
 
 function createAuth() {
   const [user, setUser] = createSignal<AppUser | null>(null);
@@ -20,7 +22,13 @@ function createAuth() {
   const refreshSession = async () => {
     const current = ++revision;
     try {
-      const next = await readUser();
+      const [next, namespace] = await Promise.all([
+        readUser(),
+        window.desktop ? mainBridge.call(MAIN_CHANNELS.CLOUD_CONFIG, undefined).then(config => config.authUrl) : Promise.resolve(import.meta.env.VITE_CONVEX_SITE_URL),
+      ]);
+      if (current !== revision) return;
+      if (next?.id !== user()?.id) invalidateToken();
+      await setCatalogCacheScope(next ? JSON.stringify([namespace, next.id]) : null);
       if (current !== revision) return;
       setUser(next);
       setError(null);
@@ -51,18 +59,23 @@ function createAuth() {
       () => authClient.emailOtp.sendVerificationOtp({ email, type: 'sign-in' }),
     );
   const verifyCode = async (email: string, otp: string) => {
+    invalidateToken();
     await call(
       () => nativeAuth('verifyCode', { email, otp }),
       () => authClient.signIn.emailOtp({ email, otp }),
     );
+    invalidateToken();
     await refreshSession();
   };
   const signOut = async () => {
+    invalidateToken();
     await call(
       () => nativeAuth('signOut'),
       () => authClient.signOut(),
     );
+    invalidateToken();
     revision++;
+    void setCatalogCacheScope(null);
     setUser(null);
     convex?.setAuth(async () => null);
   };
@@ -74,11 +87,14 @@ function createAuth() {
     await refreshSession();
   };
   const deleteAccount = async () => {
+    invalidateToken();
     await call(
       () => nativeAuth('deleteUser'),
       () => authClient.deleteUser(),
     );
+    invalidateToken();
     revision++;
+    void setCatalogCacheScope(null);
     setUser(null);
     convex?.setAuth(async () => null);
   };

@@ -3,7 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { useWorld } from "@compound/koota-solid";
-import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@compound/runtime";
+import { findSceneAt, screenToWorld, worldToLocal, Library, Root, Computed, store } from "@compound/runtime";
+import { importCatalogAsset, readCatalogDrag } from '@/engine/catalog-assets';
 import { CameraController, EngineCanvas } from "@/engine";
 import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
@@ -40,6 +41,16 @@ export function Canvas() {
     const scene = findSceneAt(world, worldPt.x, worldPt.y);
     const parent = scene ?? world.get(Root)!;
     const localPt = scene ? worldToLocal(world, scene, worldPt.x, worldPt.y) : worldPt;
+    const catalog = readCatalogDrag(event);
+    if (catalog) {
+      const start = store(world, Computed).localTimeInSeconds[parent.id()] ?? 0;
+      try {
+        const asset = await importCatalogAsset(library, catalog.sourceId);
+        if (world.get(Library) !== library || library.closed) return;
+        if (!parent.isAlive() || !insertAsset(world, asset, { parent, start, sourceRange: catalog.sourceRange, x: localPt.x - 250, y: localPt.y - 75 })) throw new Error('The target scene was removed. Audio is available in Project.');
+      } catch (error) { toast.error('Could not insert audio', { description: (error as Error).message }); }
+      return;
+    }
 
     const place = (asset: Asset) => {
       const size = 'width' in asset && 'height' in asset ? { width: asset.width, height: asset.height } : { width: 500, height: 150 };

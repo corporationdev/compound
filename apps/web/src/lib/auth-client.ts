@@ -4,6 +4,7 @@ import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/
 import { ConvexClient } from 'convex/browser';
 import { mainBridge } from './ipc';
 import { createNativeSession } from './native-session';
+import { createAccessToken } from './access-token';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
 
 export type AppUser = {
@@ -31,7 +32,7 @@ export const nativeAuth = createNativeSession({
   authUrl: async () => (await mainBridge.call(MAIN_CHANNELS.CLOUD_CONFIG, undefined)).authUrl,
   request: (data) => mainBridge.call(MAIN_CHANNELS.CLOUD_AUTH, data),
 });
-export async function getToken(): Promise<string | null> {
+async function requestToken(): Promise<string | null> {
   if (window.desktop)
     return ((await nativeAuth('token')) as { token?: string } | null)?.token ?? null;
   requireBrowserConfig();
@@ -39,6 +40,12 @@ export async function getToken(): Promise<string | null> {
   if (error) throw new Error(error.message ?? 'Could not obtain session token');
   return data?.token ?? null;
 }
+const accessToken = createAccessToken(requestToken);
+export const getToken = (options?: { forceRefreshToken: boolean }) => {
+  if (options?.forceRefreshToken) accessToken.invalidate();
+  return accessToken.get();
+};
+export const invalidateToken = accessToken.invalidate;
 export function requireBrowserConfig() {
   if (!import.meta.env.VITE_CONVEX_URL || !import.meta.env.VITE_CONVEX_SITE_URL)
     throw new Error(

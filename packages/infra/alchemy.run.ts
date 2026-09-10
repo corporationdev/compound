@@ -31,13 +31,18 @@ export const mediaBucket = await R2Bucket('media', {
   dev: { remote: true },
   empty: runtime.stageKind === 'preview',
   cors: [{
-    allowed: { origins: [runtime.webUrl], methods: ['PUT'], headers: ['Content-Type'] },
+    allowed: { origins: [runtime.webUrl], methods: ['PUT', 'GET', 'HEAD'], headers: ['Content-Type', 'Range'] },
+    exposeHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges'],
     maxAgeSeconds: 3600,
   }],
   lifecycle: [{
     id: 'temporary-media',
     enabled: true,
     conditions: { prefix: 'media/' },
+    deleteObjectsTransition: { condition: { type: 'Age', maxAge: 86400 } },
+  }, {
+    id: 'temporary-library-staging', enabled: true,
+    conditions: { prefix: 'library-staging/' },
     deleteObjectsTransition: { condition: { type: 'Age', maxAge: 86400 } },
   }],
 });

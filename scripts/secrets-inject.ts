@@ -20,10 +20,18 @@ const args = process.argv.slice(2);
 const stage = stageFrom(args);
 const included = args.flatMap((arg, i) => (arg === '--include' ? [args[i + 1] ?? ''] : []));
 const examples = targets.map((target) => ({ target, values: readEnv(`${target}/.env.example`) }));
+// Item IDs are references, not credentials. Exact IDs avoid ambiguous duplicate
+// Apify titles without requiring the CI service account to edit vault contents.
+const apifyItemIds = {
+  dev: 'objiujwnpqllihha7gju73tpiu',
+  preview: 'zge7irfcyb7n5hujyzke5aaxce',
+  prod: 'l4emdm3q6xsrcz7nhwe474kura',
+} as const;
 const template = parse(
   readFileSync(resolve(root, '.env.op'), 'utf8')
     .replaceAll('${STAGE}', stage)
-    .replaceAll('${ENV_TIER}', deriveEnvTier(stage)),
+    .replaceAll('${ENV_TIER}', deriveEnvTier(stage))
+    .replaceAll('${APIFY_ITEM_ID}', apifyItemIds[deriveEnvTier(stage)]),
 );
 const allKeys = new Set(Object.keys(template).filter((key) => key !== 'STAGE'));
 for (const key of allKeys) {

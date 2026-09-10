@@ -52,6 +52,16 @@
       #boot-splash svg {
         width: 48px;
         height: 48px;
+        animation: boot-logo-pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes boot-logo-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash svg { animation: none; }
       }
     </style>
     <link href="/src/index.css" rel="stylesheet">

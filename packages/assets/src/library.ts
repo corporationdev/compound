@@ -31,7 +31,7 @@ import { assetFolder, assetName, basename, dirname, joinPath, normalizePath } fr
 
 import type { FsEntry, ProjectFS } from './fs';
 import type { AssetRecord, Manifest } from './manifest';
-import type { Asset, AssetDirectoryHandle, AssetFileHandle, AssetGeneration, SequenceAsset } from './types';
+import type { Asset, AssetDirectoryHandle, AssetFileHandle, AssetGeneration, AssetCatalogSource, SequenceAsset } from './types';
 
 /** How long changes pile up before the manifest is written. */
 const SAVE_DEBOUNCE = 200;
@@ -102,6 +102,19 @@ export class AssetLibrary {
 	/** Library assets, newest first; transient ones excluded. Same as `assets()`. */
 	public list(): Asset[] {
 		return this.assets();
+	}
+
+	public get closed(): boolean { return this.disposed; }
+
+	public rememberCatalogSource(asset: Asset, source: AssetCatalogSource): void {
+		if (this.disposed) throw new Error('The project was closed');
+		// File-watcher reloads can replace the instance returned by an earlier import.
+		const current = this.map.get(asset.id);
+		if (!current || current.transient) throw new Error('The project asset was removed');
+		const existing = current.catalogSources ?? [];
+		current.catalogSources = [...existing.filter(item => item.sourceId !== source.sourceId), source];
+		asset.catalogSources = current.catalogSources;
+		this.changed();
 	}
 
 	/** The library's assets as of now, straight from the map. */
@@ -210,11 +223,16 @@ export class AssetLibrary {
 		if (!stat || (record.stat && stat.size === record.stat.size && stat.mtime === record.stat.mtime)) {
 			return this.attach(record);
 		}
-		return this.describeFile(record.source, {
+		const refreshed = await this.describeFile(record.source, {
 			path: record.path,
 			createdAt: record.createdAt,
 			generation: record.generation,
 		});
+		// File.lastModified is integer milliseconds; native stat can retain
+		// fractions. Re-probing unchanged bytes must not lose their provenance.
+		refreshed.stat = stat;
+		if (refreshed.id === record.id && record.catalogSources) refreshed.catalogSources = record.catalogSources;
+		return refreshed;
 	}
 
 	/**
@@ -553,7 +571,7 @@ export class AssetLibrary {
 		this.dirty = true;
 		this.publish();
 		clearTimeout(this.saveTimer);
-		this.saveTimer = setTimeout(() => void this.flush(), SAVE_DEBOUNCE);
+		this.saveTimer = setTimeout(() => void this.flush().catch((error: unknown) => console.error('[assets] could not write the manifest:', error)), SAVE_DEBOUNCE);
 	}
 
 	/** The manifest as it would be written now. */
@@ -571,8 +589,9 @@ export class AssetLibrary {
 		if (!this.dirty) return this.saving;
 		this.dirty = false;
 		this.saving = this.saving
+			.catch(() => {})
 			.then(() => this.fs.writeManifest(this.manifest()))
-			.catch((error: unknown) => console.error('[assets] could not write the manifest:', error));
+			.catch((error: unknown) => { this.dirty = true; throw error; });
 		return this.saving;
 	}
 

@@ -20,6 +20,8 @@ export interface InsertAssetOptions {
 	y?: number;
 	/** Where on the timeline the clip starts, in seconds; the playhead by default. */
 	start?: number;
+	/** Snapshot of the chosen original audio range, independent of timeline start. */
+	sourceRange?: { sourceStartUs: number; sourceEndUs: number };
 }
 
 /** The box an audio clip gets on the canvas: it has no size of its own. */
@@ -42,6 +44,8 @@ export function insertAsset(world: World, asset: Asset, options: InsertAssetOpti
 	const size = sizeOf(asset);
 	const position = size ? placement(world, parent, size, options) : {};
 	const timing = start > 0 ? { start } : {};
+	const range = options.sourceRange ?? asset.catalogSources?.[0]?.sourceRange;
+	const sourceTiming = range ? { sourceIn: range.sourceStartUs / 1_000_000, sourceOut: range.sourceEndUs / 1_000_000 } : {};
 
 	const [entity] = editor.insertElement(parent, () => {
 		switch (asset.type) {
@@ -59,7 +63,7 @@ export function insertAsset(world: World, asset: Asset, options: InsertAssetOpti
 					</Rect>
 				);
 			case 'AUDIO':
-				return <Audio name={name} src={src} {...position} {...size} {...timing} />;
+				return <Audio name={name} src={src} {...position} {...size} {...timing} {...sourceTiming} />;
 			case 'TRANSCRIPT':
 				return <Captions src={src} {...timing} />;
 			default:

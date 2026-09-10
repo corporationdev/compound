@@ -12,7 +12,7 @@ import { Scene as SceneElement, SolidPaint } from '@compound/reconciler';
 import { focusRect, getCameraMatrix, getNextName, Root, Source } from '@compound/runtime';
 
 import { getDocumentEditor } from './editor';
-import { AUDIO_SIZE, insertAsset } from './insert-asset';
+import { AUDIO_SIZE, insertAsset, type InsertAssetOptions } from './insert-asset';
 
 import type { Asset } from '@compound/assets';
 import type { Rect } from '@compound/runtime';
@@ -39,6 +39,8 @@ export interface NewSceneOptions {
 	focus?: (rect: Rect) => void;
 	/** Where on the timeline the assets start, in seconds; the playhead by default. */
 	start?: number;
+	/** Optional audio selection for an asset dropped from the library. */
+	sourceRange?: InsertAssetOptions['sourceRange'];
 }
 
 /**
@@ -97,6 +99,7 @@ export function insertAssetsInNewScene(
 			x: (format.width - size.width) / 2,
 			y: (format.height - size.height) / 2,
 			start: options.start,
+			sourceRange: options.sourceRange,
 		});
 		if (entity) inserted.push(entity);
 	}

@@ -6,6 +6,7 @@ import type { Id } from '@compound/backend/convex/_generated/dataModel';
 import { AwsClient } from 'aws4fetch';
 import { z } from 'zod';
 import { analyze, transcribe } from './providers';
+import { CATALOG_OPERATIONS, catalogRequest } from './catalog';
 export interface Env {
   CONVEX_URL: string;
   CORS_ORIGIN: string;
@@ -123,7 +124,7 @@ export default {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(request.url).pathname;
       if (path === '/health' && request.method === 'GET') return json({ ok: true });
-      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze'].includes(path))
+      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
         throw new HttpError(404, 'Not found');
       if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -132,6 +133,13 @@ export default {
       const user = await client.query(api.auth.getCurrentUser, {}).catch(() => null);
       if (!user) throw new HttpError(401, 'Session expired. Sign in again.');
       const body = await readBody(request);
+      if (path.startsWith('/media/catalog-')) {
+        try { return json(await catalogRequest(client, path.slice('/media/'.length), body)); }
+        catch (error) {
+          if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid library request');
+          throw error;
+        }
+      }
       if (path === '/media/upload-url') {
         const upload = await client.mutation(api.uploads.create, parseInput(uploadSchema, body));
         if (!upload) throw new Error('Could not register upload');

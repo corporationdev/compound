@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { cloudConfig, authRequest, mediaRequest, uploadMedia } from './cloud';
+import { cloudConfig, authRequest, mediaRequest, uploadMedia, uploadCatalogAudio, readCatalogAudio, readCatalogArtwork } from './cloud';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
 import { dirname, join } from "node:path";
@@ -233,6 +233,9 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.CLOUD_AUTH, (data, event) => { trustedRenderer(event); return authRequest(data.operation, data.body, data.sessionToken); });
   mainBridge.handle(MAIN_CHANNELS.CLOUD_MEDIA, (data, event) => { trustedRenderer(event); return mediaRequest(data.path, data.body, data.token); });
   mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD, (data, event) => { trustedRenderer(event); return uploadMedia(data.contentType, data.bytes, data.token); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_UPLOAD, (data, event) => { trustedRenderer(event); return uploadCatalogAudio(data); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_FILE, (data, event) => { trustedRenderer(event); return readCatalogAudio(data.sourceId, data.token); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_ARTWORK, (data, event) => { trustedRenderer(event); return readCatalogArtwork(data.sourceId, data.token); });
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");
@@ -354,5 +357,9 @@ if (app.requestSingleInstanceLock()) {
     mainWindow.focus();
   });
 } else {
+  console.warn(
+    `[compound] Another instance is already running (user data: ${app.getPath("userData")}). ` +
+    "Quit the existing Compound/Electron app before starting a new dev session.",
+  );
   app.quit();
 }

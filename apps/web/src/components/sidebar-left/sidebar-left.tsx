@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Assets } from "./assets";
+import { MediaPanel } from "./media-panel";
 import { useLayout } from "@/context/layout";
 import { useEditorApi } from "@/context/dapi";
 import { createSignal, Show } from "solid-js";
@@ -18,7 +18,7 @@ export function SidebarLeft() {
     <div class="flex flex-col h-full overflow-hidden">
       <ElectronHeader />
       <ProjectHeader />
-      <Assets />
+      <MediaPanel />
     </div>
   );
 }

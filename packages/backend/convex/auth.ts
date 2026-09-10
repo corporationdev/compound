@@ -15,7 +15,6 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [siteUrl, 'compound://'],
     database: authComponent.adapter(ctx),
-    rateLimit: { enabled: true, storage: 'database', window: 60, max: 30 },
     user: {
       deleteUser: {
         enabled: true,
@@ -23,6 +22,7 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
           if (!('runMutation' in ctx))
             throw new Error('Account cleanup requires an action context');
           await ctx.runMutation(internal.uploads.removeForUser, { ownerId: user.id });
+          await ctx.runMutation(internal.catalog.removeForUser, { ownerId: user.id });
         },
       },
     },

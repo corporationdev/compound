@@ -38,7 +38,7 @@ jobs:
         with:
           stage: ${{ env.STAGE }}
           op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-      - name: Deploy Convex preview and Alchemy
+      - name: Deploy Convex preview, Alchemy, and curated catalog
         id: deploy
         if: steps.current.outputs.deploy == 'true'
         run: bun run deploy --stage "$STAGE"

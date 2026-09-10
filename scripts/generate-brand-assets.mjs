@@ -49,7 +49,10 @@ if (!flatPath) throw new Error('The flat mark must contain its traced path');
 await writeFile(join(root, 'apps/web/src/assets/icons/compound-project-file.svg'),
   `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 11V6a1 1 0 0 1 1-1h5l5 5v8a1 1 0 0 1-1 1h-5M13 5v5h5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path transform="translate(3 11) scale(.009)" fill="currentColor" d="${flatPath}"/></svg>\n`);
 await copyFile(join(web, 'compound-logo.png'), join(root, 'apps/web/src/assets/images/compound-logo.png'));
-await sharp(Buffer.from(flatMark.replace('viewBox=', 'width="1000" height="1000" viewBox=').replace('currentColor', '#151515'))).resize(64).flatten({ background: '#ffffff' }).png().toFile(join(web, 'compound-favicon.png'));
+// Keep the mark readable on dark browser tabs, with transparent rounded corners.
+const favicon = svg(1000, 1000, `<rect width="1000" height="1000" rx="200" fill="white"/><path fill="#151515" d="${flatPath}"/>`);
+await sharp(favicon).resize(64).png().toFile(join(web, 'compound-favicon.png'));
+await writeFile(join(root, 'apps/landing/public/favicon.svg'), favicon);
 // Embed the monochrome mark in the boot screen so it inherits its theme color.
 const indexPath = join(root, 'apps/web/index.html');
 const index = await readFile(indexPath, 'utf8');

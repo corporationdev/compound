@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { extractFile } from '@electron/asar';
 import { release, releaseVersion } from '@compound/config/release';
 import { root } from './environment';
 
@@ -12,12 +13,12 @@ for (const path of [binary, join(app, 'Contents/Resources/app/dist/corner_radius
   join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-arm64/bin/esbuild'),
   join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-x64/bin/esbuild')])
   execFileSync('lipo', [path, '-verify_arch', 'arm64', 'x86_64']);
-const chat = join(app, 'Contents/Resources/chat-runtime/node_modules');
-for (const [name, arch] of [['node-bin-darwin-arm64', 'arm64'], ['node-darwin-x64', 'x86_64']])
-  execFileSync('lipo', [join(chat, name!, 'bin/node'), '-verify_arch', arch!]);
-if (JSON.parse(readFileSync(join(chat, 't3/package.json'), 'utf8')).version !== '0.0.40')
+const chatArchive = join(app, 'Contents/Resources/chat-runtime/app.asar');
+if (JSON.parse(extractFile(chatArchive, 'node_modules/t3/package.json').toString()).version !== '0.0.40')
   throw new Error('Installer contains an unexpected T3 protocol version');
-readFileSync(join(chat, 't3/dist/bin.mjs'));
+execFileSync(binary, [join(chatArchive, 'node_modules/t3/dist/bin.mjs'), 'serve', '--help'], {
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: 'inherit', timeout: 30_000,
+});
 execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
 execFileSync('xcrun', ['stapler', 'validate', app], { stdio: 'inherit' });
 execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' });

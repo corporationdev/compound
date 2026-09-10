@@ -32,6 +32,9 @@ export const MAIN_CHANNELS = {
   CLOUD_AUTH: "cloud:auth",
   CLOUD_MEDIA: "cloud:media",
   CLOUD_UPLOAD: "cloud:upload",
+  CLOUD_CATALOG_UPLOAD: "cloud:catalog-upload",
+  CLOUD_CATALOG_FILE: "cloud:catalog-file",
+  CLOUD_CATALOG_ARTWORK: "cloud:catalog-artwork",
   // Renderer→Main requests
   APP_OPEN_EXTERNAL: "app:open-external",
   APP_SHOW_IN_FOLDER: "app:show-in-folder",
@@ -135,6 +138,9 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.CLOUD_AUTH]: { request: { operation: CloudAuthOperation; body?: Record<string, unknown>; sessionToken: string | null }; response: CloudAuthResult };
   [MAIN_CHANNELS.CLOUD_MEDIA]: { request: { path: string; body: Record<string, unknown>; token: string | null }; response: unknown };
   [MAIN_CHANNELS.CLOUD_UPLOAD]: { request: { contentType: string; bytes: Uint8Array; token: string | null }; response: { uploadId: string } };
+  [MAIN_CHANNELS.CLOUD_CATALOG_UPLOAD]: { request: { title: string; kind: 'music' | 'sfx'; mimeType: string; bytes: Uint8Array; token: string | null }; response: { sourceId: string } };
+  [MAIN_CHANNELS.CLOUD_CATALOG_FILE]: { request: { sourceId: string; token: string | null }; response: { media: import('@compound/backend/catalog').CatalogMedia; bytes: Uint8Array } };
+  [MAIN_CHANNELS.CLOUD_CATALOG_ARTWORK]: { request: { sourceId: string; token: string | null }; response: Uint8Array | null };
 
   [MAIN_CHANNELS.APP_OPEN_EXTERNAL]: { request: { url: string }; response: void };
   [MAIN_CHANNELS.CLI_IS_INSTALLED]: { request: void; response: boolean };

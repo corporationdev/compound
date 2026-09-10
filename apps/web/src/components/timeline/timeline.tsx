@@ -12,6 +12,7 @@ import { insertAssetsInNewScene } from '@/engine/new-scene';
 import { useLibrary } from '@/engine/library';
 import { useTimeline } from '@/context/timeline';
 import { ASSET_DRAG_TYPE } from '@/components/sidebar-left/folder-item';
+import { importCatalogAsset, readCatalogDrag } from '@/engine/catalog-assets';
 
 /**
  * The timeline's canvas. What is drawn on it is the timeline system's
@@ -44,6 +45,20 @@ export function Timeline() {
 
     const fps = world.get(FrameRate)?.value ?? 30;
     const start = framesToSeconds(Math.max(0, timeline.clientToFrame(event.clientX)), fps);
+    const catalog = readCatalogDrag(event);
+    if (catalog) {
+      const parent = getActiveEntity(world);
+      try {
+        const asset = await importCatalogAsset(lib, catalog.sourceId);
+        if (lib !== library() || lib.closed) return;
+        if (parent) {
+          if (!parent.isAlive() || !insertAsset(world, asset, { parent, start, sourceRange: catalog.sourceRange })) throw new Error('The target scene was removed. Audio is available in Project.');
+        } else {
+          insertAssetsInNewScene(world, [asset], { start, sourceRange: catalog.sourceRange });
+        }
+      } catch (error) { toast.error('Could not insert audio', { description: (error as Error).message }); }
+      return;
+    }
 
     // Read the transfer before the first await: it is gone by the time an
     // import resolves.

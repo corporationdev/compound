@@ -81,7 +81,7 @@ jobs:
             fi
           done
       - name: Check
-        run: bun run check && bun run test:cloud && bun run --cwd apps/landing test
+        run: bun run check && bunx tsc -p apps/web/tsconfig.node.json --noEmit && bun run test:cloud && bun run --cwd apps/landing test
       - name: Derive public production config
         run: bun scripts/release-env.ts
       - name: Load Apple release credentials
@@ -98,8 +98,19 @@ jobs:
           APPLE_TEAM_ID: op://compound-prod/Apple/team-id
       - name: Prepare signing keychain and validate Apple access
         run: bun scripts/release-signing.ts
-      - name: Build signed and notarized universal installer
-        run: bun run --cwd apps/desktop make --arch=universal
+      - name: Stage chat runtime
+        run: bun run --cwd apps/desktop stage:chat
+      - name: Compile desktop
+        # The Check step already typechecked the desktop workspace.
+        run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload && bun run --cwd apps/desktop build:native
+      - name: Build desktop web UI
+        run: bun run --cwd apps/web bundle:desktop
+      - name: Stage CLI, docs, and skills
+        run: bun run --cwd apps/desktop stage:cli && bun run --cwd apps/desktop stage:docs && bun run --cwd apps/desktop stage:skills
+      - name: Package, sign, notarize, and make installers
+        env:
+          DEBUG: electron-universal
+        run: bun run --cwd apps/desktop electron-forge make --arch=universal
       - name: Verify signature, notarization, architectures, and bundled CLI
         run: bun scripts/release-artifacts.ts
       - name: Save verified release artifacts

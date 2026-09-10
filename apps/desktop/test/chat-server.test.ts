@@ -1,10 +1,65 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir } from 'node:fs/promises';
+import electron from 'electron';
+import { extractFile, listPackage } from '@electron/asar';
 import { ChatServer, projectCliCommand } from '../src/chat-server';
+
+const runtimeDir = resolve(process.env.COMPOUND_TEST_CHAT_DIR ?? resolve(import.meta.dir, '../chat-runtime'));
+const electronPath = (process.env.COMPOUND_TEST_ELECTRON ?? electron) as unknown as string;
+
+test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('chat ships an archive and a small native payload', async () => {
+  const runtime = runtimeDir;
+  const archive = join(runtime, 'app.asar');
+  expect(JSON.parse(extractFile(archive, 'node_modules/t3/package.json').toString()).version).toBe('0.0.40');
+  expect(listPackage(archive).some(path => path.includes('claude-agent-sdk-darwin-'))).toBe(false);
+  expect(listPackage(archive).some(path => /\.(node|dylib|exe)$/.test(path))).toBe(false);
+  expect((await readdir(runtime, { recursive: true, withFileTypes: true })).filter(entry => entry.isFile()).length).toBeLessThan(500);
+  execFileSync(join(runtime, 'resource-monitor', `darwin-${process.arch}`, 't3-resource-monitor'), ['--help'], { timeout: 30_000, stdio: 'pipe' });
+}, 35_000);
+
+test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('Electron runs the chat native dependencies without standalone Node', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'compound-chat-native-test-'));
+  try {
+    await writeFile(join(dir, 'example.txt'), 'test');
+    execFileSync(electronPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import { DatabaseSync } from 'node:sqlite';
+      import pty from 'node-pty';
+      import extract from 'msgpackr-extract';
+      import { FileFinder } from '@ff-labs/fff-node';
+      assert.ok(process.versions.electron);
+      assert.equal(typeof extract.extractStrings, 'function');
+      const db = new DatabaseSync(':memory:');
+      assert.equal(db.prepare('select 1 as value').get().value, 1);
+      db.close();
+      const created = FileFinder.create({ basePath: process.argv[1], disableWatch: true });
+      assert.ok(created.ok, created.error);
+      try {
+        await created.value.waitForScan(5000);
+        const result = created.value.fileSearch('example.txt');
+        assert.ok(result.ok, result.error);
+        assert.ok(result.value.items.some(item => item.relativePath === 'example.txt'));
+      } finally { created.value.destroy(); }
+      await new Promise((resolve, reject) => {
+        const terminal = pty.spawn('/bin/sh', ['-c', 'printf electron-pty-ok'], { cwd: process.argv[1] });
+        let output = '';
+        terminal.onData(data => { output += data; });
+        terminal.onExit(({ exitCode }) => {
+          if (exitCode === 0 && output.includes('electron-pty-ok')) resolve();
+          else reject(new Error('Electron terminal failed: ' + output));
+        });
+      });
+    `, dir], {
+      cwd: runtimeDir,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: 'pipe', timeout: 15_000,
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}, 20_000);
 
 test('chat CLI invocation preserves exact app, socket and project through a shell', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'compound-cli-command-'));
@@ -24,7 +79,7 @@ test('chat CLI invocation preserves exact app, socket and project through a shel
 // but never submits a model turn or changes a user's provider credentials.
 test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('packaged T3 authenticates, persists threads, streams metadata, and signs assets', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'compound-chat-runtime-test-'));
-  const server = new ChatServer({ runtimeDir: resolve(import.meta.dir, '../chat-runtime'), dataDir: join(dir, 'state'), cliBinDir: resolve(import.meta.dir, '../../../node_modules/.bin'), cliSocketPath: join(dir, 'app.sock'), validateProject: async p => p, changed: () => {} });
+  const server = new ChatServer({ executablePath: electronPath, runtimeDir, dataDir: join(dir, 'state'), cliBinDir: resolve(import.meta.dir, '../../../node_modules/.bin'), cliSocketPath: join(dir, 'app.sock'), validateProject: async p => p, changed: () => {} });
   const project = { id: 'test-project', name: 'Test', dir };
   try {
     const settingsDir = join(dir, 'state', 'userdata');

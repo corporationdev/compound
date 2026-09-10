@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:desktop": "tsc -b && vite build --mode desktop --base=./ --outDir=../desktop/web",
+    "build:desktop": "tsc -b && bun run bundle:desktop",
+    "bundle:desktop": "vite build --mode desktop --base=./ --outDir=../desktop/web",
     "preview": "vite preview",
     "check": "tsc -p tsconfig.app.json --noEmit",
     "lint": "eslint ."
@@ -28,6 +29,7 @@
     "@solid-primitives/pointer": "^0.3.3",
     "@solid-primitives/resize-observer": "^2.1.3",
     "@solidjs/router": "^0.15.4",
+    "@tanstack/solid-query": "^5.102.8",
     "@trpc/server": "^11.10.0",
     "animejs": "^4.4.1",
     "better-auth": "~1.6.15",

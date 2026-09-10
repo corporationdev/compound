@@ -31,7 +31,7 @@ if (action === 'preview') {
   const temporary = mkdtempSync(resolve(tmpdir(), 'compound-convex-'));
   try {
     const file = resolve(temporary, 'runtime.env');
-    const keys = ['STAGE', 'SITE_URL', 'BETTER_AUTH_SECRET', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'CLOUDFLARE_ACCOUNT_ID', 'MEDIA_BUCKET_NAME', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'DEEPGRAM_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY', 'MODAL_TOKEN_ID', 'MODAL_TOKEN_SECRET'];
+    const keys = ['STAGE', 'SITE_URL', 'BETTER_AUTH_SECRET', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'CLOUDFLARE_ACCOUNT_ID', 'MEDIA_BUCKET_NAME', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'DEEPGRAM_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY', 'MODAL_TOKEN_ID', 'MODAL_TOKEN_SECRET', 'APIFY_TOKEN'];
     requireKeys(backend, keys);
     writeFileSync(file, renderEnv(Object.fromEntries(keys.map((key) => [key, backend[key]]))), { mode: 0o600 });
     run(['env', 'set', ...(target.preview ? ['--preview-name', stage] : []), '--from-file', file, '--force'], true);

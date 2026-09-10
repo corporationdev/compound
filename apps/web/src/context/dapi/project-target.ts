@@ -39,6 +39,11 @@ export async function targetContext(target?: CliProjectTarget) {
 const jobs = new Set<Promise<unknown>>();
 export const hasRendererJobs = () => jobs.size > 0;
 export const waitForRendererJobs = async () => { while (jobs.size) await Promise.allSettled([...jobs]); };
+export async function withProjectJob<T>(run: () => Promise<T>): Promise<T> {
+  const work = Promise.resolve().then(run);
+  jobs.add(work);
+  try { return await work; } finally { jobs.delete(work); }
+}
 export async function withTargetRenderer<T>(target: CliProjectTarget | undefined, run: (session: EditorSession) => Promise<T>): Promise<T> {
   const project = await resolveTarget(target);
   const session = await attachedSession(project);

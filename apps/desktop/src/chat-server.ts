@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, readFile, writeFile, realpath } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { dirname, join, delimiter, resolve } from 'node:path';
+import { join, delimiter, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Writable } from 'node:stream';
 import { T3Rpc, rpcError } from '@compound/chat/rpc';
@@ -16,6 +16,7 @@ const empty = (): ChatState => ({ status: 'starting', providers: [], shell: null
 
 export type ChatServerOptions = {
   runtimeDir: string;
+  executablePath?: string;
   dataDir: string;
   cliBinDir: string;
   cliSocketPath: string;
@@ -66,9 +67,9 @@ export class ChatServer {
   private async launch() {
     const generation = ++this.generation;
     this.publish({ status: 'starting', error: undefined });
-    const node = join(this.options.runtimeDir, `node_modules/${process.arch === 'arm64' ? 'node-bin-darwin-arm64' : 'node-darwin-x64'}/bin/node`);
-    const entry = join(this.options.runtimeDir, 'node_modules/t3/dist/bin.mjs');
-    await Promise.all([access(node), access(entry)]).catch(() => {
+    const archive = join(this.options.runtimeDir, 'app.asar');
+    const entry = join(archive, 'node_modules/t3/dist/bin.mjs');
+    await access(archive).catch(() => {
       throw new Error('Chat runtime is missing. In development run `bun run --cwd apps/desktop stage:chat`, then Retry.');
     });
     const stateDir = join(this.options.dataDir, 'userdata');
@@ -100,11 +101,15 @@ export class ChatServer {
     this.baseUrl = `http://127.0.0.1:${port}`;
     this.credential = randomBytes(32).toString('hex');
     this.stderr = '';
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: [this.options.cliBinDir, dirname(node), join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].filter(Boolean).join(delimiter) };
-    // These identify an enclosing development-agent session, not the user's login.
-    delete env.ELECTRON_RUN_AS_NODE;
+    // Like T3's desktop app, run the backend with Electron's built-in Node.
+    const env: NodeJS.ProcessEnv = {
+      ...process.env, ELECTRON_RUN_AS_NODE: '1',
+      T3CODE_RESOURCE_MONITOR_PATH: join(this.options.runtimeDir, 'resource-monitor', `${process.platform}-${process.arch}`, 't3-resource-monitor'),
+      PATH: [this.options.cliBinDir, join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].filter(Boolean).join(delimiter),
+    };
+    // This identifies an enclosing development-agent session, not the user's login.
     delete env.CLAUDECODE;
-    const child = spawn(node, [entry, 'serve', '--bootstrap-fd', '3'], {
+    const child = spawn(this.options.executablePath ?? process.execPath, [entry, 'serve', '--bootstrap-fd', '3'], {
       cwd: this.options.dataDir, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
     });
     this.child = child;

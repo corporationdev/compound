@@ -4,7 +4,11 @@ Reference for `compound`, the Compound CLI. Every canvas and project command tal
 
 Each feature command has its own file (linked below). The JSX code syntax specified in [jsx/](./jsx/README.md) is **pseudo-SVG**, mirroring SVG's shape-and-paint model with the editor's own tags and props rather than the SVG spec.
 
-A project is a folder of that JSX, and **the source is the document**: the app compiles the entry file and renders every element into an editable node, and edits made on the canvas are written back to the element that authored them. So the loop is `compound open <dir>` once, then edit the files — there is no command that pushes content into the app. What the commands do is read the running app ([`context`](./context.md), [`capture`](./capture.md), [`logs`](./logs.md)), inspect media, and list what a declaration may name.
+A project is a folder of that JSX, and **the source is the document**: the app compiles the entry file and renders every element into an editable node, and edits made on the canvas are written back to the element that authored them. So the loop is `compound open <dir>` once, then edit the files — composition edits are made in source files. What the commands do is read the running app ([`context`](./context.md), [`capture`](./capture.md), [`logs`](./logs.md)), inspect media, and list what a declaration may name.
+
+For music and sound effects, start with `compound library search --kind music` or
+`--kind sfx` **without a query** to browse every description. See [Library](./library.md)
+for search, exact links, inspection, and project import.
 
 ## Groups
 
@@ -12,11 +16,12 @@ A project is a folder of that JSX, and **the source is the document**: the app c
 
 | Group | Alias | Scope |
 | ----- | ----- | ----- |
-| `media` | `m` | Inspect a media file by path, without adding it to the project. Local files and URLs work with or without an open project; library paths resolve against the target project. |
+| `library` | — | Discover music/SFX with optional-query `search`, inspect metadata with `get`, `resolve` music links, and `import` a source into a target project. |
+| `media` | `m` | Inspect a media file by path, without adding it to the project. `library:<source-id>` inspects cached catalog audio without importing. Local files and URLs work with or without an open project; library paths resolve against the target project. |
 
 How the surface is divided:
 
-- Compound supports cloud transcription and Gemini analysis. Import other media from files; cloud generation and transforms are unavailable. `models` and `voices` return empty lists.
+- Compound supports cloud transcription and Gemini analysis. Import music/SFX with `library import`, or use local files; cloud generation and transforms are unavailable. `models` and `voices` return empty lists.
 - Inspecting an existing asset (probe / transcribe / listen / filmstrip / waveform / grab) lives under `media`.
 
 ## Commands
@@ -70,7 +75,7 @@ Time inputs take the `Time` format unless noted otherwise. Times in **outputs** 
 
 ## Conventions
 
-- **Stdout is JSON.** Commands that return a single record emit one JSON value. Commands that return a collection emit JSON Lines (one object per line, no surrounding array) so per-item results stay streamable. Exceptions: `fonts --names-only` writes plain family names; `logs` writes plain formatted log lines.
+- **Stdout is JSON.** Commands that return a single record emit one JSON value. Commands that return a collection emit JSON Lines (one object per line, no surrounding array) so per-item results stay streamable. Exceptions: `library search` returns one envelope with items, count, complete, and expanded; `fonts --names-only` writes plain family names; `logs` writes plain formatted log lines.
 - **Unix-style names are canonical.** Commands without a natural Unix equivalent (`context`, `whoami`) keep their descriptive names.
 - **Stderr:** human-readable error messages.
 - **Exit codes:** `0` on success, `1` on any error (missing file, app not running, invalid input, IPC error).
