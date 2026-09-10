@@ -1,5 +1,10 @@
 # `compound export <id> [output]`
 
+Targets `--project <id-or-path>` when supplied, otherwise the project containing
+the working directory. The exact target must be open in the editor. A different
+visible project is never used; background rendering is not available.
+
+
 Encodes a scene to a video file — the full render the app's own export runs: the scene re-rendered from a fresh mount at its own size, the workarea from start to end, video and audio, streamed to the output file as it encodes. What [`capture`](./capture.md) shows one frame of, `export` writes all of.
 
 **The settings live in the project, not on the command.** The export is made with the scene's entry in the project's `package.json` — the same entry the app's export panel writes — so a CLI export reproduces the in-app one exactly, and the settings version with the project. The command decides only what to export and where to put it; a hand edit to `package.json` is picked up by the running app immediately, no reload needed.

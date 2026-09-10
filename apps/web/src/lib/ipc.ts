@@ -17,7 +17,7 @@ import type { CliHandshake, CliReply, CliRequest } from "@compound/cli/channels"
 
 type EventHandler<C extends MainEventChannel> = (data: MainEventMap[C]) => void;
 
-export type ProcedureCaller = (input: unknown) => Promise<unknown>;
+export type ProcedureCaller = (input: unknown, target?: import("@compound/cli/channels").CliProjectTarget) => Promise<unknown>;
 
 // Resolves a dot-joined tRPC procedure path to an invocable, or undefined
 // when the router doesn't own that path.
@@ -148,7 +148,7 @@ class CliBridge {
     }
     let reply: CliReply;
     try {
-      const data = await proc(req.input);
+      const data = await proc(req.input, req.target);
       reply = { ok: true, data };
     } catch (err) {
       reply = { ok: false, error: (err as Error).message };

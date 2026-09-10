@@ -50,3 +50,7 @@ apps/desktop/runtime-config.json
 .env.*
 !.env.example
 !.env.op
+
+# Local transcription/model test environments
+.cache/
+__pycache__/

@@ -35,7 +35,10 @@ const config: ForgeConfig = {
       !path.startsWith('/web/'),
     // Staged by scripts/stage-{cli,docs,skills}.mjs; end up at
     // Contents/Resources/{cli,docs,skills}.
-    extraResource: ['./cli', './docs', './skills'],
+    extraResource: ['./cli', './docs', './skills', './chat-runtime'],
+    // This identical resource tree contains both CPU variants. ChatServer
+    // selects the matching Node binary; native packages select their own CPU.
+    osxUniversal: { x64ArchFiles: 'Contents/Resources/chat-runtime/**' },
     osxSign: process.env.SKIP_SIGN ? undefined : {
       ...(process.env.APPLE_SIGNING_IDENTITY ? { identity: process.env.APPLE_SIGNING_IDENTITY } : {}),
     },

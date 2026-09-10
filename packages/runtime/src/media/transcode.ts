@@ -2,11 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { MAX_AUDIO_SECONDS } from "@compound/config/transcription";
+
 // Asset transcoding and preview rendering (was engine/utils/transcode.ts;
 // the timecode formatters moved to utils/time.ts). Filmstrips and waveforms
 // draw into an OffscreenCanvas, so everything here is worker-capable.
 
-import { ALL_FORMATS, AudioSampleSink, BlobSource, BufferTarget, CanvasSink, Conversion, Input, InputAudioTrack, Mp4OutputFormat, OggOutputFormat, Output, StreamTarget } from 'mediabunny';
+import { ALL_FORMATS, AudioSampleSink, BlobSource, BufferTarget, CanvasSink, Conversion, Input, InputAudioTrack, Mp4OutputFormat, OggOutputFormat, WavOutputFormat, Output, StreamTarget } from 'mediabunny';
 
 import { assert } from '../utils/assert';
 import { formatTimestamp } from '../utils/time';
@@ -18,15 +20,17 @@ import type { Asset, VideoAsset, AudioAsset } from '@compound/assets';
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 export async function transcodeForTranscription(asset: Asset): Promise<File> {
+	assert(asset.type === "AUDIO" || asset.type === "VIDEO", "Transcription requires audio or video.");
+	assert(asset.duration <= MAX_AUDIO_SECONDS, "Prepared audio exceeds 100 MiB. Choose a shorter clip.");
 	const blob = await getAssetFile(asset);
 	const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
 	try {
-		const output = new Output({ format: new OggOutputFormat(), target: new BufferTarget() });
+		const output = new Output({ format: new WavOutputFormat(), target: new BufferTarget() });
 		const conversion = await Conversion.init({
 			input,
 			output,
 			video: { discard: true },
-			audio: { codec: "opus", numberOfChannels: 1, sampleRate: 16000 },
+			audio: { codec: "pcm-s16", numberOfChannels: 1, sampleRate: 16000 },
 		});
 		if (!conversion.isValid || conversion.utilizedTracks.length === 0) {
 			throw new Error("No audio found. The asset has no audio track to transcribe.");
@@ -35,7 +39,7 @@ export async function transcodeForTranscription(asset: Asset): Promise<File> {
 
 		const buffer = output.target.buffer;
 		assert(buffer, "Transcoding produced no output.");
-		return new File([buffer], `${crypto.randomUUID()}.ogg`, { type: "audio/ogg" });
+		return new File([buffer], `${crypto.randomUUID()}.wav`, { type: "audio/wav" });
 	} finally {
 		input.dispose();
 	}

@@ -2,12 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Show, createMemo, createSignal } from "solid-js";
+import { Show, createMemo, createSignal, onMount, batch } from "solid-js";
+import { ChatPanel } from "@/components/chat/panel";
 import { Canvas } from "@/components/canvas";
 import { Timeline, Layers } from "@/components/timeline";
 import { Soundboard, Inspector } from "@/components/sidebar-right";
 import { FloatingProjectHeader, SidebarLeft } from "@/components/sidebar-left";
-import { useLayout, MIN_TIMELINE_HEIGHT } from "@/context/layout";
+import { useLayout, MIN_TIMELINE_HEIGHT, DEFAULT_TIMELINE_HEIGHT } from "@/context/layout";
 import { useEditorApi } from "@/context/dapi";
 import { RULER_HEIGHT } from "@/engine/timeline";
 import { createEffect, onCleanup, untrack } from 'solid-js';
@@ -31,12 +32,25 @@ import { useEngineContext } from "@/engine";
 import type { Mount } from '@compound/reconciler';
 import type { EditWriter } from '@/projects/edits';
 
+import { PanelResizeHandle } from '@/components/ui/panel-resize-handle';
+import { DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_CANVAS_WIDTH, fitSidebarWidths } from '@/lib/panel-sizing';
+
 const MIN_CANVAS_HEIGHT = 200;
 
 export function EditorPage() {
-  const { uiVisible, timelineMinimized, timelineHeight, setTimelineHeight } = useLayout();
+  const { uiVisible, timelineMinimized, timelineHeight, setTimelineHeight, leftSidebarWidth, rightSidebarWidth, setLeftSidebarWidth, setRightSidebarWidth } = useLayout();
   const { isDesktop, isFullscreen } = useEditorApi();
-  const [resizing, setResizing] = createSignal(false);
+  const [chatOpen, setChatOpen] = createSignal(false);
+  const [windowSize, setWindowSize] = createSignal({ width: window.innerWidth, height: window.innerHeight });
+  onMount(() => {
+    const resize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', resize);
+    onCleanup(() => window.removeEventListener('resize', resize));
+  });
+  const sidebars = createMemo(() => fitSidebarWidths(windowSize().width, leftSidebarWidth(), rightSidebarWidth()));
+  const sidebarMax = (other: number) => Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, windowSize().width - other - MIN_CANVAS_WIDTH - 2));
+  const resizeLeft = (width: number) => { const right = sidebars().right; batch(() => { setRightSidebarWidth(right); setLeftSidebarWidth(width); }); };
+  const resizeRight = (width: number) => { const left = sidebars().left; batch(() => { setLeftSidebarWidth(left); setRightSidebarWidth(width); }); };
   const project = useProject();
   const world = useWorld();
   const engine = useEngineContext();
@@ -187,42 +201,15 @@ export function EditorPage() {
     const height = timelineMinimized() ? RULER_HEIGHT : timelineHeight();
 
     return {
-      'grid-template-rows': `1fr 1px ${height}px`,
+      'grid-template-rows': `minmax(0,1fr) 1px ${height}px`,
+      'grid-template-columns': `${sidebars().left}px 1px minmax(0,1fr) 1px ${sidebars().right}px`,
     };
   });
 
-  const handleResizeStart = (e: PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startY = e.clientY;
-    const startHeight = timelineHeight();
-    setResizing(true);
-
-    const handleMove = (ev: PointerEvent) => {
-      const deltaY = startY - ev.clientY;
-      const maxHeight = Math.max(
-        MIN_TIMELINE_HEIGHT,
-        window.innerHeight - MIN_CANVAS_HEIGHT - 1,
-      );
-      const next = Math.max(MIN_TIMELINE_HEIGHT, Math.min(maxHeight, startHeight + deltaY));
-      setTimelineHeight(next);
-    };
-
-    const handleEnd = () => {
-      setResizing(false);
-      document.removeEventListener('pointermove', handleMove);
-      document.removeEventListener('pointerup', handleEnd);
-    };
-
-    document.addEventListener('pointermove', handleMove);
-    document.addEventListener('pointerup', handleEnd);
-  };
-
   return (
     <div
-      class="bg-sidebar h-screen w-full overflow-hidden grid"
+      class="bg-sidebar h-screen w-full overflow-hidden grid relative"
       classList={{
-        'grid-cols-[264px_1px_1fr_1px_264px]': uiVisible(),
         'grid-cols-[1fr]': !uiVisible(),
         'grid-rows-[1fr]': !uiVisible(),
       }}
@@ -238,20 +225,20 @@ export function EditorPage() {
       <Canvas />
       <Show when={uiVisible()}>
         <div class="bg-border-strong" />
-        <Inspector />
+        <div class="min-h-0 min-w-0 flex flex-col" classList={{ 'row-span-3': chatOpen() }}>
+          <Show when={isDesktop}>
+            <div class="h-10 shrink-0 flex items-center gap-1 px-3 border-b border-border relative z-30" style="-webkit-app-region: no-drag;" role="tablist" aria-label="Right sidebar">
+              <button class="px-2 py-1 text-[11px] rounded hover:bg-accent" classList={{ 'text-muted-foreground': chatOpen() }} role="tab" aria-selected={!chatOpen()} onClick={() => setChatOpen(false)}>Inspector</button>
+              <button class="px-2 py-1 text-[11px] rounded hover:bg-accent" classList={{ 'text-muted-foreground': !chatOpen() }} role="tab" aria-selected={chatOpen()} onClick={() => setChatOpen(true)}>Chat</button>
+            </div>
+          </Show>
+          <div class="flex-1 min-h-0"><Show when={chatOpen()} fallback={<Inspector />}><ChatPanel /></Show></div>
+        </div>
       </Show>
       <Show when={uiVisible()}>
-        <div class="col-span-full bg-border-strong relative">
+        <div class="bg-border-strong relative" classList={{ "col-span-full": !chatOpen(), "col-span-4": chatOpen() }}>
           <Show when={!timelineMinimized()}>
-            <div
-              class="absolute left-0 right-0 -top-px h-0.75 z-10 cursor-ns-resize group"
-              onPointerDown={handleResizeStart}
-            >
-              <div
-                class="absolute left-0 right-0 top-px h-px transition-colors group-hover:bg-primary"
-                classList={{ 'bg-primary': resizing() }}
-              />
-            </div>
+            <PanelResizeHandle label="Resize timeline" axis="y" reverse value={timelineHeight()} min={MIN_TIMELINE_HEIGHT} max={Math.max(MIN_TIMELINE_HEIGHT, windowSize().height - MIN_CANVAS_HEIGHT - 1)} defaultValue={DEFAULT_TIMELINE_HEIGHT} onChange={setTimelineHeight} style={{ top: '0px' }} />
           </Show>
         </div>
       </Show>
@@ -264,9 +251,13 @@ export function EditorPage() {
       </Show>
       <Show when={uiVisible()}>
         <div class="bg-border-strong" />
-        <Show when={!timelineMinimized()}>
+        <Show when={!timelineMinimized() && !chatOpen()}>
           <Soundboard />
         </Show>
+      </Show>
+      <Show when={uiVisible()}>
+        <PanelResizeHandle label="Resize left sidebar" axis="x" value={sidebars().left} min={MIN_SIDEBAR_WIDTH} max={sidebarMax(sidebars().right)} defaultValue={DEFAULT_SIDEBAR_WIDTH} onChange={resizeLeft} style={{ left: `${sidebars().left}px` }} />
+        <PanelResizeHandle label="Resize right sidebar" axis="x" reverse value={sidebars().right} min={MIN_SIDEBAR_WIDTH} max={sidebarMax(sidebars().left)} defaultValue={DEFAULT_SIDEBAR_WIDTH} onChange={resizeRight} style={{ left: `calc(100% - ${sidebars().right}px - 1px)` }} />
       </Show>
       <Show when={!uiVisible()}>
         <FloatingProjectHeader />

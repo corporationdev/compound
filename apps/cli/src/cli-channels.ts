@@ -21,7 +21,10 @@ export type CliHandshakeReply = { ok: true } | { ok: false; error: string };
 // dot-joined procedure path in the renderer's router (e.g. "media.frame");
 // procedure inputs and outputs are typed end-to-end via the AppRouter type,
 // so the wire envelope stays untyped.
+export type CliProjectTarget = { dir?: string; ref?: string };
+
 export type CliRequest = {
+  target?: CliProjectTarget;
   path: string;
   input: unknown;
 };

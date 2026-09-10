@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { resolveCliTarget } from "./project-target";
 import { connect } from "node:net";
 import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
@@ -117,13 +118,17 @@ async function transport(request: CliRequest, timeoutMs: number): Promise<unknow
 // Terminating link: each operation runs over its own short-lived WebSocket
 // server that the renderer dials in to. Long-running procedures pass
 // { context: { timeoutMs } } at the call site.
+let projectOverride: string | undefined;
+export function setProjectOverride(value: string | undefined) { projectOverride = value; }
+
 const cliLink: TRPCLink<AppRouter> =
   () =>
   ({ op }) =>
     observable((observer) => {
       const timeoutMs =
         typeof op.context.timeoutMs === "number" ? op.context.timeoutMs : DEFAULT_TIMEOUT_MS;
-      transport({ path: op.path, input: op.input }, timeoutMs)
+      resolveCliTarget(process.cwd(), projectOverride)
+        .then(target => transport({ path: op.path, input: op.input, target }, timeoutMs))
         .then((data) => {
           observer.next({ result: { data } });
           observer.complete();

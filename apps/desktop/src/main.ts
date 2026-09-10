@@ -14,6 +14,7 @@ import { installCli, isCliInstalled } from "./cli-install";
 import { healSkillsLinks, installSkills, isSkillsInstalled } from "./skills-install";
 import { setupAppMenu } from "./menu";
 import { prepareUserData } from "./brand-migration";
+import { ChatServer } from "./chat-server";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import {
@@ -43,6 +44,7 @@ import {
   writeProject,
 } from "./projects";
 import type { LogEntry } from "@compound/cli/protocol";
+import { SOCKET_PATH } from "@compound/cli/protocol";
 
 const DEV_URL = "http://localhost:5173";
 const MACOS_CORNER_RADIUS = 18;
@@ -213,10 +215,24 @@ if (app.requestSingleInstanceLock()) {
     const trusted = app.isPackaged ? url.protocol === 'file:' && url.pathname === new URL(pathToFileURL(join(app.getAppPath(), 'web', 'index.html')).href).pathname : url.origin === DEV_URL;
     if (!trusted) throw new Error('Untrusted renderer origin');
   };
+  const chat = new ChatServer({
+    runtimeDir: app.isPackaged ? join(process.resourcesPath, 'chat-runtime') : join(app.getAppPath(), 'chat-runtime'),
+    dataDir: join(app.getPath('userData'), 'chat'),
+    cliBinDir: app.isPackaged ? join(process.resourcesPath, 'cli', 'bin') : join(app.getAppPath(), '..', '..', 'node_modules', '.bin'),
+    cliSocketPath: SOCKET_PATH,
+    validateProject: async (input) => {
+      const project = await getProject(input.dir);
+      if (!project || project.id !== input.id) throw new Error('Project directory no longer matches this chat. Reopen the project.');
+      return { id: project.id, name: project.displayName, dir: project.dir };
+    },
+    changed: state => mainBridge.emit(mainWindow, MAIN_CHANNELS.CHAT_STATE, state),
+  });
+  mainBridge.handle(MAIN_CHANNELS.CHAT_REQUEST, (data, event) => { trustedRenderer(event); return chat.request(data); });
+  void app.whenReady().then(() => chat.start());
   mainBridge.handle(MAIN_CHANNELS.CLOUD_CONFIG, (_data, event) => { trustedRenderer(event); return cloudConfig(); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_AUTH, (data, event) => { trustedRenderer(event); return authRequest(data.operation, data.body); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_MEDIA, (data, event) => { trustedRenderer(event); return mediaRequest(data.path, data.body); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD, (data, event) => { trustedRenderer(event); return uploadMedia(data.contentType, data.bytes); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_AUTH, (data, event) => { trustedRenderer(event); return authRequest(data.operation, data.body, data.sessionToken); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_MEDIA, (data, event) => { trustedRenderer(event); return mediaRequest(data.path, data.body, data.token); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD, (data, event) => { trustedRenderer(event); return uploadMedia(data.contentType, data.bytes, data.token); });
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");
@@ -309,7 +325,12 @@ if (app.requestSingleInstanceLock()) {
     createWindow(!isHiddenLaunch(process.argv));
   });
 
-  app.on("before-quit", () => {
+  let chatStopped = false;
+  app.on("before-quit", (event) => {
+    if (!chatStopped) {
+      event.preventDefault();
+      void chat.stop().finally(() => { chatStopped = true; app.quit(); });
+    }
     unwatchAll();
     stopCliServer();
   });

@@ -12,7 +12,7 @@ A project is a folder of that JSX, and **the source is the document**: the app c
 
 | Group | Alias | Scope |
 | ----- | ----- | ----- |
-| `media` | `m` | Inspect a media file by path, without adding it to the project. Local files and URLs work with or without an open project; library paths need one. |
+| `media` | `m` | Inspect a media file by path, without adding it to the project. Local files and URLs work with or without an open project; library paths resolve against the target project. |
 
 How the surface is divided:
 
@@ -31,7 +31,7 @@ How the surface is divided:
 ### Document
 
 - [`compound open`](./open.md): launch the app and open (or create) a project folder, anywhere on disk
-- [`compound context`](./context.md): which project the app has open, where its playhead sits, its registered fonts, and where its generations stand
+- [`compound context`](./context.md): the target project and whether its editor is attached; when attached, its playhead, registered fonts, and generations
 - [`compound capture`](./capture.md): render frames of a scene, as an export would, to a labelled contact sheet or one PNG per position
 - [`compound check`](./check.md): check a node's subtree for structural mistakes (black-frame gaps, never-visible nodes, failed sources) and report subtree stats
 - [`compound export`](./export.md): encode a scene to a video file, with the settings saved in the project's `package.json`
@@ -75,3 +75,15 @@ Time inputs take the `Time` format unless noted otherwise. Times in **outputs** 
 - **Stderr:** human-readable error messages.
 - **Exit codes:** `0` on success, `1` on any error (missing file, app not running, invalid input, IPC error).
 - **App must be running:** every command except `fonts` and `fetch` talks to the open Compound instance. If the app isn't running, the CLI prints an instruction to launch it and exits `1`. `report` is the one command that reads from the app but tolerates its absence, recording it in the issue instead of failing.
+
+## Project targeting
+
+`compound --project <id-or-path> <command>` explicitly selects a project. Without
+that option, project commands discover the nearest `package.json` with a
+`projectId` from the command's working directory and its parents. They never
+use a different visible project as a fallback. `compound projects list` lists
+known project IDs, names and absolute directories across remembered roots.
+
+File editing and relative media inspection work while another project is open.
+Capture, check and export require the target's editor to be attached and fail
+otherwise. `compound open <dir>` remains an explicit navigation operation.

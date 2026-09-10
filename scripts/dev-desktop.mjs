@@ -137,6 +137,8 @@ async function reclaimPort(port) {
 console.log("[dev:desktop] building CLI…");
 execFileSync("bun", ["run", "--cwd", "apps/cli", "build"], { stdio: "inherit" });
 
+execFileSync("bun", ["run", "--cwd", "apps/desktop", "stage:chat"], { stdio: "inherit" });
+
 // 2. Start the web dev server, on a port that is free.
 await reclaimPort(DEV_PORT);
 console.log("[dev:desktop] starting web dev server…");

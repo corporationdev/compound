@@ -19,7 +19,15 @@ import type { World } from 'koota';
  */
 const DEBOUNCE = 120;
 
+const writers = new Map<string, EditWriter>();
+
+export async function flushProjectEdits(dir: string): Promise<void> {
+  await writers.get(dir)?.flushAndWait();
+}
+
 class EditWriter {
+	private writing?: Promise<void>;
+	private writeError?: string;
 	private readonly dir: string;
 	private readonly world: World;
 
@@ -53,6 +61,7 @@ class EditWriter {
 	private disposed = false;
 
 	public constructor(dir: string, world: World) {
+		writers.set(dir, this);
 		this.dir = dir;
 		this.world = world;
 	}
@@ -107,6 +116,7 @@ class EditWriter {
 		// they came from are on their way out.
 		this.flush();
 		this.disposed = true;
+		if (writers.get(this.dir) === this) writers.delete(this.dir);
 	}
 
 	/**
@@ -162,7 +172,19 @@ class EditWriter {
 		this.timer = setTimeout(() => this.flush(), DEBOUNCE);
 	}
 
+	public async flushAndWait(): Promise<void> {
+		clearTimeout(this.timer);
+		if (this.writeError) throw new Error(this.writeError);
+		for (;;) {
+			this.flush();
+			if (!this.writing) break;
+			await this.writing;
+			if (this.writeError) throw new Error(this.writeError);
+		}
+	}
+
 	private flush(): void {
+		if (this.writing) return;
 		this.timer = undefined;
 		if (!this.unrolls.size && !this.inserts.size && !this.moves.size && !this.pending.size && !this.texts.size && !this.removes.size && !this.variables.size) return;
 
@@ -242,11 +264,12 @@ class EditWriter {
 		this.texts = heldTexts;
 		this.removes = heldRemoves;
 
-		writeProject(this.dir, edits)
+		this.writing = writeProject(this.dir, edits)
 			.then((result) => this.report(result))
 			.catch((error: unknown) => {
+				this.writeError = message(error);
 				toast.error('Could not write to the project', { description: message(error) });
-			});
+			}).finally(() => { this.writing = undefined; this.flush(); });
 	}
 
 	/**
@@ -285,6 +308,7 @@ class EditWriter {
 	}
 
 	private report(result: WriteResult): void {
+		this.writeError = result.error;
 		if (result.error) {
 			toast.error('Could not write to the project', { description: result.error });
 		}

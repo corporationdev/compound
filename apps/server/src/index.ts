@@ -21,7 +21,7 @@ const MAX_BYTES = 100 * 1024 * 1024;
 const uploadSchema = z
   .object({
     size: z.number().int().min(1).max(MAX_BYTES),
-    contentType: z.enum(['audio/ogg', 'video/mp4']),
+    contentType: z.enum(['audio/ogg', 'audio/wav', 'video/mp4']),
   })
   .strict();
 const operationSchema = z
@@ -123,7 +123,7 @@ export default {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(request.url).pathname;
       if (path === '/health' && request.method === 'GET') return json({ ok: true });
-      if (!['/media/upload-url', '/media/transcribe', '/media/analyze'].includes(path))
+      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze'].includes(path))
         throw new HttpError(404, 'Not found');
       if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -138,6 +138,23 @@ export default {
         return json({
           uploadId: upload._id,
           uploadUrl: await signedUrl(env, upload.key, 'PUT', upload.contentType, upload.size),
+        });
+      }
+      if (path === '/media/transcribe-status' || path === '/media/transcribe-cancel') {
+        const input = parseInput(z.object({ jobId: z.string().min(1).max(100) }).strict(), body);
+        const jobId = input.jobId as Id<'transcriptionJobs'>;
+        if (path === '/media/transcribe-cancel') {
+          await client.mutation(api.transcriptions.cancel, { jobId });
+          return json({ ok: true });
+        }
+        const job = await client.query(api.transcriptions.get, { jobId });
+        if (job.status === 'ready' && job.resultKey) {
+          const result = await env.MEDIA.get(job.resultKey);
+          if (!result) throw new HttpError(410, 'Transcription result expired');
+          return json({ status: 'ready', segments: await result.json(), quality: job.quality });
+        }
+        return json({ status: job.status, stage: job.stage,
+          ...(job.error ? { error: 'Transcription failed. Please try again.' } : {}),
         });
       }
       const input = parseInput(operationSchema, body);
@@ -155,6 +172,9 @@ export default {
         throw new HttpError(400, 'Upload is incomplete or does not match its declared size/type');
       const signal = AbortSignal.any([request.signal, AbortSignal.timeout(240000)]);
       if (path === '/media/transcribe') {
+        if (upload.contentType === 'audio/wav') {
+          return json(await client.mutation(api.transcriptions.start, { uploadId: upload._id, language: input.language }));
+        }
         if (upload.contentType !== 'audio/ogg')
           throw new HttpError(400, 'Transcription requires audio');
         if (!env.DEEPGRAM_API_KEY) throw new HttpError(503, 'Transcription is not configured');

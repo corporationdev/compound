@@ -1,6 +1,6 @@
 # Compound cloud setup
 
-The code now uses **Convex + Better Auth for email-code login** and a **Cloudflare Worker + R2 for media**. The Worker calls Deepgram directly for transcription and Gemini for analysis. There is no Supabase migration, billing, credit system, social login, or media generation service.
+The code now uses **Convex + Better Auth for email-code login** and a **Cloudflare Worker + R2 for media**. The Worker handles uploads and Gemini analysis; Convex Workflow runs Deepgram → Gemini omission recovery → Modal wav2vec2 alignment for WAV transcription. There is no Supabase migration, billing, credit system, social login, or media generation service.
 
 The dev environment is connected and deployed. The current root `.env` service account can access `compound-dev`, `compound-preview`, and `compound-prod`; setup does not create those vaults. Preview and production deployment remain separate setup steps.
 
@@ -10,9 +10,11 @@ On September 9, 2026, setup and Alchemy deployment succeeded for `dev-isaacdyor-
 
 | Component | Responsibility |
 | --- | --- |
-| `packages/backend/convex` | Better Auth component, Resend email OTP, upload ownership, expiry and request limits |
+| `packages/backend/convex` | Better Auth component, Resend email OTP, upload ownership, expiry and request limits; durable transcription workflows |
 | `packages/infra/alchemy.run.ts` | Alchemy Worker, R2 bucket/CORS/lifecycle, dev tunnel, encrypted infrastructure state |
-| `apps/server` | Three authenticated media endpoints, R2 URL signing, Deepgram, streamed Gemini Files API |
+| `apps/server` | Authenticated media endpoints, R2 signing/result delivery, legacy Ogg transcription, streamed Gemini Files API |
+| `apps/wav2vec-aligner` | Stage-scoped Modal CPU inference; bounded source PCM reads |
+| `packages/backend/lib/transcription` | PostBob correction/alignment algorithms and provider/storage adapters |
 | `apps/web` | Solid auth client, email-code UI, local editor/captions and CLI handlers |
 | `apps/desktop/src/cloud.ts` | Native auth/media transport, OS-encrypted session storage, short-lived Convex tokens |
 | `scripts` | Bun setup, scoped 1Password injection, runtime config, Convex CLI and Alchemy orchestration |
@@ -24,12 +26,14 @@ The desktop initializes a default projects folder on startup: `~/Movies/compound
 The authenticated Worker API is:
 
 - `POST /media/upload-url { contentType, size }` → `{ uploadId, uploadUrl }`. The client PUTs the prepared file to that R2 URL.
-- `POST /media/transcribe { uploadId, language? }` → `{ segments: [{ text, words: [{ text, start, end }] }] }`.
+- `POST /media/transcribe { uploadId, language? }` → `{ jobId }` for WAV, or the legacy `{ segments }` result for Ogg.
+- `POST /media/transcribe-status { jobId }` → status, or `{ status: "ready", segments, quality }`. The existing client waits internally and still returns the segment array.
+- `POST /media/transcribe-cancel { jobId }` cancels an owned job.
 - `POST /media/analyze { uploadId, prompt? }` → `{ result: string }`.
 
 Each request uses `Authorization: Bearer <Convex JWT>`. The Worker verifies the current Better Auth session through Convex and checks ownership before accessing R2. It receives no Convex admin key. The signed PUT binds both MIME type and byte length. The client cannot submit an arbitrary provider URL or object key.
 
-Deepgram word timing is used as returned, with simple punctuation-based segmentation. There is no wav2vec2, forced alignment, transcript rewrite, or second model. `listen` uses Gemini, defaults to audio only, and supports `--keep-video`. Analysis timestamps are relative to the requested start offset.
+English WAV transcription uses independent Gemini verbatim text with PostBob’s conservative omission/cut-off merge and Modal forced alignment. It preserves the existing sentence/30-word caption segmentation and seconds-based word JSON. Non-English/undetected languages retain Deepgram timings. Provider failures fail the job instead of silently presenting guessed Gemini timings as aligned. `listen` uses Gemini, defaults to audio only, and supports `--keep-video`. Analysis timestamps are relative to the requested start offset.
 
 ## Configuration follows PostBob
 
@@ -52,14 +56,16 @@ Create `compound-dev`, `compound-preview`, and `compound-prod`. The grouped `.en
 | Section / item | Fields | Destination |
 | --- | --- | --- |
 | Deployment / `Cloudflare` | `account-id`, `api-token` | Deployment tools; only the public account ID is a Worker variable |
-| R2 / `R2` | `access-key-id`, `secret-access-key` | Worker signing credentials, scoped to the relevant stage buckets |
+| R2 / `R2` | `access-key-id`, `secret-access-key` | Worker and Convex signing credentials, scoped to the relevant stage buckets |
 | Alchemy / `Alchemy` | `password`, `state-token` | Infrastructure workspace only; encrypt state and authenticate the CI state service |
 | Convex / `Convex` | `deploy-key` | Convex CLI only; a project preview key in the preview vault |
 | Convex / `Convex` | `team-access-token` | Preview teardown through the Management API; never synced to app runtime |
 | Auth / `Better Auth` | `secret` | Convex only; at least 32 random characters, independent per tier |
 | Auth / `Resend` | `api-key` | Convex only |
-| AI / `Deepgram` | `api-key` | Worker only |
-| AI / `Gemini` | `api-key` | Worker only; Google AI Studio/Gemini API key, not Vertex service-account JSON |
+| AI / `Deepgram` | `api-key` | Worker and Convex transcription actions |
+| AI / `Gemini` | `api-key` | Worker and Convex transcription actions; Google AI Studio/Gemini API key, not Vertex service-account JSON |
+
+| AI / `Modal` | `token-id`, `token-secret` | Convex actions and Modal deployment CLI |
 
 Use deployment-specific keys for dev and production. In `compound-preview / Convex / deploy-key`, use a project preview deploy key for `corporation/compound` (format `preview:corporation:compound|…`). Each branch stage creates or reuses its own isolated Convex deployment with `--preview-name`. The shared preview vault supplies credentials, not a shared database. Store the Convex team access token in `compound-preview / Convex / team-access-token`; it is injected only for preview by default and is used for exact-stage cleanup. Dev/prod setup does not require this additional token. The preview R2 signing credentials must cover the dynamically created preview buckets.
 
@@ -144,3 +150,12 @@ Release publishing/download links now target this repository (`corporationdev/co
 References: [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer), [Convex Better Auth](https://labs.convex.dev/better-auth), [Cloudflare fixed-length request streams](https://developers.cloudflare.com/workers/runtime-apis/request/), [R2 lifecycle API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/lifecycle/methods/update/).
 
 Convex lifecycle reference: [named previews preserve existing data; preview-create resets it](https://docs.convex.dev/production/multiple-deployments), [Management API team tokens](https://docs.convex.dev/management-api/overview).
+
+
+## Improved transcription deployment
+
+`bun run deploy --stage <stage>` deploys `compound-wav2vec-aligner` to the matching Modal environment before syncing/deploying Convex and the Worker. The Modal deployment script follows PostBob’s pinned Python CLI pattern and creates an ignored `.cache/modal-cli` environment when needed; Python 3 with venv support is required. For development, deploy the aligner once with `bun scripts/modal-aligner.ts --stage <stage>` and redeploy after Python changes. `bun scripts/modal-aligner.ts stop --stage <stage>` stops only Compound’s app, preserving any other apps in that Modal environment.
+
+Add a `Modal` item with `token-id` and `token-secret` to each Compound environment vault before running fresh setup/CI injection. The existing development Modal account was used for the initial isolated Compound app test; preview and production credentials/deployments must be provisioned separately. No production deployment was performed as part of this restoration.
+
+Transcription uses 16 kHz mono PCM16 WAV for both source extraction and rendered scene audio. The 100 MiB upload limit permits about 54.6 minutes. Job metadata lives in Convex; provider responses, corrected words, alignment batches and final JSON live under the temporary R2 `media/` prefix. Jobs expire with their upload. Account deletion cancels jobs and removes ownership records; R2 lifecycle removes temporary bytes. Successful caption files stay in the local library. The client’s upload cache stores references, never credentials, scoped to account/environment/pipeline/scene seed.

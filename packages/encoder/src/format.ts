@@ -9,7 +9,10 @@ import type { ContainerFormat } from './types';
  * Lazily imports the output format based on the format specified
  */
 export async function createOutputFormat(buffer: TargetBuffer, format?: ContainerFormat) {
-  if (format == 'webm') {
+  if (format == 'wav') {
+		const { WavOutputFormat } = await import('mediabunny');
+		return new WavOutputFormat();
+	} else if (format == 'webm') {
     const { WebMOutputFormat } = await import('mediabunny');
     return new WebMOutputFormat();
   } else if (format == 'ogg') {

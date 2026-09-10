@@ -8,8 +8,14 @@
     "./runtime": "./src/runtime.ts",
     "./deployment": "./src/deployment.ts",
     "./models": "./src/models.ts",
-    "./release": "./src/release.ts"
+    "./release": "./src/release.ts",
+    "./transcription": "./src/transcription.ts"
   },
-  "scripts": { "check": "tsc --noEmit" },
-  "devDependencies": { "typescript": "~5.9.3", "@types/node": "^24.10.1" }
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "@types/node": "^24.10.1"
+  }
 }

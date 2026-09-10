@@ -10,7 +10,13 @@
   "dependencies": {
     "convex": "^1.33.1",
     "better-auth": "~1.6.15",
-    "@convex-dev/better-auth": "^0.12.2"
+    "@convex-dev/better-auth": "^0.12.2",
+    "@compound/config": "workspace:*",
+    "@convex-dev/workflow": "^0.4.6",
+    "@convex-dev/workpool": "^0.4.10",
+    "modal": "^0.9.0",
+    "aws4fetch": "^1.0.20",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

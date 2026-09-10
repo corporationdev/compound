@@ -239,3 +239,22 @@ export function watchProject(dir: string, onChange: (path: string) => void, debo
 		void mainBridge.call(MAIN_CHANNELS.PROJECTS_UNWATCH, { dir }).catch(() => {});
 	};
 }
+
+/** All remembered roots, for explicit CLI targeting independently of navigation. */
+export async function listKnownProjects(): Promise<ProjectInfo[]> {
+  await ready;
+  const roots = await listProjectRoots();
+  const active = projectsRoot();
+  const dirs = new Set<string>();
+  const projects: ProjectInfo[] = [];
+  for (const root of [...roots, ...(active && !roots.some(r => r.path === active) ? [{ path: active, kind: 'multi' }] : [])]) {
+    const found = root.kind === 'single'
+      ? [await getProject(root.path)].filter((p): p is ProjectInfo => !!p)
+      : await mainBridge.call(MAIN_CHANNELS.PROJECTS_LIST, { root: root.path });
+    for (const project of found) {
+      const canonical = await mainBridge.call(MAIN_CHANNELS.PROJECTS_FS_REAL_PATH, { dir: project.dir, source: '.' });
+      if (canonical && !dirs.has(canonical)) { dirs.add(canonical); projects.push({ ...project, dir: canonical }); }
+    }
+  }
+  return projects;
+}

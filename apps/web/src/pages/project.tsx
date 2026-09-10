@@ -37,6 +37,9 @@ export function ProjectPage() {
   // before ids, a bookmark from before a rename) is swapped for the canonical
   // one, so the next rename leaves it alone.
   createEffect(() => {
+    // A resource retains the previous project's value during a new lookup.
+    // Canonicalizing that stale value would navigate back to the old project.
+    if (project.loading) return;
     const id = project()?.id;
     if (!id) return;
     resolvedId = id;

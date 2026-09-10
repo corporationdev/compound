@@ -11,6 +11,6 @@ import { join } from "node:path";
 // Kept separate from cli-channels so the renderer can import the channel
 // registry and envelope types without pulling in node:os / node:path.
 export const SOCKET_PATH =
-  platform() === "win32"
+  process.env.COMPOUND_CLI_SOCKET || (platform() === "win32"
     ? "\\\\.\\pipe\\compound"
-    : join(tmpdir(), "compound.sock");
+    : join(tmpdir(), "compound.sock"));

@@ -1,0 +1,1 @@
+{"name":"@compound/wav2vec-aligner","private":true,"scripts":{"deploy":"bun ../../scripts/modal-aligner.ts"}}

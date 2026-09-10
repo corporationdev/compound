@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values';
 import { mutation, query, internalMutation } from './_generated/server';
 import { authComponent } from './auth';
+import { transcriptionWorkflowManager } from './transcription_workflow';
 
 export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 export const create = mutation({
@@ -11,9 +12,9 @@ export const create = mutation({
       !Number.isSafeInteger(args.size) ||
       args.size < 1 ||
       args.size > MAX_UPLOAD_BYTES ||
-      !['audio/ogg', 'video/mp4'].includes(args.contentType)
+      !['audio/ogg', 'audio/wav', 'video/mp4'].includes(args.contentType)
     ) {
-      throw new ConvexError('Unsupported upload. Use Ogg audio or MP4 video up to 100 MiB.');
+      throw new ConvexError('Unsupported upload. Use WAV/Ogg audio or MP4 video up to 100 MiB.');
     }
     const now = Date.now();
     const active = await ctx.db
@@ -45,6 +46,11 @@ export const get = query({
 export const removeForUser = internalMutation({
   args: { ownerId: v.string() },
   handler: async (ctx, { ownerId }) => {
+    const jobs = await ctx.db.query('transcriptionJobs').withIndex('by_owner', q => q.eq('ownerId', ownerId)).collect();
+    for (const job of jobs) {
+      if (job.status === 'running' && job.workflowId) await transcriptionWorkflowManager.cancel(ctx, job.workflowId);
+      await ctx.db.delete(job._id);
+    }
     const uploads = await ctx.db
       .query('uploads')
       .withIndex('by_owner', (q) => q.eq('ownerId', ownerId))

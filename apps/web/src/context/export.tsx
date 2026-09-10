@@ -44,12 +44,12 @@ export function ExportProvider(props: { children: JSX.Element }) {
     if (!scene?.isAlive()) return;
 
     const format = config.format ?? "mp4";
-    const mimeType = MIME_TYPES[format];
+    const mimeType = format === "wav" ? "audio/wav" : MIME_TYPES[format];
 
     // Fail before the save picker: an unencodable configuration is known
     // right away, and the encoder would only find out after a file was
     // picked and the render machinery spun up.
-    const videoEnabled = format !== "ogg" && config.video?.enabled !== false;
+    const videoEnabled = format !== "ogg" && format !== "wav" && config.video?.enabled !== false;
     if (videoEnabled) {
       const computed = scene.get(Computed);
       const codec = config.video?.codec ?? "avc";

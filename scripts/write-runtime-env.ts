@@ -32,6 +32,9 @@ export function writeRuntime(stage: string) {
   const backendValues: Record<string, string> = {
     ...backend,
     ...runtime.backendEnv,
+    CLOUDFLARE_ACCOUNT_ID: server.CLOUDFLARE_ACCOUNT_ID,
+    MEDIA_BUCKET_NAME: runtime.bucket,
+    ...Object.fromEntries(workerSecretKeys.map(key => [key, server[key]])),
     CONVEX_URL: runtime.convexUrl,
     CONVEX_SITE_URL: runtime.convexSiteUrl,
   };

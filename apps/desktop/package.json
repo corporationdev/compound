@@ -18,11 +18,12 @@
     "stage:docs": "node scripts/stage-docs.mjs",
     "stage:skills": "node scripts/stage-skills.mjs",
     "check": "tsc --noEmit",
-    "dev": "bun run build && electron-forge start",
-    "package": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge package",
-    "make": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge make",
-    "publish": "bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge publish",
-    "make:icns": "sh scripts/make-icns.sh"
+    "dev": "bun run stage:chat && bun run build && electron-forge start",
+    "package": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge package",
+    "make": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge make",
+    "publish": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:docs && bun run stage:skills && electron-forge publish",
+    "make:icns": "sh scripts/make-icns.sh",
+    "stage:chat": "node scripts/stage-chat.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
@@ -44,6 +45,7 @@
     "esbuild": "^0.28.1",
     "nanoid": "^6.0.1",
     "ts-morph": "^28.0.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "@compound/chat": "workspace:*"
   }
 }

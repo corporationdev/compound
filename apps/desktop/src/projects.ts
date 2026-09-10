@@ -861,6 +861,9 @@ export async function initProject(window: BrowserWindow | null, dir: string): Pr
   if (!(await findEntry(dir))) {
     await writeIfMissing(dir, "index.tsx", STARTER);
   }
+  // Navigation and project-bound chats need the identity before the lazy
+  // compiler/scaffold runs, including for external project directories.
+  await ensureProjectId(dir);
   const project = await describe(dir);
   if (!project) throw new Error(noEntryError());
   return project;

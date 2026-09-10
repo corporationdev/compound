@@ -1,0 +1,14 @@
+{
+  "name": "@compound/chat",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts",
+    "./types": "./src/upstream/contracts/index.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.103"
+  }
+}

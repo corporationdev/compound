@@ -85,7 +85,7 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 	// Before the two below read them: ogg is an audio container, so asking for
 	// one is asking for the audio alone — and with `videoEnabled` derived
 	// first, it would still have gone looking for pictures to put in it.
-	if (config.format === 'ogg') {
+	if (config.format === 'ogg' || config.format === 'wav') {
 		config.audio = { ...config.audio, enabled: true };
 		config.video = { ...config.video, enabled: false };
 	}
@@ -96,7 +96,7 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 	const sampleRate = config.audio?.sampleRate ?? 48000;
 	const audioBitrate = config.audio?.bitrate ?? 128e3;
 	const videoBitrate = config.video?.bitrate ?? 10e6;
-	const audioCodec = config.audio?.codec ?? 'aac';
+	const audioCodec = config.audio?.codec ?? (config.format === 'wav' ? 'pcm-s16' : 'aac');
 	const videoCodec = config.video?.codec ?? 'avc';
 	const containerFormat = config.format ?? 'mp4';
 	const resolution = config.video?.resolution ?? 1080;

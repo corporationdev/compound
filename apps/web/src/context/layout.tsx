@@ -6,12 +6,17 @@ import { createContext, useContext, type Accessor, type JSX } from 'solid-js';
 import { assert } from '@/utils';
 import { createStoredSignal } from '@/lib/store';
 import { store } from '@/init';
+import { DEFAULT_SIDEBAR_WIDTH } from '@/lib/panel-sizing';
 
 type LayoutContextValue = {
   uiVisible: Accessor<boolean>;
   timelineMinimized: Accessor<boolean>;
   timelineHeight: Accessor<number>;
   setTimelineHeight(height: number): void;
+  leftSidebarWidth: Accessor<number>;
+  rightSidebarWidth: Accessor<number>;
+  setLeftSidebarWidth(width: number): void;
+  setRightSidebarWidth(width: number): void;
   toggleUI(): void;
   toggleTimeline(): void;
 };
@@ -33,6 +38,9 @@ export function LayoutProvider(props: { children: JSX.Element }) {
     store.define<boolean>('layout.timelineMinimized', false),
   );
 
+  const [leftSidebarWidth, setLeftSidebarWidth] = createStoredSignal(store.define<number>('layout.leftSidebarWidth', DEFAULT_SIDEBAR_WIDTH));
+  const [rightSidebarWidth, setRightSidebarWidth] = createStoredSignal(store.define<number>('layout.rightSidebarWidth', DEFAULT_SIDEBAR_WIDTH));
+
   const toggleUI = () => setUiVisible(!uiVisible());
   const toggleTimeline = () => setTimelineMinimized(!timelineMinimized());
 
@@ -43,6 +51,7 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         timelineMinimized,
         timelineHeight,
         setTimelineHeight,
+        leftSidebarWidth, rightSidebarWidth, setLeftSidebarWidth, setRightSidebarWidth,
         toggleUI,
         toggleTimeline,
       }}>

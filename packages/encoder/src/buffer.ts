@@ -46,5 +46,6 @@ const mimeTypes: Record<ContainerFormat, string> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
   ogg: 'audio/ogg',
+  wav: 'audio/wav',
   mov: 'video/quicktime',
 };

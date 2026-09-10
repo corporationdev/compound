@@ -12,6 +12,12 @@ for (const path of [binary, join(app, 'Contents/Resources/app/dist/corner_radius
   join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-arm64/bin/esbuild'),
   join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-x64/bin/esbuild')])
   execFileSync('lipo', [path, '-verify_arch', 'arm64', 'x86_64']);
+const chat = join(app, 'Contents/Resources/chat-runtime/node_modules');
+for (const [name, arch] of [['node-bin-darwin-arm64', 'arm64'], ['node-darwin-x64', 'x86_64']])
+  execFileSync('lipo', [join(chat, name!, 'bin/node'), '-verify_arch', arch!]);
+if (JSON.parse(readFileSync(join(chat, 't3/package.json'), 'utf8')).version !== '0.0.40')
+  throw new Error('Installer contains an unexpected T3 protocol version');
+readFileSync(join(chat, 't3/dist/bin.mjs'));
 execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
 execFileSync('xcrun', ['stapler', 'validate', app], { stdio: 'inherit' });
 execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' });

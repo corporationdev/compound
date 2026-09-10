@@ -33,7 +33,8 @@
     "deploy": "bun scripts/deploy.ts",
     "test:cloud": "bun test apps/server/test packages/backend/test scripts/environment.test.ts apps/desktop/test/cloud.test.ts",
     "brand:assets": "node scripts/generate-brand-assets.mjs",
-    "test:branding": "bun test apps/desktop/test/brand-migration.test.ts apps/web/test/brand-migration.test.ts"
+    "test:branding": "bun test apps/desktop/test/brand-migration.test.ts apps/web/test/brand-migration.test.ts",
+    "test:transcription": "bun test packages/backend/test apps/server/test apps/desktop/test/cloud.test.ts packages/encoder/test && bun test apps/web/test/transcription-client.test.ts"
   },
   "devDependencies": {
     "@typegpu/noise": "0.11.0",

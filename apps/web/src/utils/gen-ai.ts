@@ -2,11 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { MAX_AUDIO_SECONDS, TRANSCRIPTION_VERSION } from "@compound/config/transcription";
+
 import { parseSource } from '@compound/jsx';
 import {
   Ai,
   AssetId,
   Audio,
+  Computed,
+  FrameRate,
+  framesToSeconds,
   GenAi,
   getEntityTree,
   Hidden,
@@ -58,7 +63,10 @@ export class EditorGenAi extends GenAi {
   public async transcribe(world: World, scene: Entity, seed: number): Promise<Asset> {
     const key = transcriptKey(scene, seed);
 
-    const cached = this.library.list().find((asset) => asset.generation?.key === key);
+    const legacyKey = key.replace(`transcript:${TRANSCRIPTION_VERSION}:`, 'transcript:v1:');
+    const cached = this.library.list().find((asset) =>
+      asset.generation?.key === key || asset.generation?.key === legacyKey,
+    );
     if (cached) return cached;
 
     const running = this.inflight.get(key);
@@ -84,13 +92,15 @@ export class EditorGenAi extends GenAi {
 
     // The scene's own capture world: the project rendered again, reduced to
     // this scene, with nothing drawn — see `createCapture`.
+    const duration = framesToSeconds(scene.get(Computed)?.duration ?? 0, world.get(FrameRate)?.value ?? 30);
+    assert(duration <= MAX_AUDIO_SECONDS, 'Prepared audio exceeds 100 MiB. Choose a shorter clip.');
     const capture = await createCapture(world, scene, { mode: 'offline-audio', dir: this.dir });
     let result: ExportResult;
     try {
       const encoder = await createEncoder(capture.world, {
-        format: 'ogg',
+        format: 'wav',
         video: { enabled: false },
-        audio: { enabled: true, codec: 'opus', sampleRate: 24000 },
+        audio: { enabled: true, codec: 'pcm-s16', sampleRate: 16000, numberOfChannels: 1 },
       });
       result = await encoder.render();
     } finally {
@@ -102,9 +112,9 @@ export class EditorGenAi extends GenAi {
     );
 
     const uploadId = crypto.randomUUID();
-    const audioFile = new File([result.data], `${uploadId}.ogg`, { type: 'audio/ogg' });
+    const audioFile = new File([result.data], `${uploadId}.wav`, { type: 'audio/wav' });
     console.log(`[gen-ai] uploading scene audio for ${key} (${audioFile.size} bytes)`);
-    const fileRef = await uploadBlob(audioFile);
+    const fileRef = await uploadBlob(audioFile, key);
     assert(fileRef, 'Failed to upload the scene audio for transcription');
 
     console.log(`[gen-ai] transcribing scene audio for ${key}`);
@@ -164,7 +174,7 @@ function transcriptKey(scene: Entity, seed: number): string {
   const source = scene.get(Source)?.value;
   const locator = source ? parseSource(source)?.locator : undefined;
   const sceneId = typeof locator === 'string' ? locator : (source ?? String(scene.id()));
-  return `transcript:v1:${sceneId}:${seed}`;
+  return `transcript:${TRANSCRIPTION_VERSION}:${sceneId}:${seed}`;
 }
 
 /**

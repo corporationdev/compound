@@ -1,5 +1,10 @@
 # `compound capture <id> [-t, --time <time...>]`
 
+Targets `--project <id-or-path>` when supplied, otherwise the project containing
+the working directory. The exact target must be open in the editor. A different
+visible project is never used; background rendering is not available.
+
+
 Renders single frames of a scene at one or more timeline positions and merges them into **contact sheets**: up to 12 positions per PNG, each cell labelled with the timecode of the frame actually rendered and drawn as large as the sheet allows, so a few positions arrive as one high-resolution picture instead of a directory to open one by one. `--separate` writes a PNG per position instead.
 
 Each frame is **the frame an export of that scene would encode**: the scene is re-rendered from a fresh mount at its own size, position `0` is the workarea's first frame, and the requested positions are evaluated in timeline order, forward only — the way an export advances — so a composition whose look depends on having played (an `<html>` node's own animation state, for instance) captures exactly as it exports. The tool for checking composition ("what plays at time T": layout, overlaps, text, timing) and for verifying frames before an export.

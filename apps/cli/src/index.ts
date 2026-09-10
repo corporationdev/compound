@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { Command } from "commander";
 import { version } from "../../../package.json";
 import { parseTime, TIME_FPS } from "@compound/jsx";
-import { editor, errnoCode, EXPORT_TIMEOUT_MS, GENERATE_TIMEOUT_MS, waitForCliSocket } from "./cli-client";
+import { editor, setProjectOverride, errnoCode, EXPORT_TIMEOUT_MS, GENERATE_TIMEOUT_MS, waitForCliSocket } from "./cli-client";
 import { listLocalFonts } from "./fonts";
 import { buildIssueBody, createIssue } from "./report";
 import { fetchVideo } from "./ytdlp";
@@ -156,7 +156,7 @@ async function mediaTranscribe(ref: string): Promise<void> {
   const target = resolveAssetRef(ref);
   const stop = startSpinner("Transcribing asset");
   try {
-    const result = await editor.media.transcribe.query(target, GENERATE);
+    const result = await editor.media.transcribe.query(target, { context: { timeoutMs: 24 * 60 * 60 * 1000 } });
     stop();
     console.log(JSON.stringify(result));
   } catch (e) {
@@ -609,7 +609,13 @@ program
     `The Compound CLI: inspect media, edit compositions, and export video.
 Controls the local Compound desktop app. Transcription and analysis use your signed-in cloud account.`,
   )
-  .version(version);
+  .version(version)
+  .option("--project <id-or-path>", "Target a project explicitly; otherwise resolve from the working directory")
+  .hook("preAction", () => setProjectOverride(program.opts().project));
+
+program.command("projects").description("Known Compound projects").command("list").action(async () => {
+  try { console.log(JSON.stringify(await editor.projects.list.query(), null, 2)); } catch (error) { handleSocketError(error); }
+});
 
 program
   .command("open")
