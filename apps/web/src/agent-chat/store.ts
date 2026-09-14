@@ -176,7 +176,10 @@ export function setActiveChat(projectId: string, chatId: string | null): void {
 
 // --- the bridge ---------------------------------------------------------
 
-const call = (request: ChatRequest) => mainBridge.call(MAIN_CHANNELS.CHAT_REQUEST, request);
+// Plain data only: drafts and projects come out of Solid stores as proxies,
+// which the structured clone behind the IPC bridge refuses ("An object could
+// not be cloned"). Every field of a request is JSON already.
+const call = (request: ChatRequest) => mainBridge.call(MAIN_CHANNELS.CHAT_REQUEST, JSON.parse(JSON.stringify(request)) as ChatRequest);
 
 let connected = false;
 

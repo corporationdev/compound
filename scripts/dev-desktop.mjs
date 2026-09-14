@@ -155,4 +155,7 @@ try {
 console.log("[dev:desktop] building desktop app…");
 execFileSync("bun", ["run", "--cwd", "apps/desktop", "build"], { stdio: "inherit" });
 console.log("[dev:desktop] starting desktop app…");
-run("desktop", "electron-forge", ["start"], join(ROOT, "apps", "desktop"));
+// Extra Electron flags for a dev session, e.g. a remote debugging port for
+// driving the app from a script: COMPOUND_DEV_ELECTRON_ARGS="--remote-debugging-port=9333".
+const electronArgs = (process.env.COMPOUND_DEV_ELECTRON_ARGS ?? "").split(/\s+/).filter(Boolean);
+run("desktop", "electron-forge", ["start", ...(electronArgs.length ? ["--", ...electronArgs] : [])], join(ROOT, "apps", "desktop"));
