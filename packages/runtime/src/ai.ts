@@ -2,12 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { generate } from '@compound/jsx';
+import { generate, transform } from '@compound/jsx';
 
 import type { Entity, World } from 'koota';
 import type { Asset } from '@compound/assets';
-import type { SourceModifierValues } from './actions/assets';
 import type {
+	AssetInput,
 	AssetRef,
 	GenerateAudioOptions,
 	GenerateImageOptions,
@@ -15,12 +15,24 @@ import type {
 	GenerateVoiceOptions,
 } from '@compound/jsx';
 
+/**
+ * The generation service a host attaches to its world. Where a generation
+ * stands is the library's to hold, as partial documents (see
+ * `PartialAsset` in @compound/assets): a run that starts is
+ * `pending` there, one that lands is the asset, one that fails stays as
+ * `error` with its reason — and a key standing in error resolves to that
+ * error rather than to another run, in this session and the next. Nothing
+ * here writes to the source that declared the generation.
+ */
 export abstract class GenAi {
 	/**
-	 * The declaration, made real: an asset whose bytes the model produced.
-	 * Content-addressed — the fully-resolved spec's hash is the asset's
-	 * `generation.key`, so the same spec is the same asset in this session
-	 * and the next, and identical concurrent declarations share one run.
+	 * The declaration, made real: an asset whose bytes the model produced —
+	 * from a prompt (`generate.*`) or from another asset (`transform.*`), its
+	 * inputs resolved first. Content-addressed — the fully-resolved spec's
+	 * hash is the asset's `generation.key`, so the same spec is the same
+	 * asset in this session and the next, and identical concurrent
+	 * declarations share one run. Rejects with the recorded reason when the
+	 * key stands in error.
 	 */
 	public abstract resolve(ref: AssetRef): Promise<Asset>;
 
@@ -33,14 +45,6 @@ export abstract class GenAi {
 	public abstract transcribe(world: World, scene: Entity, seed: number): Promise<Asset>;
 
 	/**
-	 * `asset` put through the modifiers an element asked of its source (see
-	 * `SourceModifiers`): the same asset and the same modifiers are the same
-	 * result, in this session and the next, and every step is cached on its
-	 * own, so adding one to an element does not re-run the others.
-	 */
-	public abstract derive(asset: Asset, modifiers: SourceModifierValues): Promise<Asset>;
-
-	/**
 	 * The imperative surface: `ai.generate.image({...})` declares and resolves
 	 * in one call, returning the finished asset.
 	 */
@@ -49,5 +53,12 @@ export abstract class GenAi {
 		video: (options: GenerateVideoOptions): Promise<Asset> => this.resolve(generate.video(options)),
 		voice: (options: GenerateVoiceOptions): Promise<Asset> => this.resolve(generate.voice(options)),
 		audio: (options: GenerateAudioOptions): Promise<Asset> => this.resolve(generate.audio(options)),
+	};
+
+	/** The same for `transform.*`: `ai.transform.upscale(input)` is the upscaled asset. */
+	public readonly transform = {
+		upscale: (input: AssetInput): Promise<Asset> => this.resolve(transform.upscale(input)),
+		removeBackground: (input: AssetInput): Promise<Asset> => this.resolve(transform.removeBackground(input)),
+		addAudio: (input: AssetInput): Promise<Asset> => this.resolve(transform.addAudio(input)),
 	};
 }

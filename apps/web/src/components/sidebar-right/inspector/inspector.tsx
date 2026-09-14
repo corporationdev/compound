@@ -75,7 +75,7 @@ function classifyNode(entity: Entity): SelectionTarget {
 export function Inspector() {
   const tool = useTool();
   const { nodes, keyframes, first } = useSelection();
-  const { asset } = useAssetSelection();
+  const { asset, partial } = useAssetSelection();
 
   // For ExportPanel (root scenes only) and TransitionSettings (sequence items).
   const parent = createMemo(() => getParentNode(first()));
@@ -88,7 +88,7 @@ export function Inspector() {
   const selectionTarget = createMemo<SelectionTarget>(() => {
     if (tool() === ToolType.SCENE) return "scene-tool";
     if (keyframes().length > 0) return "keyframe";
-    if (asset()) return "asset";
+    if (asset() || partial()) return "asset";
     const entity = first();
     if (nodes().length === 1 && entity) return classifyNode(entity);
     return "stage";
@@ -96,7 +96,7 @@ export function Inspector() {
 
   // Remounts the panels when the selection changes
   const selectionHash = createMemo(() => {
-    return [...nodes(), ...keyframes(), asset()?.id ?? ""].join(",") + selectionTarget();
+    return [...nodes(), ...keyframes(), asset()?.id ?? partial()?.id ?? ""].join(",") + selectionTarget();
   });
 
   const includesTarget = (...targets: SelectionTarget[]) => {

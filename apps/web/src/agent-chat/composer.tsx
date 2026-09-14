@@ -1,0 +1,205 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// The prompt box, docked at the bottom of the panel in every state. Looks
+// like the dashboard composer, sized to the chat sidebar, and never moves:
+// no centred start, no animated height, a static placeholder.
+//
+// Two kinds of attachment share the row above the text: files and folders
+// dropped from the shell, which the agent reads where they are, and images
+// pasted or picked, which are uploaded with the message.
+
+import { For, Show, createEffect } from "solid-js";
+
+import { Icon } from "@/components/ui/icon";
+
+import type { ProviderOptionChoice, RuntimeMode, SelectProviderOptionDescriptor, UploadChatAttachment } from "@compound/chat/types";
+
+import { AttachmentTile, DropOverlay, createDropZone, mergeAttachments, type Attachment } from "./attachments";
+import { ModelPicker } from "./model-picker";
+import { PermissionPicker } from "./permissions";
+import { ThinkingPicker } from "./thinking-picker";
+import type { ModelRef } from "./store";
+
+const MAX_HEIGHT_PX = 160;
+
+type ComposerProps = {
+  text: string;
+  attachments: Attachment[];
+  images: UploadChatAttachment[];
+  onText(text: string): void;
+  onAttachments(attachments: Attachment[]): void;
+  onImages(images: UploadChatAttachment[]): void;
+  onAddFiles(files: FileList | File[]): void;
+  /** Whether a turn runs or waits: the send button becomes Stop. */
+  running: boolean;
+  /** A question is pending: sending is disabled, Stop still works. */
+  waiting: boolean;
+  /** Why nothing can be sent, or null. Shown as the placeholder while the box is disabled. */
+  blocked: string | null;
+  model: ModelRef | null;
+  onModel(ref: ModelRef): void;
+  permissions: RuntimeMode;
+  onPermissions(value: RuntimeMode): void;
+  thinking?: SelectProviderOptionDescriptor;
+  thinkingValue?: ProviderOptionChoice;
+  onThinking(value: string): void;
+  onSend(): void;
+  onStop(): void;
+};
+
+export function Composer(props: ComposerProps) {
+  let textarea: HTMLTextAreaElement | undefined;
+  let fileInput: HTMLInputElement | undefined;
+
+  const drop = createDropZone((dropped) => props.onAttachments(mergeAttachments(props.attachments, dropped)));
+
+  const canSend = () =>
+    !props.running && !props.blocked && props.model !== null && (props.text.trim().length > 0 || props.attachments.length > 0 || props.images.length > 0);
+
+  // Grows with its content, instantly, up to the cap; then it scrolls.
+  const resize = () => {
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_HEIGHT_PX)}px`;
+  };
+  createEffect(() => {
+    void props.text;
+    resize();
+  });
+
+  // Enter sends, shift+enter breaks the line — and the editor's shortcuts
+  // have no business reading what is typed here. While a turn runs Enter
+  // does nothing: there is no queue.
+  const handleKeyDown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    if (canSend()) props.onSend();
+  };
+
+  const sendTitle = () => (props.waiting ? "Waiting for your answer" : props.blocked ?? "Send");
+
+  return (
+    <div
+      class="relative mx-4 mb-4 flex shrink-0 flex-col gap-2 rounded-xl border border-border bg-accent p-2 focus-within:border-border-input"
+      onDragOver={drop.onDragOver}
+      onDragEnter={drop.onDragEnter}
+      onDragLeave={drop.onDragLeave}
+      onDrop={drop.onDrop}
+    >
+      <Show when={props.attachments.length > 0 || props.images.length > 0}>
+        {/* The remove buttons overhang the tiles' corners, and a scrolling
+            row clips at its edge — so the row pads for them and pulls itself
+            back up by the same amount. */}
+        <div class="-mt-2.5 flex w-full items-start gap-1.5 overflow-x-auto pt-2.5 pr-2.5">
+          <For each={props.attachments}>
+            {(entry) => (
+              <AttachmentTile
+                attachment={entry}
+                class="size-9 [&>div]:rounded-md"
+                onRemove={() => props.onAttachments(props.attachments.filter((item) => item.key !== entry.key))}
+              />
+            )}
+          </For>
+          <For each={props.images}>
+            {(image, index) => (
+              <AttachmentTile
+                attachment={{ key: `${image.name}:${index()}`, name: image.name, kind: "file", path: null }}
+                class="size-9 [&>div]:rounded-md"
+                preview={image.dataUrl}
+                onRemove={() => props.onImages(props.images.filter((_, position) => position !== index()))}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <textarea
+        ref={textarea}
+        value={props.text}
+        onInput={(event) => props.onText(event.currentTarget.value)}
+        onKeyDown={handleKeyDown}
+        onKeyUp={(event) => event.stopPropagation()}
+        onPaste={(event) => {
+          const files = event.clipboardData?.files;
+          if (!files?.length) return;
+          event.preventDefault();
+          props.onAddFiles(files);
+        }}
+        aria-label="Message the agent"
+        placeholder={props.blocked ?? "Do anything"}
+        disabled={props.blocked !== null}
+        rows={1}
+        class="max-h-40 min-h-7 w-full resize-none overflow-auto bg-transparent p-1 text-[12px] leading-5 text-foreground outline-none placeholder:text-muted-foreground selection:bg-selection selection:text-selection-foreground disabled:cursor-default"
+      />
+
+      <div class="flex min-h-4 items-center gap-0.5">
+        <ModelPicker value={props.model} onSelect={props.onModel} class="min-w-0" />
+        <Show when={props.thinking}>
+          {(descriptor) => (
+            <ThinkingPicker
+              descriptor={descriptor()}
+              value={props.thinkingValue}
+              disabled={props.running}
+              onSelect={props.onThinking}
+            />
+          )}
+        </Show>
+        <PermissionPicker value={props.permissions} disabled={props.blocked !== null} onSelect={props.onPermissions} />
+
+        <span class="ml-auto" />
+        <input
+          ref={fileInput}
+          hidden
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          onChange={(event) => {
+            if (event.currentTarget.files) props.onAddFiles(event.currentTarget.files);
+            event.currentTarget.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInput?.click()}
+          aria-label="Attach image"
+          title="Attach image"
+          class="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-ring"
+        >
+          <Icon name="attachment" />
+        </button>
+        <Show
+          when={props.running}
+          fallback={
+            <button
+              type="button"
+              onClick={() => canSend() && props.onSend()}
+              disabled={!canSend()}
+              aria-label="Send"
+              title={sendTitle()}
+              class="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-40 focus-ring"
+            >
+              <Icon name="arrow-top" />
+            </button>
+          }
+        >
+          <button
+            type="button"
+            onClick={props.onStop}
+            aria-label="Stop"
+            title="Stop"
+            class="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground hover:bg-primary-hover focus-ring"
+          >
+            <Icon name="stop" />
+          </button>
+        </Show>
+      </div>
+
+      <Show when={drop.dragging()}>
+        <DropOverlay radius="rounded-xl" />
+      </Show>
+    </div>
+  );
+}

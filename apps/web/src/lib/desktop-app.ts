@@ -16,7 +16,7 @@ const DOWNLOAD_URL =
   "https://github.com/corporationdev/compound/releases/latest/download/Compound-arm64.dmg";
 
 /** Where a download was started from, so the promos can be compared. */
-export type DesktopAppDownloadSource = "canvas_banner" | "dashboard_footer" | "main_menu" | "onboarding";
+export type DesktopAppDownloadSource = "canvas_banner" | "dashboard_footer" | "main_menu" | "chat_panel";
 
 function isMacOS() {
   const uaData = (navigator as { userAgentData?: { platform?: string } }).userAgentData;

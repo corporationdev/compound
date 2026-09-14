@@ -32,7 +32,7 @@ import { Not, Or } from 'koota';
 
 import { getDocumentEditor } from '../editor';
 import { syncKeyframe } from '../keyframes';
-import { AssetSelection, Hud, Keys, Pointer, SnapLines } from '../traits';
+import { Hud, Keys, Pointer, SnapLines } from '../traits';
 import { getToolCursor, updateCursor, type CursorType } from './cursor';
 import { mountNameInput } from '../hud/name-input';
 import {
@@ -237,7 +237,6 @@ export function handleCanvasInteraction(world: World, event: DispatchedPointerEv
 
 		if (Math.hypot(dx, dy) < CLICK_DISTANCE * resolution(world)) {
 			editor.clearSelection();
-			world.set(AssetSelection, { id: null });
 			syncInteractiveState(world);
 			clearHovering(world);
 		}

@@ -10,12 +10,11 @@ import { AppContextMenu } from "@/components/app-context-menu";
 
 import { AuthProvider, useAuth } from '@/context/auth';
 import { PersistRoute } from '@/lib/persist-route';
-import { EditorApi } from '@/context/dapi';
+import { EditorApi } from '@/dapi';
 import { ScreenTooSmall } from '@/components/screen-too-small';
 import { UnsupportedBrowser } from '@/components/unsupported-browser';
 import { ProjectPage } from '@/pages/project';
 import { LoginPage } from '@/pages/login';
-import { OnboardingPage, onboardingCompleted } from '@/pages/onboarding';
 import { NotFoundPage } from '@/pages/not-found';
 import { DashboardPage } from '@/pages/dashboard';
 
@@ -24,15 +23,10 @@ function AuthGate(props: { children: JSX.Element }) {
 
   return (
     <Show when={!auth.isLoading()}>
-      <Show when={auth.isAuthenticated() || auth.headless()}>
-        <Show
-          when={onboardingCompleted() || auth.headless()}
-          fallback={<OnboardingPage />}
-        >
-          {props.children}
-        </Show>
+      <Show when={auth.isAuthenticated()}>
+        {props.children}
       </Show>
-      <Show when={!auth.isAuthenticated() && !auth.headless()}>
+      <Show when={!auth.isAuthenticated()}>
         <LoginPage />
       </Show>
     </Show>

@@ -16,22 +16,27 @@
 // path, rebind whatever is bound to a relinked asset's old id) it asks of
 // `LibraryOptions`. Generation is not its business either — a generated
 // file is stored like any other bytes the app produced, with its
-// `generation` record along. Its state is solid signals (`assets()`,
+// `generation` record along — but where a generation stands is: a run that
+// has started is a partial document here (`reserve`), one that failed stays
+// as one with its reason (`fail`), and one that landed replaces its partial
+// (`store`). Its state is solid signals (`assets()`, `partials()`,
 // `folders()`), so readers inside a tracking scope follow it.
 
 import { createSignal, type Accessor } from 'solid-js';
 
 import { AssetCache } from './cache';
-import { hashBlob, hashSequence } from './hash';
+import { hashBlob, hashKey, hashSequence } from './hash';
 import {
-	ASSETS_DIR, isAbsoluteSource, isProjectSource, isUrlSource, normalizeManifest, toRecord,
+	ASSETS_DIR, isAbsoluteSource, isPartialRecord, isProjectSource, isUrlSource, normalizeManifest, toRecord,
 } from './manifest';
 import { detectMimeType, DEFAULT_SEQUENCE_FPS, isSequenceListing, probeMedia, sortFrames } from './probe';
-import { assetFolder, assetName, basename, dirname, joinPath, normalizePath } from './types';
+import { assetFolder, assetName, basename, dirname, isPartialAsset, joinPath, normalizePath } from './types';
 
 import type { FsEntry, ProjectFS } from './fs';
 import type { AssetRecord, Manifest } from './manifest';
-import type { Asset, AssetDirectoryHandle, AssetFileHandle, AssetGeneration, AssetCatalogSource, SequenceAsset } from './types';
+import type {
+	Asset, AssetCatalogSource, AssetDirectoryHandle, AssetEntry, AssetFileHandle, AssetGeneration, AssetType, PartialAsset, SequenceAsset,
+} from './types';
 
 /** How long changes pile up before the manifest is written. */
 const SAVE_DEBOUNCE = 200;
@@ -64,21 +69,38 @@ export interface ImportOptions {
 	generation?: AssetGeneration;
 }
 
+export interface ReserveOptions {
+	/** The generation key the partial stands for (see `AssetGeneration`). */
+	key: string;
+	/** What the generation is to become. */
+	type: AssetType;
+	/** A provisional library name; the bytes, once they land, are named by whoever stores them. */
+	name: string;
+	/** Library folder to place it in; root by default. */
+	folder?: string;
+}
+
 export class AssetLibrary {
 	public readonly fs: ProjectFS;
 	/** Thumbnails, rough waveforms: what is derived from assets and kept in `cache/`. */
 	public readonly cache: AssetCache;
 	/** Library assets, newest first; transient ones excluded. Reactive. */
 	public readonly assets: Accessor<Asset[]>;
+	/** Partial documents — generations pending or failed — newest first. Reactive. */
+	public readonly partials: Accessor<PartialAsset[]>;
 	/** Every folder: declared ones, those implied by asset paths, and their ancestors. Reactive. */
 	public readonly folders: Accessor<ReadonlySet<string>>;
 
 	private readonly setAssets: (assets: Asset[]) => void;
+	private readonly setPartials: (partials: PartialAsset[]) => void;
 	private readonly setFolders: (folders: ReadonlySet<string>) => void;
 	/** Folders declared in the manifest (the empty ones need declaring). */
 	private declared = new Set<string>();
-	/** Every asset by id: the library's, and transient ones resolved from outside it. */
-	private readonly map = new Map<string, Asset>();
+	/**
+	 * Every entry by id: the library's assets, transient ones resolved from
+	 * outside it, and the partial documents of generations without bytes.
+	 */
+	private readonly map = new Map<string, AssetEntry>();
 	private readonly onRename: LibraryOptions['onRename'];
 	private readonly onRelink: LibraryOptions['onRelink'];
 	private inflight = new Map<string, Promise<Asset>>();
@@ -93,6 +115,7 @@ export class AssetLibrary {
 		this.onRename = options.onRename;
 		this.onRelink = options.onRelink;
 		[this.assets, this.setAssets] = createSignal<Asset[]>([]);
+		[this.partials, this.setPartials] = createSignal<PartialAsset[]>([]);
 		[this.folders, this.setFolders] = createSignal<ReadonlySet<string>>(new Set());
 	}
 
@@ -110,7 +133,7 @@ export class AssetLibrary {
 		if (this.disposed) throw new Error('The project was closed');
 		// File-watcher reloads can replace the instance returned by an earlier import.
 		const current = this.map.get(asset.id);
-		if (!current || current.transient) throw new Error('The project asset was removed');
+		if (!current || isPartialAsset(current) || current.transient) throw new Error('The project asset was removed');
 		const existing = current.catalogSources ?? [];
 		current.catalogSources = [...existing.filter(item => item.sourceId !== source.sourceId), source];
 		asset.catalogSources = current.catalogSources;
@@ -119,30 +142,63 @@ export class AssetLibrary {
 
 	/** The library's assets as of now, straight from the map. */
 	private listNow(): Asset[] {
-		return Array.from(this.map.values()).filter((asset) => !asset.transient);
+		const assets: Asset[] = [];
+		for (const entry of this.map.values()) {
+			if (!isPartialAsset(entry) && !entry.transient) assets.push(entry);
+		}
+		return assets;
+	}
+
+	/** The partial documents as of now, straight from the map. */
+	private partialsNow(): PartialAsset[] {
+		return Array.from(this.map.values()).filter(isPartialAsset);
+	}
+
+	/** Everything at a library path as of now: assets and partials, transient ones excluded. */
+	private entriesNow(): AssetEntry[] {
+		return Array.from(this.map.values()).filter((entry) => isPartialAsset(entry) || !entry.transient);
 	}
 
 	/** The asset with `id`, or at library path `path`; undefined otherwise. */
 	public get(pathOrId: string): Asset | undefined {
 		const byId = this.map.get(pathOrId);
-		if (byId) return byId;
+		if (byId && !isPartialAsset(byId)) return byId;
 		const path = normalizePath(pathOrId);
-		for (const asset of this.map.values()) {
-			if (asset.path === path && !asset.transient) return asset;
+		for (const asset of this.listNow()) {
+			if (asset.path === path) return asset;
 		}
 		return undefined;
+	}
+
+	/** The partial document with `id`; undefined when there is none, or the id is an asset's. */
+	public getPartial(id: string): PartialAsset | undefined {
+		const entry = this.map.get(id);
+		return entry && isPartialAsset(entry) ? entry : undefined;
 	}
 
 	/** The asset whose bytes are `source`, if the library links to it. */
 	public bySource(source: string): Asset | undefined {
-		for (const asset of this.map.values()) {
-			if (asset.source === source && !asset.transient) return asset;
+		for (const asset of this.listNow()) {
+			if (asset.source === source) return asset;
 		}
 		return undefined;
 	}
 
-	/** Direct children of a folder ('' for the root): its subfolders and assets. Reactive. */
-	public childrenOf(folder: string): { folders: string[]; assets: Asset[] } {
+	/**
+	 * What the library holds for a generation key: the asset the generation
+	 * landed as, or the partial document standing for it while it runs or
+	 * after it failed. Undefined when the generation was never asked for
+	 * here — or its record was removed, which is how one is asked for again.
+	 */
+	public generated(key: string): AssetEntry | undefined {
+		for (const entry of this.entriesNow()) {
+			if (entry.generation?.key === key) return entry;
+		}
+		return undefined;
+	}
+
+	/** Direct children of a folder ('' for the root): its subfolders, assets and partials. Reactive. */
+	public childrenOf(folder: string): { folders: string[]; assets: Asset[]; partials: PartialAsset[] } {
 		const prefix = folder ? `${folder}/` : '';
 		const folders = new Set<string>();
 		for (const path of this.folders()) {
@@ -151,23 +207,25 @@ export class AssetLibrary {
 			}
 		}
 		const assets = this.assets().filter((asset) => assetFolder(asset) === folder);
-		return { folders: [...folders].sort(), assets };
+		const partials = this.partials().filter((partial) => assetFolder(partial) === folder);
+		return { folders: [...folders].sort(), assets, partials };
 	}
 
-	/** Every folder as of now: declared, implied by asset paths, and all their ancestors. */
+	/** Every folder as of now: declared, implied by entry paths, and all their ancestors. */
 	private foldersNow(): Set<string> {
 		const folders = new Set<string>();
 		const declare = (path: string): void => {
 			for (let folder = path; folder && !folders.has(folder); folder = dirname(folder)) folders.add(folder);
 		};
 		for (const folder of this.declared) declare(folder);
-		for (const asset of this.listNow()) declare(assetFolder(asset));
+		for (const entry of this.entriesNow()) declare(assetFolder(entry));
 		return folders;
 	}
 
 	/** Publishes the map's state to the signals. */
 	private publish(): void {
 		this.setAssets(this.listNow());
+		this.setPartials(this.partialsNow());
 		this.setFolders(this.foldersNow());
 	}
 
@@ -181,11 +239,17 @@ export class AssetLibrary {
 	 * again. Safe to call again: it reconciles rather than replaces.
 	 */
 	public async load(): Promise<void> {
+		await this.flush();
 		const manifest = normalizeManifest(await this.fs.readManifest());
 		this.declared = new Set(manifest.folders);
 
-		const next = new Map<string, Asset>();
+		const next = new Map<string, AssetEntry>();
 		await Promise.all(manifest.assets.map(async (record) => {
+			// A partial has no bytes to attach or re-examine; it is its record.
+			if (isPartialRecord(record)) {
+				next.set(record.id, { ...record });
+				return;
+			}
 			const asset = await this.revive(record).catch((error: unknown) => {
 				console.warn(`[assets] could not load ${record.path}:`, error);
 				return this.attach(record);
@@ -194,8 +258,8 @@ export class AssetLibrary {
 		}));
 
 		// Keep transient assets and the same-id instances entities already hold.
-		for (const [id, asset] of this.map) {
-			if (asset.transient && !next.has(id)) next.set(id, asset);
+		for (const [id, entry] of this.map) {
+			if (!isPartialAsset(entry) && entry.transient && !next.has(id)) next.set(id, entry);
 		}
 		this.map.clear();
 		for (const [id, asset] of next) {
@@ -312,7 +376,7 @@ export class AssetLibrary {
 
 	/** Resolves a source outside the library without adding it to the manifest. */
 	private transient(source: string): Promise<Asset> {
-		const existing = Array.from(this.map.values()).find((asset) => asset.transient && asset.source === source);
+		const existing = this.transientBySource(source);
 		if (existing) return Promise.resolve(existing);
 
 		return this.once(`transient:${source}`, async () => {
@@ -322,10 +386,17 @@ export class AssetLibrary {
 			asset.transient = true;
 			// A transient asset that turns out to be one the library has is that one.
 			const owned = this.map.get(asset.id);
-			if (owned && !owned.transient) return owned;
+			if (owned && !isPartialAsset(owned) && !owned.transient) return owned;
 			this.map.set(asset.id, asset);
 			return asset;
 		});
+	}
+
+	private transientBySource(source: string): Asset | undefined {
+		for (const entry of this.map.values()) {
+			if (!isPartialAsset(entry) && entry.transient && entry.source === source) return entry;
+		}
+		return undefined;
 	}
 
 	/** The File backing an asset. */
@@ -391,23 +462,94 @@ export class AssetLibrary {
 
 	/**
 	 * Writes bytes the app produced into `assets/<folder>/<name>` and takes
-	 * the file into the library at the same library path.
+	 * the file into the library at the same library path. Stored under a
+	 * generation key, the asset takes the place of the partial document
+	 * reserved for that key, and answers for the key from here on — even
+	 * when the bytes turn out to be ones the library already had under
+	 * another key, as a re-take of unchanged speech does.
 	 */
 	public async store(blob: Blob, options: ImportOptions & { name: string }): Promise<Asset> {
-		const path = this.uniquePath(joinPath(options.folder ?? '', options.name));
+		const key = options.generation?.key;
+		const reserved = key === undefined ? undefined : this.partialFor(key);
+		const path = this.uniquePath(joinPath(options.folder ?? '', options.name), reserved);
 		const source = joinPath(ASSETS_DIR, path);
 		await this.fs.write(source, blob);
 		const asset = await this.describeFile(source, { path, generation: options.generation });
-		return this.add(asset);
+		if (key !== undefined) this.dropPartial(key);
+		const stored = this.add(asset);
+		if (options.generation && stored.generation?.key !== key) {
+			this.update(stored, { generation: options.generation });
+		}
+		return stored;
+	}
+
+	/**
+	 * Puts a partial document in the library for a generation about to run:
+	 * `pending`, at a path of its own under `folder`. A partial already
+	 * standing for the key — a run the last session never finished, or one
+	 * that failed and is being asked for again — is set pending again rather
+	 * than doubled. An asset the key already landed as is left alone: this
+	 * is not the place to ask whether to run (see `generated`).
+	 */
+	public async reserve(options: ReserveOptions): Promise<PartialAsset> {
+		const id = await hashKey(options.key);
+		const existing = this.getPartial(id);
+		if (existing) {
+			existing.state = 'pending';
+			delete existing.error;
+			this.changed();
+			return existing;
+		}
+
+		const partial: PartialAsset = {
+			id,
+			path: this.uniquePath(joinPath(options.folder ?? '', options.name)),
+			type: options.type,
+			createdAt: new Date().toISOString(),
+			generation: { key: options.key },
+			state: 'pending',
+		};
+		this.reorder(partial);
+		this.changed();
+		return partial;
+	}
+
+	/**
+	 * Records that the generation `partial` stands for failed, and why. The
+	 * record stays: it is what answers for the key from here on, until it
+	 * is removed. A partial no longer in the library (removed while the run
+	 * went on) is not brought back — that removal was the answer.
+	 */
+	public fail(partial: PartialAsset, error: string): void {
+		const current = this.getPartial(partial.id);
+		if (!current) return;
+		current.state = 'error';
+		current.error = error;
+		this.changed();
+	}
+
+	/** The partial document standing for `key`, if one is in the library. */
+	private partialFor(key: string): PartialAsset | undefined {
+		return this.partialsNow().find((partial) => partial.generation.key === key);
+	}
+
+	/** Takes the partial standing for `key` out, its bytes having landed. */
+	private dropPartial(key: string): void {
+		for (const partial of this.partialsNow()) {
+			if (partial.generation.key === key) this.map.delete(partial.id);
+		}
 	}
 
 	/** Puts an asset into the library, deduplicating by content. */
 	private add(asset: Asset): Asset {
 		const existing = this.map.get(asset.id);
-		if (existing && !existing.transient) return existing;
-		// A transient asset the library now takes in becomes a real one; the
-		// instance entities hold stays valid, so mutate rather than replace.
-		if (existing) {
+		if (existing && isPartialAsset(existing)) {
+			// A content hash colliding with a key hash: the bytes win the id.
+			this.map.delete(existing.id);
+		} else if (existing) {
+			if (!existing.transient) return existing;
+			// A transient asset the library now takes in becomes a real one; the
+			// instance entities hold stays valid, so mutate rather than replace.
 			Object.assign(existing, asset);
 			delete existing.transient;
 			this.reorder(existing);
@@ -419,11 +561,11 @@ export class AssetLibrary {
 		return asset;
 	}
 
-	/** Puts `asset` at the front of the map (newest first). */
-	private reorder(asset: Asset): void {
-		const rest = Array.from(this.map.values()).filter((other) => other.id !== asset.id);
+	/** Puts `entry` at the front of the map (newest first). */
+	private reorder(entry: AssetEntry): void {
+		const rest = Array.from(this.map.values()).filter((other) => other.id !== entry.id);
 		this.map.clear();
-		this.map.set(asset.id, asset);
+		this.map.set(entry.id, entry);
 		for (const other of rest) this.map.set(other.id, other);
 	}
 
@@ -462,39 +604,45 @@ export class AssetLibrary {
 		return next;
 	}
 
-	/** Renames an asset within its folder; the source file is untouched. */
-	public rename(asset: Asset, name: string): void {
+	/** Renames an entry within its folder; an asset's source file is untouched. */
+	public rename(entry: AssetEntry, name: string): void {
 		const clean = normalizePath(name).replace(/\//g, '-');
-		if (!clean || clean === assetName(asset)) return;
-		this.setPath(asset, this.uniquePath(joinPath(assetFolder(asset), clean), asset));
+		if (!clean || clean === assetName(entry)) return;
+		this.setPath(entry, this.uniquePath(joinPath(assetFolder(entry), clean), entry));
 	}
 
-	/** Moves assets into a folder ('' for the root). */
-	public move(assets: Asset[], folder: string): void {
+	/** Moves entries into a folder ('' for the root). */
+	public move(entries: AssetEntry[], folder: string): void {
 		const target = normalizePath(folder);
 		if (target) this.declared.add(target);
-		for (const asset of assets) {
-			if (assetFolder(asset) === target) continue;
-			this.setPath(asset, this.uniquePath(joinPath(target, assetName(asset)), asset));
+		for (const entry of entries) {
+			if (assetFolder(entry) === target) continue;
+			this.setPath(entry, this.uniquePath(joinPath(target, assetName(entry)), entry));
 		}
 	}
 
-	private setPath(asset: Asset, path: string): void {
-		const from = asset.path;
+	private setPath(entry: AssetEntry, path: string): void {
+		const from = entry.path;
 		if (from === path) return;
-		asset.path = path;
+		entry.path = path;
 		this.changed();
-		this.onRename?.(asset, from);
+		// Nothing names a partial by path: it is not a source yet.
+		if (!isPartialAsset(entry)) this.onRename?.(entry, from);
 	}
 
-	/** Removes assets from the library. Bytes the app wrote into `assets/` go too. */
-	public async remove(assets: Asset[]): Promise<void> {
-		for (const asset of assets) {
-			this.map.delete(asset.id);
-			if (isProjectSource(asset.source) && asset.source.startsWith(`${ASSETS_DIR}/`)) {
-				await this.fs.remove(asset.source).catch(() => { });
+	/**
+	 * Removes entries from the library. Bytes the app wrote into `assets/`
+	 * go too. Removing a partial forgets where its generation stood — for a
+	 * failed one, that is what asks for the run again.
+	 */
+	public async remove(entries: AssetEntry[]): Promise<void> {
+		for (const entry of entries) {
+			this.map.delete(entry.id);
+			if (isPartialAsset(entry)) continue;
+			if (isProjectSource(entry.source) && entry.source.startsWith(`${ASSETS_DIR}/`)) {
+				await this.fs.remove(entry.source).catch(() => { });
 			}
-			this.cache.remove(asset);
+			this.cache.remove(entry);
 		}
 		this.changed();
 	}
@@ -545,20 +693,20 @@ export class AssetLibrary {
 			}
 		}
 		this.declared.add(to);
-		for (const asset of this.listNow()) {
-			if (asset.path.startsWith(prefix)) this.setPath(asset, to + asset.path.slice(from.length));
+		for (const entry of this.entriesNow()) {
+			if (entry.path.startsWith(prefix)) this.setPath(entry, to + entry.path.slice(from.length));
 		}
 		this.changed();
 		return to;
 	}
 
-	/** Deletes a folder and everything in it. Returns the removed assets. */
-	public async deleteFolder(path: string): Promise<Asset[]> {
+	/** Deletes a folder and everything in it. Returns the removed entries. */
+	public async deleteFolder(path: string): Promise<AssetEntry[]> {
 		const prefix = `${path}/`;
 		for (const folder of [...this.declared]) {
 			if (folder === path || folder.startsWith(prefix)) this.declared.delete(folder);
 		}
-		const doomed = this.listNow().filter((asset) => asset.path.startsWith(prefix));
+		const doomed = this.entriesNow().filter((entry) => entry.path.startsWith(prefix));
 		await this.remove(doomed);
 		return doomed;
 	}
@@ -579,7 +727,7 @@ export class AssetLibrary {
 		return {
 			version: 1,
 			folders: [...this.declared].sort(),
-			assets: this.listNow().map(toRecord),
+			assets: this.entriesNow().map(toRecord),
 		};
 	}
 
@@ -605,9 +753,9 @@ export class AssetLibrary {
 	// -----------------------------------------------------------------------
 	// Describing
 
-	/** A library path not taken by any other asset: `name`, `name 2`, … */
-	private uniquePath(path: string, except?: Asset): string {
-		const taken = new Set(this.listNow().filter((asset) => asset !== except).map((asset) => asset.path));
+	/** A library path not taken by any other entry: `name`, `name 2`, … */
+	private uniquePath(path: string, except?: AssetEntry): string {
+		const taken = new Set(this.entriesNow().filter((entry) => entry !== except).map((entry) => entry.path));
 		if (!taken.has(path)) return path;
 		const folder = dirname(path);
 		const name = basename(path);
@@ -630,6 +778,9 @@ export class AssetLibrary {
 
 	/** Describes a file or frames directory at `source`. */
 	private async describeSource(source: string, meta: DescribeMeta): Promise<Asset> {
+		// A path that is not there fails as that, not as an unsupported file
+		// once the mime sniff finds nothing to read.
+		if (!(await this.fs.stat(source))) throw new Error(`No such file: ${source}`);
 		const entries = await this.fs.list(source);
 		if (entries.length && isSequenceListing(entries.map((entry) => entry.name))) {
 			return this.describeSequence(source, sortFrames(entries).filter((entry) => entry.kind === 'file'), meta);

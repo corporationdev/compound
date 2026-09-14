@@ -16,7 +16,6 @@ import { setCatalogCacheScope } from '@/lib/catalog-cache';
 function createAuth() {
   const [user, setUser] = createSignal<AppUser | null>(null);
   const [isLoading, setLoading] = createSignal(true);
-  const [headless, setHeadless] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   let revision = 0;
   const refreshSession = async () => {
@@ -111,18 +110,11 @@ function createAuth() {
       window.removeEventListener('online', restore);
       window.removeEventListener('focus', restore);
     });
-    if (window.desktop) {
-      void mainBridge.call(MAIN_CHANNELS.HEADLESS_GET_MODE, undefined).then(setHeadless);
-      onCleanup(
-        mainBridge.handle(MAIN_CHANNELS.HEADLESS_MODE, ({ active }) => setHeadless(active)),
-      );
-    }
   });
   return {
     user,
     isAuthenticated: () => !!user(),
     isLoading,
-    headless,
     error,
     refreshSession,
     sendCode,

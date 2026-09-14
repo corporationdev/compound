@@ -17,7 +17,7 @@ import {
 	Sequential, Transition, Playback, Workarea,
 	AudioPlayback, Computed,
 	AudioDecoderHandle, AudioBusHandle, Host,
-	Mode, FrameRate, Time, AudioEngine, FramePromises, Tickers,
+	Mode, Silent, FrameRate, Time, AudioEngine, FramePromises, Tickers,
 	Root,
 } from '../traits';
 import { getParentNode } from '../queries/hierarchy';
@@ -154,7 +154,7 @@ function forwardCaptionDecoder(world: World, _scene: Entity, entity: Entity): vo
  * timing still comes from the clip entity itself.
  */
 function forwardAudioDecoder(world: World, scene: Entity, entity: Entity, audioSource?: Entity): void {
-	if (entity.has(Muted)) return;
+	if (world.has(Silent) || entity.has(Muted)) return;
 
 	const resolvedDecoder = resolveAudioDecoder(world, audioSource ?? entity);
 	if (!resolvedDecoder) return;

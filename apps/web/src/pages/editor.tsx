@@ -3,13 +3,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Show, createMemo, createSignal, onMount, batch } from "solid-js";
-import { ChatPanel } from "@/components/chat/panel";
 import { Canvas } from "@/components/canvas";
+import { RightSidebar } from "@/agent-chat";
 import { Timeline, Layers } from "@/components/timeline";
 import { Soundboard, Inspector } from "@/components/sidebar-right";
 import { FloatingProjectHeader, SidebarLeft } from "@/components/sidebar-left";
 import { useLayout, MIN_TIMELINE_HEIGHT, DEFAULT_TIMELINE_HEIGHT } from "@/context/layout";
-import { useEditorApi } from "@/context/dapi";
+import { useEditorApi } from "@/dapi";
 import { RULER_HEIGHT } from "@/engine/timeline";
 import { createEffect, onCleanup, untrack } from 'solid-js';
 import { toast } from 'somoto';
@@ -24,7 +24,7 @@ import { attachProjectConfig, isProjectConfigFile } from '@/engine/project-confi
 import { loadProjectBundle, rememberProjectBundle } from '@/lib/db';
 import { isCacheFile } from '@compound/assets';
 import { createEditWriter } from '@/projects/edits';
-import { compileProject, watchProject } from '@/projects/host';
+import { compileProject, refreshProject, watchProject } from '@/projects/host';
 import { captureProjectCover } from '@/projects/cover';
 import { useProject } from "@/context/project";
 import { useEngineContext } from "@/engine";
@@ -40,7 +40,6 @@ const MIN_CANVAS_HEIGHT = 200;
 export function EditorPage() {
   const { uiVisible, timelineMinimized, timelineHeight, setTimelineHeight, leftSidebarWidth, rightSidebarWidth, setLeftSidebarWidth, setRightSidebarWidth } = useLayout();
   const { isDesktop, isFullscreen } = useEditorApi();
-  const [chatOpen, setChatOpen] = createSignal(false);
   const [windowSize, setWindowSize] = createSignal({ width: window.innerWidth, height: window.innerHeight });
   onMount(() => {
     const resize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -169,25 +168,29 @@ export function EditorPage() {
 
     load();
   
-    const unwatch = watchProject(dir, (path) => {
-      if (isCacheFile(path)) return;
-      if (isLibraryFile(path)) {
-        library.load();
-      } else {
-        // package.json is the config and the record (`main`, `displayName`)
-        // in one, so a hand edit to it reloads both; the app's own config
-        // writes never reach here (main keeps them from the watcher).
-        if (isProjectConfigFile(path)) {
-          config.load();
-          void project.refresh();
-        }
-        load();
+    // A burst arrives as the whole set of files it touched, so a checkout that
+    // rewrites the library and the sources at once reloads both — reading only
+    // the last path of a burst would answer for one of them and drop the rest.
+    const unwatch = watchProject(dir, (paths) => {
+      const changed = paths.filter((path) => !isCacheFile(path));
+      if (changed.some(isLibraryFile)) library.load();
+
+      const source = changed.filter((path) => !isLibraryFile(path));
+      if (!source.length) return;
+      // package.json is the config and the record (`main`, `displayName`)
+      // in one, so a hand edit to it reloads both; the app's own config
+      // writes never reach here (main keeps them from the watcher).
+      if (source.some(isProjectConfigFile)) {
+        config.load();
+        project.refresh();
       }
+      load();
     });
 
     onCleanup(() => {
       disposed = true;
       captureProjectCover(dir, engine.snapshot());
+      refreshProject(dir);
       unwatch();
       unmount();
       config.dispose();
@@ -202,6 +205,9 @@ export function EditorPage() {
 
     return {
       'grid-template-rows': `minmax(0,1fr) 1px ${height}px`,
+      // Both sidebars are user-resizable and their widths persist, so the
+      // Editor/Chat tabs share one right column rather than animating between
+      // two fixed widths: a transition here would lag behind a drag.
       'grid-template-columns': `${sidebars().left}px 1px minmax(0,1fr) 1px ${sidebars().right}px`,
     };
   });
@@ -225,18 +231,10 @@ export function EditorPage() {
       <Canvas />
       <Show when={uiVisible()}>
         <div class="bg-border-strong" />
-        <div class="min-h-0 min-w-0 flex flex-col" classList={{ 'row-span-3': chatOpen() }}>
-          <Show when={isDesktop}>
-            <div class="h-10 shrink-0 flex items-center gap-1 px-3 border-b border-border relative z-30" style="-webkit-app-region: no-drag;" role="tablist" aria-label="Right sidebar">
-              <button class="px-2 py-1 text-[11px] rounded hover:bg-accent" classList={{ 'text-muted-foreground': chatOpen() }} role="tab" aria-selected={!chatOpen()} onClick={() => setChatOpen(false)}>Inspector</button>
-              <button class="px-2 py-1 text-[11px] rounded hover:bg-accent" classList={{ 'text-muted-foreground': !chatOpen() }} role="tab" aria-selected={chatOpen()} onClick={() => setChatOpen(true)}>Chat</button>
-            </div>
-          </Show>
-          <div class="flex-1 min-h-0"><Show when={chatOpen()} fallback={<Inspector />}><ChatPanel /></Show></div>
-        </div>
+        <RightSidebar editor={() => <Inspector />} />
       </Show>
       <Show when={uiVisible()}>
-        <div class="bg-border-strong relative" classList={{ "col-span-full": !chatOpen(), "col-span-4": chatOpen() }}>
+        <div class="col-span-full bg-border-strong relative">
           <Show when={!timelineMinimized()}>
             <PanelResizeHandle label="Resize timeline" axis="y" reverse value={timelineHeight()} min={MIN_TIMELINE_HEIGHT} max={Math.max(MIN_TIMELINE_HEIGHT, windowSize().height - MIN_CANVAS_HEIGHT - 1)} defaultValue={DEFAULT_TIMELINE_HEIGHT} onChange={setTimelineHeight} style={{ top: '0px' }} />
           </Show>
@@ -251,7 +249,7 @@ export function EditorPage() {
       </Show>
       <Show when={uiVisible()}>
         <div class="bg-border-strong" />
-        <Show when={!timelineMinimized() && !chatOpen()}>
+        <Show when={!timelineMinimized()}>
           <Soundboard />
         </Show>
       </Show>

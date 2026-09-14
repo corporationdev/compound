@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Show, type JSX } from "solid-js";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/context/auth";
 import { useAvatar } from "@/hooks/use-avatar";
@@ -65,32 +66,75 @@ export function DashboardSidebarHeader() {
   );
 }
 
+/**
+ * Stands in for the header when the sidebar has none. On the macOS desktop
+ * build it clears the traffic lights (hiddenInset title bar), except in
+ * fullscreen where they are gone.
+ */
+export function DashboardSidebarTopSpacer() {
+  return <div class="h-4 shrink-0 [[data-platform=darwin]:not([data-fullscreen=true])_&]:h-12" />;
+}
+
 type DashboardSidebarNavProps = {
   children: JSX.Element;
-  footer: JSX.Element;
+  footer?: JSX.Element;
 };
 
+/** The scrolling middle of the sidebar: stacked sections, then empty space. */
 export function DashboardSidebarNav(props: DashboardSidebarNavProps) {
   return (
     <div class="flex min-h-0 flex-1 flex-col gap-2 px-3">
-      <div class="flex shrink-0 flex-col">
-        <div class="flex h-8 shrink-0 items-center px-1">
-          <p class="text-xs text-muted-foreground">
-            Get Started
+      {props.children}
+      <div class="min-h-0 flex-1" />
+      {props.footer}
+    </div>
+  );
+}
+
+type DashboardSidebarConnectCardProps = {
+  onInstall: () => void;
+};
+
+/** The nudge towards the agent setup, shown until an agent is connected. */
+export function DashboardSidebarConnectCard(props: DashboardSidebarConnectCardProps) {
+  return (
+    <div class="flex w-full shrink-0 flex-col items-center gap-1 rounded-md bg-accent py-3">
+      <div class="flex w-full flex-col gap-3 px-3">
+        <div class="flex w-full flex-col gap-1">
+          <div class="flex w-full items-center pb-0.5">
+            <p class="min-w-0 flex-1 truncate text-xs font-450 text-foreground">Connect your agent</p>
+          </div>
+          <p class="w-full text-xs text-muted-foreground">
+            Edit your videos with coding agents like Claude Code, Codex, or Cursor.
           </p>
         </div>
-        {props.children}
-      </div>
-      <div class="min-h-0 flex-1" />
-      <div class="flex shrink-0 flex-col">
-        {props.footer}
+        <Button variant="secondary" class="w-full" onClick={props.onInstall}>
+          Install agent tools
+        </Button>
       </div>
     </div>
   );
 }
 
+type DashboardSidebarSectionProps = {
+  title?: string;
+  children: JSX.Element;
+};
+
+export function DashboardSidebarSection(props: DashboardSidebarSectionProps) {
+  return (
+    <div class="flex shrink-0 flex-col">
+      <Show when={props.title}>
+        <div class="flex h-8 shrink-0 items-center px-1">
+          <p class="text-xs text-muted-foreground">{props.title}</p>
+        </div>
+      </Show>
+      {props.children}
+    </div>
+  );
+}
+
 type DashboardSidebarUserProps = {
-  active: boolean;
   onClick: () => void;
 };
 
@@ -113,12 +157,11 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
         type="button"
         onClick={props.onClick}
         class="flex w-full items-center gap-2 rounded-md p-2 text-left hover:bg-accent focus-ring"
-        classList={{ "bg-accent": props.active }}
       >
         <Show
           when={avatarUrl()}
           fallback={
-            <div class="grid size-8 shrink-0 place-items-center rounded-full bg-input text-xs text-foreground">
+            <div class="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs text-foreground">
               {initial()}
             </div>
           }
@@ -139,6 +182,7 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
             {auth.user()?.email}
           </span>
         </div>
+        <Icon name="settings" class="size-6 shrink-0 text-muted-foreground" />
       </button>
     </div>
   );

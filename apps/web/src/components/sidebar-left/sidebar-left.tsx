@@ -4,7 +4,7 @@
 
 import { MediaPanel } from "./media-panel";
 import { useLayout } from "@/context/layout";
-import { useEditorApi } from "@/context/dapi";
+import { useEditorApi } from "@/dapi";
 import { createSignal, Show } from "solid-js";
 import { toast } from "somoto";
 import { Button } from "../ui/button";

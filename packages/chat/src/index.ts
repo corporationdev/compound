@@ -6,8 +6,9 @@ export type { PendingApproval, PendingUserInput } from './upstream/pendingReques
 export { classifyAuthFailure, threadAuthFailure } from './auth';
 export type { ChatAuthFailure } from './auth';
 export { thinkingDescriptor, thinkingValue, setThinkingValue, compatibleModelOptions } from './thinking';
-export { buildTranscript } from './presentation';
-export type { ToolRow, TranscriptEntry } from './presentation';
+export { buildItems } from './presentation';
+export type { Item, ItemKind, ItemAsset, ItemQuestion, ToolStatus, ToolImage } from './presentation';
+export { CONTEXT_START, CONTEXT_END, splitContext } from './context';
 
 export type ChatProject = { id: string; name: string; dir: string };
 export type ChatState = {
@@ -34,13 +35,6 @@ export type ChatRequest =
 export type ChatReply = { state: ChatState; threadId?: string; url?: string; filePath?: string };
 
 export const t3ProjectId = (id: string) => `compound-${id}`;
-export const CONTEXT_START = '\n\n<compound-context>\n';
-export const CONTEXT_END = '\n</compound-context>';
-export function splitContext(text: string) {
-  const index = text.lastIndexOf(CONTEXT_START);
-  if (index < 0 || !text.endsWith(CONTEXT_END)) return { text, context: '' };
-  return { text: text.slice(0, index), context: text.slice(index + CONTEXT_START.length, -CONTEXT_END.length) };
-}
 
 /** A snapshot is the watermark; replayed deltas at or below it never apply twice. */
 export function reduceThread(snapshot: OrchestrationThreadDetailSnapshot | null, item: OrchestrationThreadStreamItem): OrchestrationThreadDetailSnapshot | null {

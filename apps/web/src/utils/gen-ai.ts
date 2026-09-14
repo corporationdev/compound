@@ -20,18 +20,24 @@ import {
   PaintType,
   Source,
 } from '@compound/runtime';
-import type { SourceModifierValues } from '@compound/runtime';
 import { createEncoder } from '@compound/encoder';
 import { createCapture } from '@/engine/capture';
-import { assetName, GENERATED_DIR } from '@compound/assets';
+import { assetName, GENERATED_DIR, isPartialAsset } from '@compound/assets';
 import { assert } from '@/utils';
 import { uploadBlob } from '@/lib/uploads';
 import { transcribe } from '@/lib/media-api';
 import { toast } from 'somoto';
 import type { AssetRef } from '@compound/jsx';
-import type { Asset, AssetLibrary } from '@compound/assets';
+import type { Asset, AssetLibrary, PartialAsset } from '@compound/assets';
 import type { ExportResult } from '@compound/encoder';
 import type { Entity, World } from 'koota';
+
+/**
+ * A failure the user has already been told of — as a toast when it happened,
+ * and in the library's record from then on. Asking again answers with it
+ * rather than running the work a second time.
+ */
+class ReportedError extends Error {}
 
 export function attachAi(world: World, library: AssetLibrary, dir?: string): EditorGenAi {
   const ai = new EditorGenAi(library, dir);
@@ -43,48 +49,91 @@ export function attachAi(world: World, library: AssetLibrary, dir?: string): Edi
 export class EditorGenAi extends GenAi {
   private readonly library: AssetLibrary;
   private readonly dir?: string;
+  /** Runs in flight, keyed by generation key. */
   private readonly inflight = new Map<string, Promise<Asset>>();
+
   constructor(library: AssetLibrary, dir?: string) {
     super();
     this.library = library;
     this.dir = dir;
   }
+
+  /**
+   * `generate.*` and `transform.*` declarations have no backend here: media
+   * generation is not part of this build, so a declaration says so rather
+   * than standing pending forever.
+   */
   public async resolve(_ref: AssetRef): Promise<Asset> {
     throw new Error('Media generation is unavailable. Import media from your computer instead.');
   }
-  public async derive(asset: Asset, modifiers: SourceModifierValues): Promise<Asset> {
-    if (modifiers.removeBackground || modifiers.upscale > 1 || modifiers.addAudio) {
-      throw new Error(
-        'Cloud media transforms are unavailable. Remove the source modifier to use the original asset.',
-      );
-    }
-    return asset;
-  }
-  public async transcribe(world: World, scene: Entity, seed: number): Promise<Asset> {
-    const key = transcriptKey(scene, seed);
 
-    const legacyKey = key.replace(`transcript:${TRANSCRIPTION_VERSION}:`, 'transcript:v1:');
-    const cached = this.library.list().find((asset) =>
-      asset.generation?.key === key || asset.generation?.key === legacyKey,
+  /**
+   * Transcribes the scene's audible mix for a `<captions>` element (see the
+   * runtime's asset system). Keyed by scene id + seed: the same pair is the
+   * same transcript asset across sessions, and a new seed transcribes the
+   * scene again.
+   */
+  public transcribe(world: World, scene: Entity, seed: number): Promise<Asset> {
+    const key = transcriptKey(scene, seed);
+    return this.generated(
+      key,
+      () => ({ type: 'TRANSCRIPT' as const, name: `${this.nextCaptionsName()}.json` }),
+      (partial) => this.runTranscription(world, scene, key, partial),
     );
-    if (cached) return cached;
+  }
+
+  /**
+   * The library's answer for `key`, or the run that produces one. An asset
+   * the key landed as is returned; a key standing in error rejects with the
+   * recorded reason — answered, not run again, and not toasted again either;
+   * a run in flight is joined. Otherwise the run starts against a partial
+   * document reserved for it, and ends either as the asset that replaces the
+   * partial or as the partial's recorded failure.
+   */
+  private async generated(
+    key: string,
+    describe: () => { type: 'TRANSCRIPT'; name: string },
+    run: (partial: PartialAsset) => Promise<Asset>,
+  ): Promise<Asset> {
+    const known = this.library.generated(key);
+    if (known && !isPartialAsset(known)) return known;
+    if (known?.state === 'error') throw new ReportedError(known.error || 'Caption generation failed');
+
+    // Transcripts taken before the version bump are the same transcript.
+    const legacyKey = key.replace(`transcript:${TRANSCRIPTION_VERSION}:`, 'transcript:v1:');
+    const legacy = this.library.generated(legacyKey);
+    if (legacy && !isPartialAsset(legacy)) return legacy;
 
     const running = this.inflight.get(key);
     if (running) return await running;
 
-    const promise = this.runTranscription(world, scene, key);
+    const promise = this.library
+      .reserve({ key, folder: GENERATED_DIR, ...describe() })
+      .then(async (reserved) => {
+        try {
+          return await run(reserved);
+        } catch (error) {
+          const failure = reportFailure(error, 'Caption generation failed');
+          this.library.fail(reserved, failure.message);
+          throw failure;
+        }
+      });
+
     this.inflight.set(key, promise);
     try {
       return await promise;
-    } catch (error) {
-      throw reportFailure(error, 'Caption generation failed');
     } finally {
       this.inflight.delete(key);
     }
   }
 
   /** Encodes the scene's audio, transcribes it, and stores the transcript. */
-  private async runTranscription(world: World, scene: Entity, key: string): Promise<Asset> {
+  private async runTranscription(
+    world: World,
+    scene: Entity,
+    key: string,
+    partial: PartialAsset,
+  ): Promise<Asset> {
     assert(
       sceneHasAudio(world, scene),
       'No audio found. Add an audio or video clip to the scene to generate captions.',
@@ -126,7 +175,7 @@ export class EditorGenAi extends GenAi {
 
     const blob = new Blob([JSON.stringify(transcript)], { type: 'application/json' });
     const asset = await this.library.store(blob, {
-      name: `${this.nextCaptionsName()}.json`,
+      name: assetName(partial),
       folder: GENERATED_DIR,
       generation: { key },
     });
@@ -142,26 +191,29 @@ export class EditorGenAi extends GenAi {
     return asset;
   }
 
+  /** The next free `Captions N`, counting the takes still in flight. */
   private nextCaptionsName(): string {
     let max = 0;
-    for (const asset of this.library.list()) {
-      const match = assetName(asset).match(/^Captions (\d+)\.json$/);
+    for (const entry of [...this.library.list(), ...this.library.partials()]) {
+      const match = assetName(entry).match(/^Captions (\d+)\.json$/);
       if (match) max = Math.max(max, Number(match[1]));
     }
     return `Captions ${max + 1}`;
   }
 }
 
-function reportFailure(error: unknown, title: string): Error {
-  const failure = error instanceof Error ? error : new Error(String(error));
+function reportFailure(error: unknown, title: string): ReportedError {
+  if (error instanceof ReportedError) return error;
 
-  console.error(`[gen-ai] ${title}:`, failure);
+  const message = error instanceof Error ? error.message : String(error);
+
+  console.error(`[gen-ai] ${title}:`, error);
   toast.error(title, {
-    id: `gen-ai:${title}:${failure.message}`,
-    description: failure.message,
+    id: `gen-ai:${title}:${message}`,
+    description: message,
   });
 
-  return failure;
+  return new ReportedError(message);
 }
 
 /**

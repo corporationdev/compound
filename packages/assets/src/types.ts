@@ -2,13 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The asset model. An asset is a manifest record (see ./manifest.ts) plus a
-// runtime handle to its bytes, attached by the AssetLibrary. Everything an
-// asset *is* lives in the record: what the file was found to be (probe
-// results), where its bytes are (`source`), and where the project keeps it in
-// the library (`path`). Its `id` is a content hash, so the same bytes imported
-// twice are one asset, and a relinked file keeps its metadata.
-
 /** Whatever hands out the asset's bytes: a real File on desktop, an OPFS
  *  file on the web, a fetched blob for a URL. */
 export interface AssetFileHandle {
@@ -133,11 +126,45 @@ export type Asset =
 
 export type AssetType = Asset['type'];
 
+/** Where a generation stands while the library has no bytes for it. */
+export type PartialAssetState = 'pending' | 'error';
+
+/**
+ * A partial document: the library's record of a generation before — or
+ * instead of — its bytes. Written `pending` when a run starts, so the
+ * generation is in the library from the moment it is asked for; replaced by
+ * the asset when the run lands; kept as `error`, with what went wrong, when
+ * it does not. The error record is what keeps a refused or impossible
+ * generation from being run — or paid for — again on every reopen: a
+ * declaration whose key stands in error resolves to that error, and removing
+ * the record is what asks for the run again. Never bound to an entity;
+ * elements see the state through their resolution.
+ */
+export interface PartialAsset {
+	/** Hash of the generation key: there are no bytes to hash. */
+	id: string;
+	/** Library path, like any asset's; provisional until the bytes name themselves. */
+	path: string;
+	/** What the generation is to become. */
+	type: AssetType;
+	createdAt: string;
+	generation: AssetGeneration;
+	state: PartialAssetState;
+	/** What the run failed with, on an `error` record. */
+	error?: string;
+}
+
+/** Anything the library holds at a path: an asset, or a partial standing for one. */
+export type AssetEntry = Asset | PartialAsset;
+
+/** Whether a library entry is a partial document rather than an asset with bytes. */
+export const isPartialAsset = (entry: AssetEntry): entry is PartialAsset => 'state' in entry;
+
 /** The file name of an asset: the last segment of its library path. */
-export const assetName = (asset: Pick<Asset, 'path'>): string => basename(asset.path);
+export const assetName = (asset: Pick<AssetEntry, 'path'>): string => basename(asset.path);
 
 /** The folder of an asset: its library path without the name, '' at root. */
-export const assetFolder = (asset: Pick<Asset, 'path'>): string => dirname(asset.path);
+export const assetFolder = (asset: Pick<AssetEntry, 'path'>): string => dirname(asset.path);
 
 export function basename(path: string): string {
 	const at = path.lastIndexOf('/');

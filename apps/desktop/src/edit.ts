@@ -4,14 +4,16 @@
 
 
 import { randomInt } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { IndentationText, Project, SyntaxKind } from "ts-morph";
 
-import { ID_ATTR, INSPECT_TAG, formatSource, isCompositionTag, isLoopTag, isSerializedAssetRef, parseSource } from "@compound/jsx";
+import { ID_ATTR, INSPECT_TAG, formatSource, isCompositionTag, isLoopTag, isSerializedAssetRef, isTransformType, parseSource } from "@compound/jsx";
 
-import type { InspectValue, PropValue, SerializedAssetRef } from "@compound/jsx";
+import { writeFileAtomic } from "./atomic";
+
+import type { PropValue, SerializedAssetRef } from "@compound/jsx";
 import type {
   ArrowFunction,
   FunctionExpression,
@@ -24,136 +26,19 @@ import type {
   SourceFile,
 } from "ts-morph";
 
-export type { PropValue, SerializedAssetRef };
-
-/**
- * A value an edit can carry: what a source spells as a literal, or a
- * `generate.*` declaration in its wire form, spelled as the call that
- * reproduces it (see `setProp`).
- */
-export type EditValue = PropValue | SerializedAssetRef;
-
-export interface SourceContext {
-  /** Absolute path of the project folder. */
-  dir: string;
-  /** Called with the project-relative path of every file written. */
-  onWrite?: (file: string) => void;
-}
-
-/**
- * Overwrites props of the element named by `source` (a `SOURCE_ATTR` value),
- * and — for a `<text>` — what it says. `text` is its literal content, which is
- * its children rather than a prop and so arrives on its own; an element that
- * only says something new comes with no props at all.
- */
-export interface SourceSet {
-  kind: "set";
-  source: string;
-  props: Record<string, EditValue>;
-  text?: string;
-}
-
-/**
- * Adds `<tag {...props} />` under the element named by `parent`, in front of
- * the child named by `before` or last. `source` is the pending name the canvas
- * knows the new element by; the write answers with the real one in `ids`.
- * A parent may itself be pending when it was inserted earlier in the same
- * write. `text`, when present, is the element's literal text content
- * (`<text>Hello</text>`); without it the element is written self-closing.
- */
-export interface SourceInsert {
-  kind: "insert";
-  source: string;
-  parent: string;
-  tag: string;
-  props: Record<string, EditValue>;
-  before?: string;
-  text?: string;
-}
-
-/**
- * Moves the element named by `source` under the one named by `parent`, in
- * front of the child named by `before` or last. The element travels as it was
- * written — its own text, re-indented for where it lands — so a move is the
- * one edit that does not touch what an element says, only where it says it.
- * Both ends must be in one file: an element cannot move into another module's
- * JSX any more than a project could have put it there.
- */
-export interface SourceMove {
-  kind: "move";
-  source: string;
-  parent: string;
-  before?: string;
-}
-
-/**
- * Removes the element named by `source` from the file, and with it everything
- * it contains: its children are its text, and go the way a move takes them
- * along. Addressed like a move — an unnamed element is a position, and cutting
- * text renumbers positions, so the element is found before anything is cut.
- */
-export interface SourceRemove {
-  kind: "remove";
-  source: string;
-}
-
-/**
- * One iteration of a loop as the canvas rendered it: for every composition
- * element of the loop body, by its source, the props it came out with and (for
- * a `<text>`) its literal content — the values that were computed from the
- * item, spelled as literals. `pending` is the name the canvas already knows
- * that iteration's copy of the element by; the write answers with the real
- * one in `ids`. The first iteration keeps the body's own names, so it carries
- * none.
- */
-export type SourceIteration = Record<string, { props: Record<string, EditValue>; text?: string; pending?: string }>;
-
-/**
- * Replaces the `<For>`/`<Index>` around the element named by `source` with
- * one copy of its body per iteration, each spelling out what that iteration
- * rendered. Nothing that comes after this in the same write can address a
- * looped element (see `inLoop`): the loop is a recipe for elements, and a
- * change to one of them means writing them down first.
- */
-export interface SourceUnroll {
-  kind: "unroll";
-  source: string;
-  iterations: SourceIteration[];
-}
-
-/**
- * Overwrites the initializer of an `@inspect`-annotated top-level const (see
- * @compound/jsx's inspect). Addressed by file and variable name — a
- * const's name is unique in its module, so no id is needed — and only written
- * when the declaration still carries the annotation and holds a literal: an
- * initializer someone rewrote into an expression is theirs again.
- */
-export interface SourceVariable {
-  kind: "variable";
-  file: string;
-  name: string;
-  value: InspectValue;
-}
-
-export type SourceEdit = SourceSet | SourceInsert | SourceMove | SourceRemove | SourceUnroll | SourceVariable;
-
-export interface WriteResult {
-  /** Sources that could not be written, as `id` or `id (prop)`. */
-  skipped: string[];
-  /**
-   * Elements that earned a name in this write, as `old source id -> new one`.
-   * The canvas re-stamps its entities with these, so identity does not have to
-   * wait for a recompile.
-   */
-  ids?: Record<string, string>;
-  /**
-   * The loops this write unrolled, by the `source` of the `SourceUnroll` that
-   * asked. An unroll not listed here was declined, and the canvas takes its
-   * loop back (see the edit writer).
-   */
-  unrolled?: string[];
-  error?: string;
-}
+export type * from "./edit-types";
+import type {
+  EditValue,
+  SourceContext,
+  SourceEdit,
+  SourceInsert,
+  SourceIteration,
+  SourceMove,
+  SourceRemove,
+  SourceUnroll,
+  SourceVariable,
+  WriteResult,
+} from "./edit-types";
 
 /** The opening half of a JSX element — where its attributes live. */
 type JsxTag = JsxOpeningElement | JsxSelfClosingElement;
@@ -236,7 +121,8 @@ const round = (value: number): number => Math.round(value * 100) / 100;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 /** A prop value as the JavaScript that would have produced it. */
-function literalText(value: PropValue): string {
+function literalText(value: PropValue | SerializedAssetRef): string {
+  if (isSerializedAssetRef(value)) return declarationText(value);
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number") return String(round(value));
   if (typeof value === "boolean" || value === null) return String(value);
@@ -266,24 +152,41 @@ const initializerText = (value: PropValue): string =>
     ? `"${value}"`
     : `{${literalText(value)}}`;
 
-/** A declaration's wire form as the `generate.*` call that reproduces it. */
-function generateCallText(ref: SerializedAssetRef): string {
-  const { type, ...options } = ref.$generate;
+/**
+ * A declaration's wire form as the call that reproduces it: `generate.<type>`
+ * over its options, or `transform.<type>` over its input, with declared
+ * inputs spelled as the nested calls they are.
+ */
+function declarationText(ref: SerializedAssetRef): string {
+  const { type, ...options } = ref.$asset;
+  if (isTransformType(type)) return `transform.${type}(${literalText((options as { input: EditValue }).input)})`;
   return `generate.${type}(${literalText(options as Record<string, PropValue>)})`;
+}
+
+/** The namespaces a declaration is spelled with: what its file has to import. */
+function declarationImports(ref: SerializedAssetRef, names = new Set<string>()): Set<string> {
+  const { type, ...options } = ref.$asset;
+  names.add(isTransformType(type) ? "transform" : "generate");
+  for (const value of Object.values(options)) {
+    for (const input of Array.isArray(value) ? value : [value]) {
+      if (isSerializedAssetRef(input)) declarationImports(input, names);
+    }
+  }
+  return names;
 }
 
 /**
  * Writes a prop onto a tag as one would write it: `muted`, not `muted={true}`,
  * and no attribute at all rather than `muted={false}`, since absence is what a
- * boolean prop's false reads as. A declaration is spelled as its `generate.*`
- * call — the caller makes sure `generate` is imported (see
- * `ensureGenerateImport`).
+ * boolean prop's false reads as. A declaration is spelled as the call that
+ * reproduces it — the caller makes sure its namespaces are imported (see
+ * `ensureDeclarationImports`).
  */
 function setProp(tag: JsxTag, name: string, value: EditValue): void {
   const attribute = attributeOf(tag, name);
 
   if (isSerializedAssetRef(value)) {
-    const initializer = `{${generateCallText(value)}}`;
+    const initializer = `{${declarationText(value)}}`;
     if (attribute) attribute.setInitializer(initializer);
     else tag.addAttribute({ name, initializer });
     return;
@@ -304,32 +207,37 @@ function setProp(tag: JsxTag, name: string, value: EditValue): void {
   else tag.addAttribute({ name, initializer: initializerText(value) });
 }
 
-/** Where `generate` comes from — the module every project authors against. */
-const GENERATE_MODULE = "@compound/jsx";
+/** Where `generate` and `transform` come from — the module every project authors against. */
+const DECLARATION_MODULE = "@compound/jsx";
 
 /**
- * Makes sure `generate` is in scope once a declaration has been spelled into
- * the file: added to the module's existing import, or as an import of its own
- * after the last one — or above the first statement, past the file's header
- * comments, when there are no imports at all. Idempotent.
+ * Makes sure the namespaces a declaration is spelled with are in scope once
+ * it has been written into the file: added to the module's existing import,
+ * or as an import of their own after the last one — or above the first
+ * statement, past the file's header comments, when there are no imports at
+ * all. Idempotent.
  */
-function ensureGenerateImport(sourceFile: SourceFile): void {
+function ensureDeclarationImports(sourceFile: SourceFile, ref: SerializedAssetRef): void {
+  for (const name of declarationImports(ref)) ensureNamedImport(sourceFile, name);
+}
+
+function ensureNamedImport(sourceFile: SourceFile, name: string): void {
   const declarations = sourceFile.getImportDeclarations();
   const importable = declarations.find(
     (declaration) =>
-      declaration.getModuleSpecifierValue() === GENERATE_MODULE &&
+      declaration.getModuleSpecifierValue() === DECLARATION_MODULE &&
       !declaration.isTypeOnly() &&
       !declaration.getNamespaceImport(),
   );
 
   if (importable) {
     const named = importable.getNamedImports();
-    if (named.some((specifier) => specifier.getName() === "generate" && !specifier.getAliasNode())) return;
-    importable.addNamedImport("generate");
+    if (named.some((specifier) => specifier.getName() === name && !specifier.getAliasNode())) return;
+    importable.addNamedImport(name);
     return;
   }
 
-  const statement = `import { generate } from "${GENERATE_MODULE}";`;
+  const statement = `import { ${name} } from "${DECLARATION_MODULE}";`;
   const last = declarations.at(-1);
   if (last) sourceFile.insertText(last.getEnd(), `\n${statement}`);
   else {
@@ -540,8 +448,14 @@ function reindent(text: string, from: string, to: string): string {
     .join("\n");
 }
 
-/** Whether an expression is a value rather than a way of computing one. */
+/**
+ * Whether an expression is a value rather than a way of computing one. A
+ * declaration call over values is one too: it is what the writer spells a
+ * declaration as, so it is an initializer the writer may also overwrite.
+ */
 function isLiteral(node: Node): boolean {
+  if (isDeclarationCall(node)) return true;
+
   if (
     node.isKind(SyntaxKind.StringLiteral) ||
     node.isKind(SyntaxKind.NumericLiteral) ||
@@ -575,16 +489,19 @@ function isLiteral(node: Node): boolean {
   return false;
 }
 
+/** The namespaces a declaration call is made through. */
+const DECLARATION_NAMESPACES = new Set(["generate", "transform"]);
+
 /**
- * A `generate.*` call over a literal spec: what the writer spells a
- * declaration as, and so an initializer it may also overwrite. One whose
- * argument computes anything is authored reactivity, like any expression.
+ * A `generate.*` or `transform.*` call over literals — a nested declaration
+ * among them. One whose argument computes anything is authored reactivity,
+ * like any expression.
  */
-function isGenerateCall(node: Node): boolean {
+function isDeclarationCall(node: Node): boolean {
   const call = node.asKind(SyntaxKind.CallExpression);
   const callee = call?.getExpression().asKind(SyntaxKind.PropertyAccessExpression);
   if (!call || !callee || !callee.getExpression().isKind(SyntaxKind.Identifier)) return false;
-  if (callee.getExpression().getText() !== "generate") return false;
+  if (!DECLARATION_NAMESPACES.has(callee.getExpression().getText())) return false;
 
   const args = call.getArguments();
   return args.length === 1 && isLiteral(args[0]!);
@@ -603,7 +520,7 @@ function isWritable(attribute: JsxAttribute): boolean {
   if (!initializer.isKind(SyntaxKind.JsxExpression)) return false;
 
   const expression = initializer.getExpression();
-  return expression !== undefined && (isLiteral(expression) || isGenerateCall(expression));
+  return expression !== undefined && isLiteral(expression);
 }
 
 // ---------------------------------------------------------------------------
@@ -731,9 +648,11 @@ class SourceWriter {
       open.text = text;
 
       // Claimed before the write lands: a watcher must never see this change
-      // arrive without knowing whose it was.
-      this.context.onWrite?.(path);
-      await writeFile(absolute(this.context.dir, path), text, "utf8");
+      // arrive without knowing whose it was, and what says whose it is are the
+      // bytes themselves — so they go with the claim. Written whole, because
+      // the same watcher reads the file straight back.
+      this.context.onWrite?.(path, text);
+      await writeFileAtomic(absolute(this.context.dir, path), text);
     }
   }
 
@@ -918,7 +837,7 @@ class SourceWriter {
           }
 
           setProp(tag, name, value);
-          if (isSerializedAssetRef(value)) ensureGenerateImport(sourceFile);
+          if (isSerializedAssetRef(value)) ensureDeclarationImports(sourceFile, value);
           wrote = true;
         }
 
@@ -1015,7 +934,7 @@ class SourceWriter {
     insertChild(sourceFile, parent, child, before);
     for (const [name, value] of Object.entries(edit.props)) {
       setProp(findTag(sourceFile, id)!, name, value);
-      if (isSerializedAssetRef(value)) ensureGenerateImport(sourceFile);
+      if (isSerializedAssetRef(value)) ensureDeclarationImports(sourceFile, value);
     }
     ids[edit.source] = formatSource(file, id);
     return true;
@@ -1255,7 +1174,7 @@ class SourceWriter {
         }
         for (const [name, value] of Object.entries(record.props)) {
           setProp(found(), name, value);
-          if (isSerializedAssetRef(value)) ensureGenerateImport(sourceFile);
+          if (isSerializedAssetRef(value)) ensureDeclarationImports(sourceFile, value);
         }
 
         const element = elementOf(found());

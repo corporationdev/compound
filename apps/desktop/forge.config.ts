@@ -33,9 +33,9 @@ const config: ForgeConfig = {
       !path.startsWith('/dist/') &&
       path !== '/web' &&
       !path.startsWith('/web/'),
-    // Staged by scripts/stage-{cli,docs,skills}.mjs; end up at
-    // Contents/Resources/{cli,docs,skills}.
-    extraResource: ['./cli', './docs', './skills', './chat-runtime'],
+    // Staged by scripts/stage-{cli,runtime,docs,chat}.mjs; end up at
+    // Contents/Resources/{cli,runtime,docs,chat-runtime}.
+    extraResource: ['./cli', './runtime', './docs', './chat-runtime'],
     // Native dependencies select their CPU variant; Electron supplies Node.
     osxUniversal: { x64ArchFiles: 'Contents/Resources/chat-runtime/**' },
     osxSign: process.env.SKIP_SIGN ? undefined : {

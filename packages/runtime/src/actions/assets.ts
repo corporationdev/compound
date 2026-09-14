@@ -6,7 +6,7 @@
 // goes through the AssetLibrary (@compound/assets); these are the
 // lookups the decoders and hosts share.
 
-import { Ai, AssetId, Library, Paint, SourceFrameRate, SourceModifiers } from '../traits';
+import { Ai, AssetId, Library, Paint, SourceFrameRate } from '../traits';
 import { PaintType } from '../constants';
 
 import type { Entity, World } from 'koota';
@@ -25,28 +25,6 @@ export function getAi(world: World): GenAi {
 	const ai = world.get(Ai);
 	if (!ai) throw new Error('This world cannot generate assets (no Ai attached)');
 	return ai;
-}
-
-/** What a source is put through after it resolves (see `SourceModifiers`). */
-export interface SourceModifierValues {
-	removeBackground: boolean;
-	/** Factor, 1 = natural size. */
-	upscale: number;
-	addAudio: boolean;
-}
-
-/** Whether a set of modifiers asks for anything at all. */
-export const hasModifier = (modifiers: SourceModifierValues): boolean =>
-	modifiers.removeBackground || modifiers.upscale > 1 || modifiers.addAudio;
-
-/**
- * The modifiers `entity` asks its source to be put through, or undefined
- * when it asks for none — which is what the trait's absence means, so this
- * is also the question "is this element showing a derived source".
- */
-export function getModifiers(entity: Entity): SourceModifierValues | undefined {
-	const modifiers = entity.get(SourceModifiers);
-	return modifiers && hasModifier(modifiers) ? modifiers : undefined;
 }
 
 /**

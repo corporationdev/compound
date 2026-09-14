@@ -35,6 +35,37 @@ type ThumbnailSize = {
 };
 
 /**
+ * The widths a thumbnail is derived at. A request is rounded up to one of
+ * these so the cache keeps a handful of variants rather than one per layout,
+ * and `DEFAULT_THUMBNAIL_WIDTH` is among them: the width the asset bar asks
+ * for is the one stored without a variant, and the small boxes mostly land on
+ * it too.
+ */
+const THUMBNAIL_WIDTHS = [64, 128, DEFAULT_THUMBNAIL_WIDTH, 600, 1200];
+
+/**
+ * How wide to derive for a box `size` CSS pixels across. Two things the box
+ * itself does not say: the display's pixels are not CSS pixels, and the
+ * picture is cropped to fill (`object-cover`), so a 16:9 asset in a square
+ * box is scaled by its *height* and its width overflows. Both are upscales of
+ * the derived bitmap, and they multiply — a 64px-wide thumbnail in a 64px
+ * square is drawn at about 3.5× on a retina screen, which is the blur.
+ *
+ * Never wider than the asset itself: there is nothing above its own
+ * resolution to derive.
+ */
+function sourceWidth(asset: Asset, size?: ThumbnailSize): number {
+  if (!size) return DEFAULT_THUMBNAIL_WIDTH;
+
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  const aspect = asset.width && asset.height ? asset.width / asset.height : 1;
+  const needed = dpr * Math.max(size.width, size.height * aspect);
+
+  const width = THUMBNAIL_WIDTHS.find(candidate => candidate >= needed) ?? THUMBNAIL_WIDTHS.at(-1)!;
+  return asset.width ? Math.min(width, Math.ceil(asset.width)) : width;
+}
+
+/**
  * The thumbnail of an image or video: from the library's cache when there is
  * one (kept in the project's `cache/` across sessions), derived on the spot
  * otherwise. Scaled to `width` at the asset's own aspect ratio; the
@@ -140,7 +171,7 @@ type AssetThumbnailProps = {
 }
 
 export function AssetThumbnail(props: AssetThumbnailProps) {
-  const width = () => props.size?.width ?? DEFAULT_THUMBNAIL_WIDTH;
+  const width = () => sourceWidth(props.asset, props.size);
 
   return (
     <div class={cx('relative', props.class)} draggable={props.draggable}>

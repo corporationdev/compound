@@ -8,7 +8,7 @@ import { toast } from "somoto";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { revealPath } from "@/lib/shell";
-import { isDesktop, pickProjectsRoot, projectsRoot, rootsReady } from "@/projects";
+import { isDesktop, pickProjectsRoot, projectsRoot } from "@/projects";
 
 /**
  * Footer bar of the projects view: shows the projects root and the actions on
@@ -16,9 +16,7 @@ import { isDesktop, pickProjectsRoot, projectsRoot, rootsReady } from "@/project
  * browser build (see @/projects).
  */
 export function DashboardProjectsFolderBar() {
-  // Blank rather than "No folder selected" until the database has answered:
-  // the root arrives a tick after the bar first renders.
-  const rootLabel = () => (rootsReady() ? projectsRoot() ?? "No folder selected" : "Setting up project folder…");
+  const rootLabel = () => projectsRoot() ?? "No folder selected";
   const hasRoot = () => !!projectsRoot();
 
   const handleChange = async () => {
@@ -52,7 +50,7 @@ export function DashboardProjectsFolderBar() {
               />
             </span>
             <div class="flex min-w-0 flex-1 flex-col justify-center gap-1">
-              <p class="h-4 text-xs text-foreground">Project folder</p>
+              <p class="h-4 text-xs text-foreground">Projects folder</p>
               <p class="min-w-0 truncate text-xs text-muted-foreground">
                 {rootLabel()}
               </p>
@@ -64,7 +62,7 @@ export function DashboardProjectsFolderBar() {
                 Reveal in finder
               </Button>
             </Show>
-            <Button variant="secondary" onClick={handleChange} disabled={!rootsReady()}>
+            <Button variant="secondary" onClick={handleChange}>
               {hasRoot() ? "Change..." : "Choose folder..."}
             </Button>
           </div>

@@ -6,7 +6,7 @@ import { Show, createEffect, createMemo, createResource } from 'solid-js';
 import { Navigate, useNavigate } from '@solidjs/router';
 import { EditorPage } from './editor';
 import { LayoutProvider } from "@/context/layout";
-import { EditorApiProvider } from '@/context/dapi';
+import { EditorApiProvider } from '@/dapi';
 import { ExportProvider } from '@/context/export';
 import { ProjectProvider } from '@/context/project';
 import { projectRoute, useProjectRef } from '@/hooks/use-project-route';

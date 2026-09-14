@@ -2,171 +2,113 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { resolveCliTarget } from "./project-target";
-import { connect } from "node:net";
-import { randomBytes } from "node:crypto";
-import type { AddressInfo } from "node:net";
-import { WebSocketServer } from "ws";
-import { createTRPCClient, TRPCClientError } from "@trpc/client";
-import type { TRPCLink } from "@trpc/client";
-import { observable } from "@trpc/server/observable";
-import { SOCKET_PATH } from "./protocol";
-import type { CliHandshake, CliHandshakeReply, CliReply, CliRequest } from "./protocol";
-import type { AppRouter } from "../../web/src/context/dapi";
+import { execFile } from "node:child_process";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { MCP_URL } from "@compound/dapi";
+import { version } from "../../../package.json";
 
-const DEFAULT_TIMEOUT_MS = 60000;
-export const GENERATE_TIMEOUT_MS = 600000;
-export const EXPORT_TIMEOUT_MS = 3600000;
+import type { ToolInput, ToolName, ToolOutput } from "@compound/dapi";
 
-// Asks the app (via the unix socket) to have the renderer dial our WebSocket
-// server. Main replies once the connect info has been delivered, so a
-// rejection here means the app is down or the renderer never became ready.
-function requestConnection(handshake: CliHandshake, timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const sock = connect(SOCKET_PATH);
-    let buf = "";
-    let settled = false;
-    const settle = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      sock.destroy();
-      fn();
-    };
+export const APP_NAME = "Compound";
 
-    sock.setEncoding("utf8");
-    sock.setTimeout(timeoutMs, () =>
-      settle(() => reject(new Error("Timed out waiting for the app to accept the connection"))),
-    );
-    sock.on("connect", () => sock.end(JSON.stringify(handshake)));
-    sock.on("data", (chunk) => {
-      buf += chunk;
-    });
-    sock.on("end", () => {
-      let reply: CliHandshakeReply;
-      try {
-        reply = JSON.parse(buf) as CliHandshakeReply;
-      } catch (e) {
-        settle(() => reject(e instanceof Error ? e : new Error(String(e))));
-        return;
-      }
-      if (reply.ok) settle(resolve);
-      else settle(() => reject(new Error(reply.error)));
-    });
-    sock.on("error", (err) => settle(() => reject(err)));
-  });
-}
+// Renders and AI generation outlive the 60s default.
+const TIMEOUTS: Record<string, number> = {
+  export: 3_600_000,
+  capture: 600_000,
+  media_transcribe: 600_000,
+  media_listen: 600_000,
+};
 
-async function transport(request: CliRequest, timeoutMs: number): Promise<unknown> {
-  const token = randomBytes(16).toString("hex");
-  // Frame batches and other base64 replies can exceed ws's 100 MiB default,
-  // so disable the payload cap; the server only lives for one request.
-  const wss = new WebSocketServer({ host: "127.0.0.1", port: 0, maxPayload: 0 });
-
+/**
+ * Calls one tool in the running app over an MCP session on its HTTP
+ * endpoint — the same URL agents register. Typed by the catalog: the input is
+ * what the tool's schema accepts, the output its structured content. One
+ * session per call; a command makes one or two, and the process exits when
+ * it settles.
+ */
+export async function call<N extends ToolName>(name: N, input: ToolInput<N>): Promise<ToolOutput<N>> {
+  const client = await connect();
   try {
-    const reply = await new Promise<CliReply>((resolve, reject) => {
-      let settled = false;
-      const timer = setTimeout(() => {
-        settle(() => reject(new Error("Timed out waiting for response")));
-      }, timeoutMs);
-      const settle = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        fn();
-      };
-
-      wss.on("error", (err) => settle(() => reject(err)));
-      wss.on("connection", (ws, req) => {
-        const url = new URL(req.url ?? "/", "ws://127.0.0.1");
-        if (url.searchParams.get("token") !== token) {
-          ws.terminate();
-          return;
-        }
-        ws.on("message", (raw) => {
-          try {
-            const parsed = JSON.parse(raw.toString()) as CliReply;
-            settle(() => resolve(parsed));
-          } catch (e) {
-            settle(() => reject(e instanceof Error ? e : new Error(String(e))));
-          }
-        });
-        ws.on("close", () =>
-          settle(() => reject(new Error("App disconnected before replying"))),
-        );
-        ws.on("error", (err) => settle(() => reject(err)));
-        ws.send(JSON.stringify(request));
-      });
-
-      wss.once("listening", () => {
-        const { port } = wss.address() as AddressInfo;
-        requestConnection({ port, token }, timeoutMs).catch((err) =>
-          settle(() => reject(err instanceof Error ? err : new Error(String(err)))),
-        );
-      });
+    const result = await client.callTool({ name, arguments: input as Record<string, unknown> }, undefined, {
+      timeout: TIMEOUTS[name] ?? 60_000,
     });
-
-    if (reply.ok) return reply.data;
-    throw new Error(reply.error);
+    if (result.isError) {
+      const text = (result.content as Array<{ type: string; text?: string }>)
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+      throw new Error(text || `${name} failed`);
+    }
+    return result.structuredContent as ToolOutput<N>;
   } finally {
-    // Tear down explicitly so no lingering handles keep the Node event loop
-    // alive past `console.log(result)` and block the CLI from exiting.
-    for (const client of wss.clients) client.terminate();
-    wss.close();
+    await client.close().catch(() => {});
   }
 }
 
-// Terminating link: each operation runs over its own short-lived WebSocket
-// server that the renderer dials in to. Long-running procedures pass
-// { context: { timeoutMs } } at the call site.
-let projectOverride: string | undefined;
-export function setProjectOverride(value: string | undefined) { projectOverride = value; }
-
-const cliLink: TRPCLink<AppRouter> =
-  () =>
-  ({ op }) =>
-    observable((observer) => {
-      const timeoutMs =
-        typeof op.context.timeoutMs === "number" ? op.context.timeoutMs : DEFAULT_TIMEOUT_MS;
-      resolveCliTarget(process.cwd(), projectOverride)
-        .then(target => transport({ path: op.path, input: op.input, target }, timeoutMs))
-        .then((data) => {
-          observer.next({ result: { data } });
-          observer.complete();
-        })
-        .catch((err) => observer.error(TRPCClientError.from(err as Error)));
-      // No cancellation: the CLI process exits when the command settles.
-      return () => {};
-    });
-
-export const editor = createTRPCClient<AppRouter>({ links: [cliLink] });
-
-// Transport failures surface as TRPCClientError wrapping the socket error;
-// unwrap to reach errno codes like ENOENT/ECONNREFUSED.
-export function errnoCode(e: unknown): string | undefined {
-  if (!(e instanceof TRPCClientError)) return undefined;
-  return (e.cause as NodeJS.ErrnoException | undefined)?.code;
+/** Liveness: a round-trip through the app's MCP server. */
+export async function ping(): Promise<void> {
+  const client = await connect();
+  try {
+    await client.ping();
+  } finally {
+    await client.close().catch(() => {});
+  }
 }
 
-// Bridges the cold-start gap after launching the app. Main only delivers the
-// handshake once the renderer has finished loading, and `ping` is answered
-// by the always-mounted app router, so a single round-trip proves the app is
-// fully up. The retry loop only handles the brief window before the handshake
-// socket itself binds (ENOENT/ECONNREFUSED).
-export async function waitForCliSocket(timeoutMs = 30000): Promise<void> {
+// Connecting is where "the app is not running" shows up: the `initialize`
+// request's fetch is refused, see `isAppDown`.
+async function connect(): Promise<Client> {
+  const client = new Client({ name: "compound", version });
+  await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL)));
+  return client;
+}
+
+/**
+ * Nothing is listening on the app's port. Node's fetch reports that as a
+ * `fetch failed` TypeError whose cause carries the errno, so the chain of
+ * causes is searched.
+ */
+export function isAppDown(e: unknown): boolean {
+  for (let error = e, depth = 0; error && depth < 5; error = (error as { cause?: unknown }).cause, depth++) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ECONNREFUSED" || code === "ECONNRESET") return true;
+  }
+  return false;
+}
+
+/**
+ * Launches the app, or surfaces the running instance: `open -a` on a running
+ * app only activates it, so this is safe to always run. macOS only; elsewhere
+ * it resolves false and the caller falls through to the connection.
+ *
+ * The bundled `compound` runs as Electron with ELECTRON_RUN_AS_NODE=1, and `open`
+ * hands its environment to the app it launches — left in, the app boots as
+ * plain Node and never answers.
+ */
+export function launchApp(background: boolean): Promise<boolean> {
+  if (process.platform !== "darwin") return Promise.resolve(false);
+  const args = background ? ["-g", "-a", APP_NAME, "--args", "--hidden"] : ["-a", APP_NAME];
+  const { ELECTRON_RUN_AS_NODE: _, ...env } = process.env;
+  return new Promise((res) => execFile("open", args, { env }, (err) => res(!err)));
+}
+
+/**
+ * Bridges the cold-start gap after launching the app: retries while the app
+ * looks down, until it answers a ping.
+ */
+export async function waitForApp(timeoutMs = 30000): Promise<void> {
   const start = Date.now();
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
     try {
-      await editor.ping.query();
-      return;
+      return await ping();
     } catch (e) {
+      if (!isAppDown(e)) throw e;
       lastError = e;
-      const code = errnoCode(e);
-      if (code !== "ENOENT" && code !== "ECONNREFUSED") throw e;
       await new Promise((r) => setTimeout(r, 200));
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Timed out waiting for the app to start");
+  const detail = lastError instanceof Error ? ` (${lastError.message})` : "";
+  throw new Error(`${APP_NAME} did not answer within ${Math.round(timeoutMs / 1000)}s of launching${detail}`);
 }

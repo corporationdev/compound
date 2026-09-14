@@ -1,6 +1,6 @@
 {
   "name": "@compound/editor",
-  "version": "0.204.5",
+  "version": "0.205.0",
   "private": true,
   "license": "MPL-2.0",
   "type": "module",
@@ -21,7 +21,8 @@
     "release": "node scripts/release.mjs",
     "postinstall": "patch-package && node scripts/link-backend-externals.mjs",
     "lint": "bun run --filter \"*\" --if-present lint",
-    "check": "bun run --filter \"*\" --if-present check && tsc -p examples --noEmit && tsc -p scripts --noEmit",
+    "check": "bun run --filter \"*\" --if-present check && tsc -p docs/examples --noEmit && tsc -p scripts --noEmit",
+    "test": "bun run --filter \"*\" --if-present test",
     "dev:backend": "bun scripts/backend.ts dev",
     "dev:infra": "bun scripts/infra.ts dev",
     "dev:server": "bun scripts/infra.ts dev",
@@ -32,7 +33,7 @@
     "setup": "bun scripts/setup.ts",
     "deploy": "bun scripts/deploy.ts",
     "catalog:publish": "bun scripts/catalog.ts",
-    "test:cloud": "bun test apps/server/test packages/backend/test packages/assets/test scripts/environment.test.ts apps/desktop/test/cloud.test.ts apps/web/test/access-token.test.ts apps/web/test/catalog-preview.test.ts apps/web/test/catalog-cache.test.ts apps/web/test/catalog-list.test.ts apps/web/test/catalog-discovery.test.ts apps/web/test/project-library.test.ts",
+    "test:cloud": "bun test apps/server/test packages/backend/test packages/assets/test scripts/environment.test.ts apps/desktop/test/cloud.test.ts apps/web/test/access-token.test.ts apps/web/test/catalog-preview.test.ts apps/web/test/catalog-cache.test.ts apps/web/test/catalog-list.test.ts apps/web/test/catalog-discovery.test.ts",
     "brand:assets": "node scripts/generate-brand-assets.mjs",
     "test:branding": "bun test apps/desktop/test/brand-migration.test.ts apps/web/test/brand-migration.test.ts",
     "test:transcription": "bun test packages/backend/test apps/server/test apps/desktop/test/cloud.test.ts packages/encoder/test && bun test apps/web/test/transcription-client.test.ts"

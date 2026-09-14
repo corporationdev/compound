@@ -23,7 +23,7 @@ export const Root = trait(() => null as Entity | null);
  * stage. The render system multiplies this by RenderSurface.resolution
  * to derive the canvas transform.
  */
-export const Camera = trait({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+export const Camera = trait({ a: 0.3, b: 0, c: 0, d: 0.3, e: 85, f: 150 });
 
 export type Camera2D = { a: number; b: number; c: number; d: number; e: number; f: number };
 
@@ -35,6 +35,12 @@ export const Background = trait({ value: DEFAULT_BACKGROUND });
 export type RuntimeMode = 'realtime' | 'offline-video' | 'offline-audio';
 
 export const Mode = trait({ value: 'realtime' as RuntimeMode });
+
+// On the world: nothing in this render is to be heard, so no audio decoder is
+// ever opened (a frame capture draws pictures and never mixes). A rendering
+// concern, kept apart from `Muted`, which is the composition's own — a clip
+// the project muted. What is silenced here is still audio the scene has.
+export const Silent = trait();
 
 // Frame clock (was timestamp).
 export const Time = trait({ now: 0, delta: 0 });

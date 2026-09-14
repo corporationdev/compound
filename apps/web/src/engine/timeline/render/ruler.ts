@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Playback, setPlayhead } from '@compound/runtime';
+import { Playback } from '@compound/runtime';
 
 import { assert } from '@/utils';
 import { RULER_INTERVALS } from '../constants';
@@ -13,7 +13,7 @@ import {
 	RULER_TICK_HEIGHT_MINOR,
 	TARGET_MAJOR_TICK_DISTANCE,
 } from '../config';
-import { editWorkarea } from '../../timing';
+import { editPlayhead, editWorkarea } from '../../timing';
 import { framesToPixels, getFrameRate, getResolution, getScrollX, getViewport, pixelsToFrames } from '../view';
 
 import type { Entity, World } from 'koota';
@@ -21,9 +21,9 @@ import type { TimelineSurfaceState } from '../surface';
 
 /**
  * The time ruler, and the two gestures that belong to it: a drag scrubs the
- * playhead, a shift-drag sets the work area. Both are ephemeral state, so
- * neither is an edit — the file has nothing to say about where the playhead
- * is or what part of the scene is being previewed.
+ * playhead, a shift-drag sets the work area. Both go to the file, which is
+ * where the project remembers them (`<scene playhead>`, `<scene workarea>`);
+ * the writer coalesces a gesture's frames into one write.
  */
 export function renderRuler(world: World, scene: Entity, surface: TimelineSurfaceState): void {
 	const { ctx, pointer } = surface;
@@ -50,7 +50,7 @@ export function renderRuler(world: World, scene: Entity, surface: TimelineSurfac
 		// change something: the transport button is watching.
 		if (scene.get(Playback)?.playing) scene.set(Playback, { playing: false });
 
-		setPlayhead(world, scene, pixelsToFrames(pointer.position.currentX + scrollX * resolution, resolution));
+		editPlayhead(world, scene, pixelsToFrames(pointer.position.currentX + scrollX * resolution, resolution));
 	}
 
 	if (dragging && pointer.shiftPressed) {
@@ -64,7 +64,7 @@ export function renderRuler(world: World, scene: Entity, surface: TimelineSurfac
 
 		// The playhead follows the edge being dragged, so the frame under the
 		// pointer is the one on the canvas.
-		setPlayhead(world, scene, pointer.position.currentX > pointer.position.initialX ? end : start);
+		editPlayhead(world, scene, pointer.position.currentX > pointer.position.initialX ? end : start);
 	}
 
 	const interval = getRulerInterval(resolution);

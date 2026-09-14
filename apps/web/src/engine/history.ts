@@ -36,10 +36,9 @@ import type { CapturedNode, DocumentEditor, EntityEdit } from './editor';
 /**
  * Props that are pointing and viewing rather than composition: undoing them
  * is not what anyone means by undo, so they pass through to the file without
- * entering the history. `error` is the runtime speaking (see source-errors),
- * not the user.
+ * entering the history.
  */
-const EXCLUDED_PROPS: ReadonlySet<string> = new Set(['selected', 'active', 'camera', 'expanded', 'clipHeight', 'timeline', 'error']);
+const EXCLUDED_PROPS: ReadonlySet<string> = new Set(['selected', 'active', 'camera', 'expanded', 'clipHeight', 'timeline', 'playhead']);
 
 /**
  * How long after one step a same-shaped step still merges into it. Edits

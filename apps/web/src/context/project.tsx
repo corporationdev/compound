@@ -11,7 +11,7 @@
 
 import { createContext, createMemo, createSignal, useContext, type Accessor, type JSX } from 'solid-js';
 
-import { getProject, renameProject } from '@/projects';
+import { refreshProject, renameProject } from '@/projects';
 
 import type { ProjectInfo } from '@/projects';
 
@@ -46,7 +46,7 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 	};
 
 	const refresh = async (): Promise<void> => {
-		const next = await getProject(dir());
+		const next = await refreshProject(dir());
 		if (next) setInfo(next);
 	};
 

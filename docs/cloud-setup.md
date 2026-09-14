@@ -125,7 +125,7 @@ bun run --cwd apps/desktop build:main
 bun run --cwd apps/desktop build:preload
 ```
 
-The 18 automated tests use Convex's test runtime and mocked email/provider responses to cover OTP/native auth, JWT claims, revoked sessions, account cleanup, ownership, quotas, signed upload constraints, provider normalization/cleanup, local 1Password token precedence, and concurrent private-file writes. Workspace typechecks include the Alchemy stack and deployed Convex-generated bindings. A patch lets Electron Forge locate hoisted Electron from `bun.lock`. The optional Redraw example requires an external vendor tarball as described in `examples/11-redraw.tsx` and is excluded from the standard example typecheck.
+The 18 automated tests use Convex's test runtime and mocked email/provider responses to cover OTP/native auth, JWT claims, revoked sessions, account cleanup, ownership, quotas, signed upload constraints, provider normalization/cleanup, local 1Password token precedence, and concurrent private-file writes. Workspace typechecks include the Alchemy stack and deployed Convex-generated bindings. A patch lets Electron Forge locate hoisted Electron from `bun.lock`. The optional Redraw example requires an external vendor tarball as described in `docs/examples/11-redraw.tsx` and is excluded from the standard example typecheck.
 
 Verify actual email delivery and sign-in in browser, Electron dev, and a packaged build, including restart and sign-out. The sender domain is verified, and audio transcription/analysis and auth transport have passed live smoke tests; video analysis, scene captions, and cancelled/long requests still need live checks.
 

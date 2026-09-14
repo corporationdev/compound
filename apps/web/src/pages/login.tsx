@@ -3,9 +3,10 @@ import { useAuth } from '@/context/auth';
 import { Button } from '@/components/ui/button';
 import { TextField, TextFieldInput, TextFieldLabel } from '@/components/ui/text-field';
 import { Icon } from '@/components/ui/icon';
-import { HeadlessIndicator } from '@/components/headless-indicator';
+import { useFullscreenState } from '@/hooks/use-fullscreen-state';
 export function LoginPage() {
   const auth = useAuth();
+  const isFullscreen = useFullscreenState();
   const [email, setEmail] = createSignal('');
   const [code, setCode] = createSignal('');
   const [sent, setSent] = createSignal(false);
@@ -29,7 +30,9 @@ export function LoginPage() {
   };
   return (
     <div class="fixed inset-0 z-999 flex items-center justify-center bg-background">
-      <HeadlessIndicator />
+      <Show when={!!window.desktop && !isFullscreen()}>
+        <div class="absolute inset-x-0 top-0 h-10 z-20" style="-webkit-app-region: drag;" />
+      </Show>
       <form class="w-80 space-y-4 rounded-xl bg-accent/40 p-6" onSubmit={submit}>
         <Icon name="compound-logo" class="size-10 rounded-lg" />
         <h1 class="text-lg font-medium">Sign in to Compound</h1>

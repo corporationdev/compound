@@ -2,12 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Stages the authoring docs into apps/desktop/docs so electron-forge can ship
-// them as an app resource (Contents/Resources/docs). The layout mirrors the
-// repo — reference/ beside examples/ — because the relative links between the
-// pages assume it. scaffold() copies the tree into each project's
-// .compound/docs, so what an agent reads in a project is exactly what was
-// staged here (see src/projects.ts).
+// Stages the docs into apps/desktop/docs so electron-forge can ship them as
+// an app resource (Contents/Resources/docs). The app's MCP server sends
+// INSTRUCTIONS.md on connect along with this folder's path; agents read the
+// rest as plain files. The tree is copied as it is in the repo, because the
+// relative links between the pages assume that layout.
 
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -19,12 +18,9 @@ const stageDir = join(desktopDir, "docs");
 
 rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(stageDir, { recursive: true });
-for (const name of ["reference", "examples"]) {
-  cpSync(join(repoRoot, name), join(stageDir, name), { recursive: true });
-}
-cpSync(join(repoRoot, "packages", "jsx"), join(stageDir, "packages", "jsx"), {
+cpSync(join(repoRoot, "docs"), stageDir, {
   recursive: true,
-  filter: (path) => !["node_modules", "dist", ".DS_Store"].includes(path.split(/[\\/]/).pop()),
+  filter: (path) => !path.endsWith(".DS_Store") && !path.endsWith(".gitkeep"),
 });
 
-console.log(`stage-docs: staged docs at ${stageDir}`);
+console.log(`stage-docs: staged the docs at ${stageDir}`);

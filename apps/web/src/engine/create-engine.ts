@@ -9,7 +9,6 @@ import { AssetSelection, Hud, Keys, MODIFIER_KEYS, Pointer, PointerEvents, Proje
 import { inputSystem } from './input/input-system';
 import { clearClipFrames, clearClipPeaks, clearMedia, clearPeaks, timelineSystem, TimelineSurface } from './timeline';
 import { shortcutSystem } from './input/shortcuts';
-import { sourceErrorSystem } from './source-errors';
 
 import type { RuntimeWorld } from '@compound/runtime';
 import type { CanvasPointerEvent, PointerEventType } from '@compound/runtime';
@@ -213,7 +212,6 @@ class Engine {
 		inputSystem(this.world);
 		shortcutSystem(this.world);
 		assetSystem(this.world);
-		sourceErrorSystem(this.world);
 		playbackSystem(this.world);
 		motionSystem(this.world);
 		transformSystem(this.world);

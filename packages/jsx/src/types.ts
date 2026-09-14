@@ -309,7 +309,7 @@ type FillProps = {
 
 type MediaProps = {
   /**
-   * Path, URL, asset id, or a `generate.*` declaration. A path naming a
+   * Path, URL, asset id, or a `generate.*` / `transform.*` declaration. A path naming a
    * directory of numbered frames (`shot_001.png`, `shot_002.png`, ...) is an
    * image sequence, and plays on `<Video>` or `<Image>` as footage does — see
    * `frameRate` for how long it lasts. On `<Captions>` a transcript source
@@ -317,32 +317,6 @@ type MediaProps = {
    * scene; `generate.*` is not accepted there.
    */
   src: string | AssetRef;
-  /**
-   * Why this element's source never became an asset. Editor state carried by
-   * the source like `selected`, and the answer to the `src` it was written
-   * for: an element holding one is not resolved again, so a generation the
-   * model refused is not run — or paid for — a second time by every reopen of
-   * the project. The editor writes it when a generation or a transcription
-   * fails; taking it off the element is what asks for the run again, and
-   * nothing else does — not another take, not another prompt.
-   */
-  error?: string;
-};
-
-/**
- * Model calls the source is put through before the element shows it. The
- * `src` goes on naming what it was made from, so taking a modifier off gives
- * the original back; what they made is cached by source and modifiers, so it
- * is made once however many elements ask for it, and adding a second
- * modifier does not re-run the first. Applied in the order below.
- */
-type UpscaleProps = {
-  /**
-   * Resolution multiplier: 2 asks for twice the pixels. Enlarges the source,
-   * not the box — the element keeps the width and height it was given, and
-   * renders sharper. Default 1, the source as it is.
-   */
-  upscale?: number;
 };
 
 type FitProps = {
@@ -454,16 +428,17 @@ export type StageProps = {
   /** Canvas color, any CSS color. */
   background?: string;
   /**
-   * The editor's viewport when the project is opened: `[1, 0, 0, 1, 0, 0]` is
+   * The editor's viewport when the project is opened; `[1, 0, 0, 1, 0, 0]` is
    * the origin at 100%. Not part of the composition — nothing rendered or
-   * exported depends on it — so a project that never says where to look opens
-   * at the origin, with most of the frame off screen.
+   * exported depends on it. A project that never says where to look opens on
+   * `[0.3, 0, 0, 0.3, 85, 150]`, which frames a 1920×1080 scene at the origin,
+   * so such a project needs no camera.
    *
-   * Give every authored project one, so it opens framed on its composition:
-   * `[s, 0, 0, s, x, y]` for a scene at the origin, `s` sized to fit the frame
-   * in roughly 580×330 screen pixels — `[0.3, 0, 0, 0.3, 85, 150]` for
-   * 1920×1080, `[0.6, 0, 0, 0.6, 85, 150]` for 960×540. The first pan or zoom
-   * overwrites it, so the exact numbers do not matter.
+   * Give a project one when its composition is anything else, so it still
+   * opens framed: `[s, 0, 0, s, x, y]` for a scene at the origin, `s` sized to
+   * fit the frame in roughly 580×330 screen pixels — `[0.25, 0, 0, 0.25, 235,
+   * 70]` for 1080×1920, `[0.6, 0, 0, 0.6, 85, 150]` for 960×540. The first pan
+   * or zoom overwrites it, so the exact numbers do not matter.
    */
   camera?: CameraMatrix;
   children?: SolidJSX.Element;
@@ -505,6 +480,15 @@ export type SceneProps = IdentityProps & PositionProps & Required<Pick<SizeProps
    * an authored project: there is no need to write one.
    */
   timeline?: TimelineView;
+  /**
+   * Where the playhead stands when the project is opened, in any time format.
+   * Editor state carried by the source the way `timeline` is: nothing
+   * rendered or exported depends on it, and the editor writes it when the
+   * playhead is scrubbed or placed on the timeline — not as playback moves
+   * it, so the file lags playback until the next scrub. Absent means the
+   * first frame; there is no need to write one.
+   */
+  playhead?: Time;
   /**
    * Decibels on the scene's own bus, which everything in it mixes into: the
    * master fader. 0 = unity, negative attenuates (-6 = half as loud),
@@ -688,24 +672,12 @@ export type ColorStopProps = ColorProps & OpacityProps & TrackChildren & {
  */
 export type MediaPaintProps = PaintProps & MediaProps & FitProps & FrameRateProps & TrackChildren;
 
-export type VideoProps = CommonProps & MediaProps & FitProps & FrameRateProps & AudioTrackProps & UpscaleProps & {
-  /**
-   * Scores the footage: a generated soundtrack for a clip that has none. See
-   * `UpscaleProps` for what a modifier is; applied last, after `upscale`, so
-   * a re-encode cannot drop the track. Independent of `volume` and `muted`,
-   * which mix whatever track the clip ends up with.
-   */
-  addAudio?: boolean;
+export type VideoProps = CommonProps & MediaProps & FitProps & FrameRateProps & AudioTrackProps & {
   /** Paint children, stacked over the media paint created by `src`; `<Stroke>`, `<Shadow>`, `<Effect>`, `<Animation>` and `<KeyframeTrack>` children. */
     children?: SolidJSX.Element;
   };
 
-export type ImageProps = CommonProps & MediaProps & FitProps & FrameRateProps & UpscaleProps & {
-  /**
-   * Cuts the subject out, leaving the rest of the picture transparent. See
-   * `UpscaleProps` for what a modifier is; applied before `upscale`.
-   */
-  removeBackground?: boolean;
+export type ImageProps = CommonProps & MediaProps & FitProps & FrameRateProps & {
   /** Paint children, stacked over the media paint created by `src`; `<Stroke>`, `<Shadow>`, `<Effect>`, `<Animation>` and `<KeyframeTrack>` children. */
     children?: SolidJSX.Element;
   };

@@ -3,20 +3,21 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import {
-	setActive, framesToSeconds, formatTimecode, assert, store, getEntityTree,
+	setActive, framesToSeconds, formatTimecode, assert, store,
 	assetSystem, playbackSystem, motionSystem, transformSystem, renderSystem,
-	Muted, Workarea, Playback, Computed,
+	Silent, Workarea, Playback, Computed,
 	Time, FrameRate, RenderSurface, AudioEngine,
 } from '@compound/runtime';
 
 import { captureScene, normalizeSceneTransform, resolverSystem, warmupAssets } from './encoder';
 import { scaleSize } from './utils';
+import { encodePng } from './png';
 
 import type { World } from 'koota';
 import type { ImageEncoderConfig } from './interfaces';
 
-/** One capture: the PNG plus the timecode of the frame rendered, e.g. `01s15f`. */
-export type CapturedImage = { base64: string; timecode: string };
+/** One capture: the PNG bytes plus the timecode of the frame rendered, e.g. `01s15f`. */
+export type CapturedImage = { png: Uint8Array; timecode: string };
 
 export type ImageExportResult =
 	| { type: 'success'; data: CapturedImage[] }
@@ -25,7 +26,7 @@ export type ImageExportResult =
 
 /**
  * Renders single frames of the scene a capture world holds into standalone
- * PNGs (base64, no data-url prefix).
+ * PNGs.
  *
  * `world` is the caller's, built for this capture and holding the scene as
  * the stage's only child — the same arrangement `createEncoder` takes, and
@@ -50,10 +51,11 @@ export async function createImageEncoder(world: World, config: ImageEncoderConfi
 	// for the lazy audio-bus wiring to have something to bind to.
 	world.set(AudioEngine, { context: new OfflineAudioContext(2, 1, 48000) });
 
-	// Mute everything so the playback system never initializes audio decoders.
-	for (const entity of getEntityTree(world, scene)) {
-		entity.add(Muted);
-	}
+	// Silence the world so the playback system never initializes audio
+	// decoders. On the world rather than as a `Muted` on every node: what the
+	// scene holds is still audio, and a `<captions>` that has to transcribe
+	// its scene during the warmup below asks exactly that question.
+	world.add(Silent);
 
 	await warmupAssets(world);
 
@@ -125,7 +127,7 @@ export async function createImageEncoder(world: World, config: ImageEncoderConfi
 				renderSystem(world);
 
 				images.set(frame, {
-					base64: await toBase64Png(canvas),
+					png: await encodePng(canvas),
 					timecode: formatTimecode(playheadSeconds, frameRate),
 				});
 			}
@@ -148,15 +150,3 @@ export async function createImageEncoder(world: World, config: ImageEncoderConfi
 	};
 }
 
-async function toBase64Png(canvas: HTMLCanvasElement): Promise<string> {
-	const blob = await new Promise<Blob>((resolve, reject) => {
-		canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode PNG')), 'image/png');
-	});
-	const dataUrl = await new Promise<string>((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(reader.result as string);
-		reader.onerror = () => reject(reader.error);
-		reader.readAsDataURL(blob);
-	});
-	return dataUrl.split(',')[1] ?? '';
-}

@@ -85,16 +85,6 @@ export const GenerationRequest = trait(() => ({ ref: null as AssetRef | null }))
 // through the library.
 export const LoadRequest = trait({ value: '' });
 
-// Model calls the src is put through once it resolves: the element shows
-// what they made of what it named, and the src goes on naming the original,
-// so taking a modifier off gives it back. Every field's default is off —
-// `upscale` 1 is natural size — and the trait is only present while one is
-// not. Applied in the order declared here: the matte before the enlarging
-// (cheaper, and the model wants a normally-sized picture), the audio last so
-// a re-encode cannot drop it. Each step is cached on its own, so turning one
-// on does not re-pay for the ones already applied.
-export const SourceModifiers = trait({ removeBackground: false, upscale: 1, addAudio: false });
-
 // On a `<captions>` element without a src: transcribe the scene it sits
 // under, through the world's Ai. The seed keys the take — the transcript is
 // cached by scene id + seed, so re-running with a seed replays that take and
@@ -121,16 +111,15 @@ export const PendingSync = trait(() => ({ value: undefined as unknown }));
 export const PendingSource = trait(() => ({ value: undefined as unknown }));
 
 // Why the entity's src never became an asset: the message of the rejection
-// the asset system saw. It stands until the element is authored without it
-// (the `error` prop) or a resolution for it starts — which, for a generation,
-// only happens once that prop is gone.
+// the asset system saw. Session state, like the requests above: it stands
+// until a resolution for the src starts again, and is never written back to
+// the source. What outlives the session is the library's: a generation that
+// failed stands there as a partial document carrying this same message, and
+// answers the next request for it with the failure rather than another run.
 //
-// `generated` tells a failed generation from a failed load, which are worth
-// different things: a load is cheap and idempotent, so it is simply tried
-// again next render, while a generation is neither. An element carrying one
-// of those is not resolved again (see the asset system), and the host is
-// expected to write it back to the source the element came from — which is
-// what makes the failure outlive the session that saw it.
+// `generated` tells a failed generation from a failed load, for whoever
+// reports them: the one is a model refusing or a spec a model cannot take,
+// the other a path that is not there.
 export const SourceError = trait({ value: '', generated: false });
 
 // Sibling order under a ChildOf parent.

@@ -6,7 +6,7 @@ import { createEffect } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import { store } from "@/init";
 
-const ROUTE_KEY = "last-route";
+const ROUTE_KEY = "last-route.v2";
 
 // Query params that trigger one-shot UI (dialogs) and must not replay on relaunch.
 const TRANSIENT_PARAMS = ["checkout"];

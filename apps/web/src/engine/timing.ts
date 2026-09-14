@@ -24,6 +24,8 @@ import {
 	getSourceFrameAt,
 	getTimelineOrigin,
 	secondsToFrames,
+	setPlayhead,
+	store,
 } from '@compound/runtime';
 import { parseTime } from '@compound/jsx';
 
@@ -76,6 +78,22 @@ export function editWorkarea(world: World, scene: Entity, range: [start: number,
 		'workarea',
 		range ? [framesToSeconds(range[0], fps), framesToSeconds(range[1], fps)] : false,
 	);
+}
+
+/**
+ * Seeks the scene to `frame` and tells the file where the playhead now rests
+ * (`<scene playhead>`), so the project reopens there. Only a gesture on the
+ * timeline seeks this way: a step, a keyframe jump or playback itself moves
+ * the playhead with `setPlayhead` and no word to the file — a write per frame
+ * of playback is not worth what it costs — so the file lags until the next
+ * scrub. No `previous`, so it never enters the history. The first frame is
+ * reported as `false`, which the writer spells as the attribute's absence.
+ */
+export function editPlayhead(world: World, scene: Entity, frame: number): void {
+	setPlayhead(world, scene, frame);
+	const fps = world.get(FrameRate)?.value ?? 30;
+	const at = store(world, Computed).localTime[scene.id()] ?? 0;
+	getDocumentEditor(world).reportEdit(scene, 'playhead', at === 0 ? false : framesToSeconds(at, fps));
 }
 
 /**

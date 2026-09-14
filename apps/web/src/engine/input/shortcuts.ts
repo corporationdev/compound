@@ -16,6 +16,7 @@ import {
 	Time,
 	Tool,
 	ToolType,
+	Workarea,
 	getActiveEntity,
 	getCameraMatrix,
 	getEntityChildren,
@@ -273,6 +274,50 @@ const seekFrames = (frames: number) => (world: World): void => seekBy(world, fra
 const seekSeconds = (seconds: number) => (world: World): void =>
 	seekBy(world, Math.round(seconds * (world.get(FrameRate)?.value ?? 30)));
 
+/**
+ * Parks the playhead on the selection's outer edge: the earliest frame any of
+ * it starts on, or the frame just past the last of it to end. `end` is
+ * exclusive everywhere else — the frame a following clip begins on, and the
+ * one a cut at the boundary leaves the playhead on — so it is here too.
+ *
+ * The scene is the context the clips are edited in rather than a clip on it,
+ * so having it selected is not an edge to jump to.
+ */
+export function seekToSelectionEdge(world: World, edge: 'start' | 'end'): void {
+	const scene = getActiveEntity(world);
+	if (!scene) return;
+
+	const computed = store(world, Computed);
+	const clips = [...world.query(Selected, NODES)].filter(entity => entity !== scene);
+	if (!clips.length) return;
+
+	const frames = clips.map(entity => computed[edge][entity.id()] ?? 0);
+	setPlayhead(world, scene, edge === 'start' ? Math.min(...frames) : Math.max(...frames));
+}
+
+const seekSelectionEdge = (edge: 'start' | 'end') => (world: World): void =>
+	seekToSelectionEdge(world, edge);
+
+/**
+ * Parks the playhead at one end of the active scene. A work area is the
+ * stretch that plays and exports, so while there is one its edges are the
+ * ends: seeking past them would leave the playhead where playback cannot
+ * pick up, and the next play would snap back in anyway.
+ */
+export function seekToTimelineEdge(world: World, edge: 'start' | 'end'): void {
+	const scene = getActiveEntity(world);
+	if (!scene) return;
+
+	const workarea = scene.has(Workarea) ? scene.get(Workarea) : undefined;
+
+	setPlayhead(world, scene, edge === 'start'
+		? workarea?.start ?? 0
+		: workarea?.end ?? store(world, Computed).duration[scene.id()] ?? 0);
+}
+
+const seekTimelineEdge = (edge: 'start' | 'end') => (world: World): void =>
+	seekToTimelineEdge(world, edge);
+
 /** How much of the zoom a step takes, in or out. */
 const ZOOM_STEP = 1.25;
 
@@ -429,6 +474,11 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['d', '!mod'], action: seekFrames(1) },
 	{ keys: ['w', '!mod'], action: seekSeconds(1) },
 	{ keys: ['s', '!mod'], action: seekSeconds(-1) },
+	{ keys: [';', '!mod'], action: seekSelectionEdge('start') },
+	{ keys: ["'", '!mod'], action: seekSelectionEdge('end') },
+	// fn ←/→ on macOS, Home/End elsewhere.
+	{ keys: ['home'], action: seekTimelineEdge('start') },
+	{ keys: ['end'], action: seekTimelineEdge('end') },
 	{ keys: ['j', '!mod'], action: shuttle(-1) },
 	{ keys: ['k', '!mod'], action: stopActivePlayback },
 	{ keys: ['l', '!mod'], action: shuttle(1) },

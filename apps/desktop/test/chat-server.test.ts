@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import electron from 'electron';
 import { extractFile, listPackage } from '@electron/asar';
-import { ChatServer, projectCliCommand } from '../src/chat-server';
+import { ChatServer, writeProjectMcpConfig } from '../src/chat-server';
 
 const runtimeDir = resolve(process.env.COMPOUND_TEST_CHAT_DIR ?? resolve(import.meta.dir, '../chat-runtime'));
 const electronPath = (process.env.COMPOUND_TEST_ELECTRON ?? electron) as unknown as string;
@@ -61,17 +61,28 @@ test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('Electron runs the c
   } finally { await rm(dir, { recursive: true, force: true }); }
 }, 20_000);
 
-test('chat CLI invocation preserves exact app, socket and project through a shell', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'compound-cli-command-'));
-  const bin = join(dir, "App's CLI bin");
-  const socket = join(dir, "socket '$() file");
-  const project = join(dir, "project '$HOME $(echo wrong)");
+// T3 attaches only its own MCP server to a session, so the app's tools reach
+// Claude Code through the project's own `.mcp.json`, pre-approved in the
+// project's local Claude settings. Codex has no project scope and is
+// registered at the user level from the settings page instead.
+test('attaching the MCP server keeps a project’s existing servers and settings', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'compound-mcp-config-'));
   try {
-    await mkdir(bin);
-    await writeFile(join(bin, 'compound'), '#!/bin/sh\nprintf "%s\\n" "$COMPOUND_CLI_SOCKET" "$@"\n');
-    await chmod(join(bin, 'compound'), 0o755);
-    const output = execFileSync('/bin/sh', ['-c', projectCliCommand(bin, socket, project) + ' context'], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } });
-    expect(output.trimEnd().split('\n')).toEqual([socket, '--project', project, 'context']);
+    await writeFile(join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { other: { command: 'other-server' } } }));
+    await mkdir(join(dir, '.claude'), { recursive: true });
+    await writeFile(join(dir, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { allow: ['Bash'] } }));
+
+    await writeProjectMcpConfig(dir, 'http://127.0.0.1:3284/mcp');
+    // Writing twice must not duplicate the approval or the entry.
+    await writeProjectMcpConfig(dir, 'http://127.0.0.1:3284/mcp');
+
+    const config = JSON.parse(await readFile(join(dir, '.mcp.json'), 'utf8'));
+    expect(config.mcpServers).toEqual({
+      other: { command: 'other-server' },
+      compound: { type: 'http', url: 'http://127.0.0.1:3284/mcp' },
+    });
+    const local = JSON.parse(await readFile(join(dir, '.claude', 'settings.local.json'), 'utf8'));
+    expect(local).toEqual({ permissions: { allow: ['Bash'] }, enabledMcpjsonServers: ['compound'] });
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -79,7 +90,7 @@ test('chat CLI invocation preserves exact app, socket and project through a shel
 // but never submits a model turn or changes a user's provider credentials.
 test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('packaged T3 authenticates, persists threads, streams metadata, and signs assets', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'compound-chat-runtime-test-'));
-  const server = new ChatServer({ executablePath: electronPath, runtimeDir, dataDir: join(dir, 'state'), cliBinDir: resolve(import.meta.dir, '../../../node_modules/.bin'), cliSocketPath: join(dir, 'app.sock'), validateProject: async p => p, changed: () => {} });
+  const server = new ChatServer({ executablePath: electronPath, runtimeDir, dataDir: join(dir, 'state'), mcpUrl: 'http://127.0.0.1:3284/mcp', validateProject: async p => p, changed: () => {} });
   const project = { id: 'test-project', name: 'Test', dir };
   try {
     const settingsDir = join(dir, 'state', 'userdata');

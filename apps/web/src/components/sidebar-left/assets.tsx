@@ -25,6 +25,7 @@ import {
   BreadcrumbsSeparator,
 } from "../ui/breadcrumbs";
 import { LazyAssetItem } from "./asset-item";
+import { PartialAssetItem } from "./partial-asset-item";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
@@ -53,6 +54,7 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
   const [currentFolder, setCurrentFolder] = createSignal("");
 
   const allAssets = createMemo(() => library()?.list().filter((asset) => asset.type !== "SCRIPT") ?? []);
+  const allPartials = createMemo(() => library()?.partials() ?? []);
   const allFolders = createMemo(() => [...(library()?.folders() ?? [])].sort());
 
   const activeFilterLabel = () => {
@@ -61,17 +63,17 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
     return ASSET_FILTER_OPTIONS.find((option) => option.value === value)?.label ?? null;
   };
 
-  const filteredAssets = createMemo(() => {
+  /** Whether an entry is in view: of the filtered type, matching the search, or in the open folder. */
+  const isShown = (entry: { type: string; path: string }): boolean => {
     const q = query().trim().toLowerCase();
     const selectedFilter = assetFilter();
-    const folder = currentFolder();
+    if (selectedFilter !== "ALL" && entry.type !== selectedFilter) return false;
+    if (q) return basename(entry.path).toLowerCase().includes(q);
+    return dirname(entry.path) === currentFolder();
+  };
 
-    return allAssets().filter((asset) => {
-      if (selectedFilter !== "ALL" && asset.type !== selectedFilter) return false;
-      if (q) return basename(asset.path).toLowerCase().includes(q);
-      return dirname(asset.path) === folder;
-    });
-  });
+  const filteredAssets = createMemo(() => allAssets().filter(isShown));
+  const filteredPartials = createMemo(() => allPartials().filter(isShown));
 
   const visibleFolders = createMemo(() => {
     const q = query().trim().toLowerCase();
@@ -82,7 +84,7 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
   });
 
   const panelTitle = createMemo(() => (currentFolder() ? basename(currentFolder()) : "Assets"));
-  const itemCount = createMemo(() => visibleFolders().length + filteredAssets().length);
+  const itemCount = createMemo(() => visibleFolders().length + filteredPartials().length + filteredAssets().length);
 
   // Deep paths collapse like the breadcrumbs docs example:
   // All assets / … / parent / current, with the hidden folders in a dropdown.
@@ -219,11 +221,11 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
 
     if (event.key === "Backspace" || event.key === "Delete") {
       const selected = selectedAssetId();
-      const asset = selected ? library()?.get(selected) : undefined;
-      if (asset) {
+      const entry = selected ? (library()?.get(selected) ?? library()?.getPartial(selected)) : undefined;
+      if (entry) {
         event.preventDefault();
         event.stopPropagation();
-        void library()?.remove([asset]);
+        void library()?.remove([entry]);
         return;
       }
 
@@ -256,9 +258,9 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
   };
 
   const hasAssets = () => allAssets().length > 0;
-  const hasContent = () => hasAssets() || allFolders().length > 0;
+  const hasContent = () => hasAssets() || allPartials().length > 0 || allFolders().length > 0;
   const isFiltering = () => query().trim().length > 0 || assetFilter() !== "ALL";
-  const isEmptyView = () => visibleFolders().length === 0 && filteredAssets().length === 0;
+  const isEmptyView = () => visibleFolders().length === 0 && filteredPartials().length === 0 && filteredAssets().length === 0;
 
   const handleCreateFolder = () => withLibrary((lib) => {
     const parent = currentFolder();
@@ -519,7 +521,7 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
               No matching assets
             </div>
           </Show>
-          <Show when={visibleFolders().length > 0 || filteredAssets().length > 0}>
+          <Show when={!isEmptyView()}>
             <div class="grid grid-cols-2 gap-x-2 gap-y-4">
               <For each={visibleFolders()}>
                 {(folder) => (
@@ -529,6 +531,15 @@ export function Assets(props: { navigation?: JSX.Element; onBrowseLibrary?: () =
                     onRenameStart={() => setRenamingFolder(folder)}
                     onRenameEnd={() => setRenamingFolder(null)}
                     onOpen={() => openFolder(folder)}
+                  />
+                )}
+              </For>
+              <For each={filteredPartials()}>
+                {(partial) => (
+                  <PartialAssetItem
+                    partial={partial}
+                    selected={selectedAssetId() === partial.id}
+                    onSelect={() => handleSelectAsset(partial.id)}
                   />
                 )}
               </For>

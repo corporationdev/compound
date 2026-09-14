@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { SidebarTabs } from "@/agent-chat";
 import { useWorld } from "@compound/koota-solid";
 import { useCameraScale, zoomBy, zoomTo, zoomToFit } from "@/engine";
 
@@ -25,9 +26,7 @@ export function InspectorHeader() {
 
   return (
     <div class="h-12 shrink-0 flex items-center px-4">
-      <span class="text-[12px] font-450 text-foreground">
-        Editor
-      </span>
+      <SidebarTabs />
       <DropdownMenu placement="bottom-end">
         <DropdownMenuTrigger<typeof Button>
           as={(triggerProps) => (

@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, readFile, writeFile, realpath } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { join, delimiter, resolve } from 'node:path';
+import { dirname, join, delimiter, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Writable } from 'node:stream';
 import { T3Rpc, rpcError } from '@compound/chat/rpc';
@@ -18,8 +18,8 @@ export type ChatServerOptions = {
   runtimeDir: string;
   executablePath?: string;
   dataDir: string;
-  cliBinDir: string;
-  cliSocketPath: string;
+  /** The app's MCP server, e.g. `http://127.0.0.1:3284/mcp`. Attached per project. */
+  mcpUrl: string;
   validateProject: (project: ChatProject) => Promise<ChatProject>;
   changed: (state: ChatState) => void;
 };
@@ -44,6 +44,7 @@ export class ChatServer {
   private refreshedProjects = new Set<string>();
   private sending = new Set<string>();
   private projectWrites = new Map<string, Promise<string>>();
+  private mcpProjects = new Set<string>();
   private stderr = '';
   private options: ChatServerOptions;
 
@@ -105,7 +106,7 @@ export class ChatServer {
     const env: NodeJS.ProcessEnv = {
       ...process.env, ELECTRON_RUN_AS_NODE: '1',
       T3CODE_RESOURCE_MONITOR_PATH: join(this.options.runtimeDir, 'resource-monitor', `${process.platform}-${process.arch}`, 't3-resource-monitor'),
-      PATH: [this.options.cliBinDir, join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].filter(Boolean).join(delimiter),
+      PATH: [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].filter(Boolean).join(delimiter),
     };
     // This identifies an enclosing development-agent session, not the user's login.
     delete env.CLAUDECODE;
@@ -214,6 +215,25 @@ export class ChatServer {
     return this.http('/api/orchestration/dispatch', 'POST', { commandId: randomUUID(), createdAt: new Date().toISOString(), ...command });
   }
 
+  /**
+   * The project's folder is gone: drop its T3 project and every chat in it,
+   * as the reference editor does with its own host. Best effort — a chat
+   * server that is down leaves the threads behind, and they are harmless.
+   */
+  async forgetProject(id: string): Promise<void> {
+    if (!id) return;
+    const projectId = t3ProjectId(id);
+    const prior = this.projectWrites.get(id) ?? Promise.resolve('');
+    const next = prior.catch(() => '').then(async () => {
+      const shell = await this.http<OrchestrationShellSnapshot>('/api/orchestration/shell').catch(() => null);
+      if (!shell?.projects.some(p => p.id === projectId)) return '';
+      await this.dispatch({ type: 'project.delete', projectId, force: true });
+      return '';
+    });
+    this.projectWrites.set(id, next);
+    await next.catch(() => {});
+  }
+
   private ensureProject(input: ChatProject): Promise<string> {
     const prior = this.projectWrites.get(input.id) ?? Promise.resolve('');
     const next = prior.catch(() => '').then(async () => {
@@ -280,6 +300,7 @@ export class ChatServer {
       case 'create': {
         if (!supported.has(request.provider)) throw new Error('Unsupported chat provider');
         const projectId = await this.ensureProject(request.project);
+        await this.attachMcp(request.project.dir);
         threadId = randomUUID();
         await this.dispatch({ type: 'thread.create', threadId, projectId, title: 'New chat', modelSelection: { instanceId: request.provider, model: request.model, options: request.modelOptions }, runtimeMode: request.runtimeMode ?? 'approval-required', interactionMode: 'default', branch: null, worktreePath: null });
         break;
@@ -303,8 +324,8 @@ export class ChatServer {
           if (thread.projectId !== projectId) throw new Error('This chat belongs to a different project');
           if (isWorking(thread)) throw new Error('Wait for this turn to finish, or stop it before sending another message');
           if (!supported.has(thread.modelSelection.instanceId)) throw new Error('Unsupported chat provider');
-          const cli = projectCliCommand(this.options.cliBinDir, this.options.cliSocketPath, request.project.dir);
-          const context = request.context + `\n\nCLI connection for this chat: ${cli}\nUse that exact invocation followed by the subcommand (for example, context). It pins the bundled CLI, this app instance, and this project. Login shells can replace PATH and provider sandboxes can remove environment variables, so do not substitute a global compound command or an npm script. If the sandbox blocks the local socket, request approval to run the same invocation with local-app access.`;
+          await this.attachMcp(request.project.dir);
+          const context = request.context + MCP_INSTRUCTIONS;
           await this.dispatch({ type: 'thread.turn.start', commandId: request.messageId, threadId: request.threadId, message: { messageId: request.messageId, role: 'user', text: request.text + CONTEXT_START + context + CONTEXT_END, attachments: request.attachments }, modelSelection: { ...thread.modelSelection, model: request.model, options: request.modelOptions ?? thread.modelSelection.options }, runtimeMode: thread.runtimeMode, interactionMode: 'default', titleSeed: request.text.slice(0, 160) || 'Image attachment' });
         } finally { this.sending.delete(request.threadId); }
         break;
@@ -348,6 +369,18 @@ export class ChatServer {
     return { state: this.state, ...(threadId ? { threadId } : {}), ...(url ? { url } : {}), ...(filePath ? { filePath } : {}) };
   }
 
+  /** Writes the project's MCP config once per session; a failure never blocks a turn. */
+  private async attachMcp(dir: string) {
+    if (!this.options.mcpUrl || this.mcpProjects.has(dir)) return;
+    this.mcpProjects.add(dir);
+    try {
+      await writeProjectMcpConfig(dir, this.options.mcpUrl);
+    } catch (error) {
+      this.mcpProjects.delete(dir);
+      this.publish({ error: `Could not attach the Compound tools to this project: ${rpcError(error).message}` });
+    }
+  }
+
   async stop() {
     this.stopped = true;
     ++this.generation;
@@ -371,8 +404,45 @@ export class ChatServer {
 
 export async function sameDirectory(left: string, right: string) { return await realpath(left) === await realpath(right); }
 
-/** Shell-safe even when project/app paths contain spaces, quotes or dollars. */
-export function projectCliCommand(binDir: string, socketPath: string, projectDir: string) {
-  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-  return `env ${quote(`COMPOUND_CLI_SOCKET=${socketPath}`)} ${quote(join(binDir, 'compound'))} --project ${quote(projectDir)}`;
+/** The name our entry lives under in every agent's server map (see `mcp-config.ts`). */
+const MCP_SERVER_NAME = 'compound';
+
+const MCP_INSTRUCTIONS = `
+
+The Compound MCP tools are attached to this session under the \`${MCP_SERVER_NAME}\` server (tool names \`mcp__${MCP_SERVER_NAME}__*\`). They act on the project that is open in the editor; there is no background renderer and no CLI to invoke. Use \`capture\` to see the current frame and \`check\` to verify a change actually rendered, before reporting that it is done. \`context\` reports what the editor has open. If the tools are not listed, say so instead of falling back to a shell command.`;
+
+/** Merge one server into a JSON config file's map, keeping everything else. */
+async function mergeJson(path: string, merge: (config: Record<string, unknown>) => Record<string, unknown>) {
+  const existing = JSON.parse(await readFile(path, 'utf8').catch(() => '{}')) as Record<string, unknown>;
+  const next = merge(existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {});
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`);
+}
+
+/**
+ * Attaches the app's MCP server to the agents T3 runs in this project.
+ *
+ * T3 gives a session exactly one MCP server of its own (`t3-code`) and has no
+ * user-configurable server list: its settings schema has no MCP section, and
+ * both drivers hardcode their own entry. What it does leave open is each
+ * agent's native configuration. Claude Code runs under
+ * `settingSources: ["user", "project", "local"]` with no `strictMcpConfig`, so
+ * a project `.mcp.json` is read — and `enabledMcpjsonServers` in the project's
+ * local settings is what pre-approves it, so no prompt appears where there is
+ * no terminal to answer it.
+ *
+ * Codex has no project-scoped equivalent: T3 passes its own server through
+ * `-c mcp_servers.t3-code.*` and everything else comes from
+ * `~/.codex/config.toml`. Codex therefore needs the user-level registration the
+ * settings page performs (`mcp-install.ts`).
+ */
+export async function writeProjectMcpConfig(dir: string, url: string) {
+  await mergeJson(join(dir, '.mcp.json'), (config) => {
+    const servers = config.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers as Record<string, unknown> : {};
+    return { ...config, mcpServers: { ...servers, [MCP_SERVER_NAME]: { type: 'http', url } } };
+  });
+  await mergeJson(join(dir, '.claude', 'settings.local.json'), (config) => {
+    const enabled = Array.isArray(config.enabledMcpjsonServers) ? config.enabledMcpjsonServers.map(String) : [];
+    return enabled.includes(MCP_SERVER_NAME) ? config : { ...config, enabledMcpjsonServers: [...enabled, MCP_SERVER_NAME] };
+  });
 }

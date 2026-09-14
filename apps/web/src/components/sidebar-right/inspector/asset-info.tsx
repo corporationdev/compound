@@ -18,11 +18,86 @@ import { assetName } from "@compound/assets";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
 import { insertAssetAtPlayhead, replaceAssetSource } from "@/engine/asset-actions";
+import { retryGeneration } from "@/engine/generations";
 
-import type { Asset } from "@compound/assets";
+import type { Asset, PartialAsset } from "@compound/assets";
 
-/** Information about the library asset picked in the assets panel. */
+/** Information about the library entry picked in the assets panel. */
 export function AssetInfoPanel() {
+  const selection = useAssetSelection();
+
+  return (
+    <Show when={selection.partial()} fallback={<AssetDetails />}>
+      {(partial) => <PartialDetails partial={partial()} />}
+    </Show>
+  );
+}
+
+/**
+ * A generation without bytes: where it stands, and — once it has failed —
+ * the reason, and the way to ask again.
+ */
+function PartialDetails(props: { partial: PartialAsset }) {
+  const world = useWorld();
+  const library = useLibrary();
+
+  const failed = () => props.partial.state === "error";
+
+  const handleRetry = async () => {
+    const lib = library();
+    if (lib) await retryGeneration(world, lib, props.partial);
+  };
+
+  const handleDelete = async () => {
+    await library()?.remove([props.partial]);
+  };
+
+  return (
+    <div class="flex flex-col w-full px-4 border-t border-border">
+      <div class="h-12 flex items-center justify-between">
+        <span class="text-base font-strong">Information</span>
+      </div>
+
+      <div class="py-3 border-t border-b border-border text-xs break-all">
+        {assetName(props.partial)}
+      </div>
+
+      <div class="flex flex-col gap-1 my-2 text-xs text-muted-foreground">
+        <div class="flex h-7 items-center gap-2">
+          <span class="w-20 shrink-0">Status</span>
+          <span class="min-w-0 flex-1 text-right" classList={{ "text-destructive": failed() }}>
+            {failed() ? "Failed" : "Generating…"}
+          </span>
+        </div>
+        <Show when={props.partial.error}>
+          {(error) => (
+            <div class="flex flex-col gap-2 py-1">
+              <span class="w-20 shrink-0">Error</span>
+              <span class="min-w-0 text-left wrap-break-words text-destructive">{error()}</span>
+            </div>
+          )}
+        </Show>
+        <div class="flex h-7 items-center gap-2">
+          <span class="w-20 shrink-0">Requested</span>
+          <span class="min-w-0 flex-1 text-right truncate">{formatAssetDate(props.partial.createdAt)}</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2 my-2">
+        <Show when={failed()}>
+          <Button variant="default" class="w-full" onClick={handleRetry}>
+            Retry generation
+          </Button>
+        </Show>
+        <Button variant="secondary" class="w-full" onClick={handleDelete}>
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AssetDetails() {
   const world = useWorld();
   const library = useLibrary();
   const selection = useAssetSelection();

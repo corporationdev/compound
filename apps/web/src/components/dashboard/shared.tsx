@@ -6,9 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { cx } from "@/lib/cva";
-import { For, Show, children, type JSX } from "solid-js";
+import { For, Show, children, createMemo, onCleanup, type JSX } from "solid-js";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "somoto";
+import { track } from "@/lib/analytics";
+import { forgetProjectBundle, generateProjectName } from "@/lib/db";
+import {
+  checkProject,
+  createProject,
+  deleteProject,
+  ensureProjectsRoot,
+  forgetProject,
+  isDesktop,
+  type ProjectInfo,
+} from "@/projects";
 
 
 type DashboardLabelValueProps = {
@@ -46,6 +58,8 @@ export function DashboardSurfaceCard(props: DashboardSurfaceCardProps) {
 
 type DashboardTitledSectionProps = {
   title: string;
+  description?: string;
+  action?: JSX.Element;
   class?: string;
   children: JSX.Element;
 };
@@ -54,8 +68,16 @@ type DashboardTitledSectionProps = {
 export function DashboardTitledSection(props: DashboardTitledSectionProps) {
   return (
     <section class={cx("flex flex-col", props.class)}>
-      <div class={cx("flex h-9 items-center px-2 text-sm leading-5 font-450 text-foreground", props.class)}>
-        {props.title}
+      <div class="p-2 gap-1 flex flex-col">
+        <span class={cx("flex items-center text-sm leading-5 font-450 text-foreground", props.class)}>
+          {props.title}
+        </span>
+        <Show when={props.description}>
+          <div class="flex items-center gap-2 pb-1">
+            <p class="min-w-0 flex-1 text-xs text-muted-foreground">{props.description}</p>
+            {props.action}
+          </div>
+        </Show>
       </div>
       {props.children}
     </section>
@@ -64,13 +86,14 @@ export function DashboardTitledSection(props: DashboardTitledSectionProps) {
 
 type DashboardSurfaceSectionProps = {
   title: string;
+  description?: string;
   class?: string;
   children: JSX.Element;
 };
 
 export function DashboardSurfaceSection(props: DashboardSurfaceSectionProps) {
   return (
-    <DashboardTitledSection title={props.title} class={props.class}>
+    <DashboardTitledSection title={props.title} description={props.description} class={props.class}>
       <DashboardSurfaceCard class="flex flex-col gap-3">
         {props.children}
       </DashboardSurfaceCard>
@@ -237,6 +260,8 @@ type DashboardInfoActionRowProps = {
   description?: JSX.Element;
   action: JSX.Element;
   leading?: JSX.Element;
+  /** The box the leading icon is centred in; "sm" lets a 24px icon overhang a 16px slot. */
+  leadingSize?: "sm" | "md";
   layout?: "responsive" | "responsive-md" | "inline";
 };
 
@@ -256,7 +281,7 @@ export function DashboardInfoActionRow(props: DashboardInfoActionRowProps) {
   const renderTitleText = (value: string) => (
     <p
       class={cx(
-        "text-xs text-foreground",
+        "text-xs leading-4 text-foreground",
         props.layout === "inline" ? "min-w-0 flex-1 truncate" : undefined,
       )}
     >
@@ -279,7 +304,7 @@ export function DashboardInfoActionRow(props: DashboardInfoActionRowProps) {
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       {titleContent()}
       <Show when={props.description}>
-        <p class="text-muted-foreground text-xs">
+        <p class="text-muted-foreground text-xs leading-4">
           {props.description}
         </p>
       </Show>
@@ -295,7 +320,14 @@ export function DashboardInfoActionRow(props: DashboardInfoActionRowProps) {
         }
       >
         <div class={cx("flex min-w-0 flex-1 gap-2", leadingAlignClass())}>
-          <span class="grid size-6 shrink-0 place-items-center text-muted-foreground">
+          <span
+            class={cx(
+              // Flex centring overhangs an oversized icon evenly on every side; a
+              // grid track would grow to fit it and pin it to the top-left.
+              "flex shrink-0 items-center justify-center text-muted-foreground",
+              props.leadingSize === "sm" ? "size-4" : "size-6",
+            )}
+          >
             {props.leading}
           </span>
           {textContent()}
@@ -355,6 +387,7 @@ export function DashboardCardButton(props: DashboardCardButtonProps) {
 
   return (
     <div
+      data-slot="card-button"
       role="button"
       tabIndex={0}
       onClick={props.onClick}
@@ -413,6 +446,79 @@ export function DashboardCardMeta(props: DashboardCardMetaProps) {
   );
 }
 
+/**
+ * A click handler for whatever surrounds a grid of {@link DashboardCardButton}s:
+ * anything that did not land on a card is the background, and clears the
+ * selection. Cards keep their own clicks.
+ */
+export function createBackgroundClickHandler(onCLick: () => void): JSX.EventHandlerUnion<HTMLDivElement, MouseEvent> {
+  return (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-slot="card-button"]')) return;
+
+    onCLick();
+  };
+}
+
+/**
+ * Creates a fresh, randomly named project under the projects root and puts
+ * it on the list. Null — with the reason already shown — when there is no
+ * desktop to create it on, and when the user is asked where to put it and
+ * declines to say. The one flow behind every "new project": the card on each
+ * view.
+ */
+export async function createNewProject(): Promise<ProjectInfo | null> {
+  if (!isDesktop()) {
+    toast.error("Projects on disk are only available in the desktop app");
+    return null;
+  }
+  // Waits for the roots to come back from the database, and asks for one
+  // when there is none to wait for.
+  if (!(await ensureProjectsRoot())) return null;
+
+  const project = await createProject(generateProjectName());
+  track("project_created");
+  return project;
+}
+
+/**
+ * The project as its folder holds it now, for opening it from the list: what
+ * the list shows is its record, and the folder is only looked at here. Null —
+ * with the reason shown, and a way to take the project off the list — when
+ * the folder is gone or no longer a project. The list is not touched on its
+ * own: a folder on a volume that is not mounted comes back with the volume.
+ */
+export async function openProjectFromList(project: ProjectInfo): Promise<ProjectInfo | null> {
+  if (!isDesktop()) return project;
+
+  const current = await checkProject(project);
+  if (current) return current;
+
+  toast.error(`Could not find ${project.displayName}`, {
+    description: `There is no project at ${project.dir}. It may be on a disk that is not connected.`,
+    action: {
+      label: "Remove from list",
+      onClick: () => {
+        forgetProject(project.dir).catch((e) => {
+          toast.error("Failed to remove project", { description: (e as Error).message });
+        });
+      },
+    },
+  });
+  return null;
+}
+
+/**
+ * Moves `project` to the Trash, and drops the bundle we were holding for it —
+ * the folder is gone, so the cached copy of it is stale.
+ */
+export async function trashProject(project: ProjectInfo): Promise<void> {
+  await deleteProject(project.dir);
+  forgetProjectBundle(project.id);
+  track("project_deleted");
+}
+
+
 type DashboardViewSectionProps = {
   title: string;
   controls: JSX.Element;
@@ -422,12 +528,9 @@ type DashboardViewSectionProps = {
 };
 
 export function DashboardViewSection(props: DashboardViewSectionProps) {
-  const handleClick: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent> = (event) => {
-    const target = event.target as HTMLElement;
-    if (target !== event.currentTarget && target.dataset.slot !== "card-grid") return;
-
-    props.onBackgroundClick?.();
-  };
+  const handleClick = createBackgroundClickHandler(() =>
+    props.onBackgroundClick?.(),
+  );
 
   return (
     <div class={cx("flex min-h-0 flex-1 flex-col gap-3 pt-4", props.class)}>
@@ -450,3 +553,28 @@ export function DashboardViewSection(props: DashboardViewSectionProps) {
   );
 }
 
+/** The project's cover, off its record; nothing while it has none. */
+export function DashboardProjectThumbnail(props: { cover: Blob | null }) {
+  // The URL the last cover was under is released as this one takes its place.
+  const url = createMemo<string | null>((previous) => {
+    if (previous) URL.revokeObjectURL(previous);
+    const blob = props.cover;
+    return blob ? URL.createObjectURL(blob) : null;
+  }, null);
+
+  onCleanup(() => {
+    const current = url();
+    if (current) URL.revokeObjectURL(current);
+  });
+
+  return (
+    <Show when={url()}>
+      <img
+        src={url()!}
+        alt=""
+        class="h-full w-full object-cover"
+        draggable={false}
+      />
+    </Show>
+  );
+}

@@ -7,7 +7,7 @@ import { toast } from "somoto";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { pickProjectsRoot, projectsRoot, rootsReady } from "@/projects";
+import { pickProjectsRoot, projectsRoot } from "@/projects";
 import { usePermissionState, type PermissionState } from "@/hooks/use-permission";
 
 import {
@@ -31,9 +31,9 @@ function DashboardProjectsFolderSection() {
       <DashboardInfoActionRow
         title="Save projects to"
         leading={<Icon name="navigation.folder" class="text-foreground" />}
-        description={rootsReady() ? projectsRoot() ?? "No folder selected" : "Setting up project folder…"}
+        description={projectsRoot() ?? "No folder selected"}
         action={
-          <Button variant="secondary" onClick={handleChange} disabled={!rootsReady()}>
+          <Button variant="secondary" onClick={handleChange}>
             Change...
           </Button>
         }

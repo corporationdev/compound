@@ -4,18 +4,21 @@
 
 import { app, dialog, shell, type BrowserWindow } from "electron";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { nanoid } from "nanoid";
+import { MCP_URL } from "@compound/dapi";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
-import { isHeadless } from "./cli-server";
+import { isTempPath, TEMP_PREFIX, writeFileAtomic } from "./atomic";
 import { cloudConfig } from "./cloud";
+import { isHeadless } from "./headless";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import { applyEdits, editLabel, stampProject } from "./edit";
@@ -47,13 +50,13 @@ const BUILD_OPTIONS: BuildOptions = {
 
 // esbuild and babel are kept external to the main bundle (esbuild ships a
 // native binary). In development they resolve from the workspace; a packaged
-// app has no node_modules of its own, so they load from the CLI's staged
-// runtime at Contents/Resources/cli/node_modules (see scripts/stage-cli.mjs).
+// app has no node_modules of its own, so they load from the staged runtime at
+// Contents/Resources/runtime/node_modules (see scripts/stage-runtime.mjs).
 let stagedRequire: NodeJS.Require | undefined;
 
 function load<T>(name: string): T {
   if (!app.isPackaged) return require(name) as T;
-  stagedRequire ??= createRequire(join(process.resourcesPath, "cli", "package.json"));
+  stagedRequire ??= createRequire(join(process.resourcesPath, "runtime", "package.json"));
   return stagedRequire(name) as T;
 }
 
@@ -82,7 +85,12 @@ async function readPackage(dir: string): Promise<PackageJson | null> {
 }
 
 async function writePackage(dir: string, pkg: PackageJson): Promise<void> {
-  await writeFile(join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
+  const path = join(dir, "package.json");
+  const text = JSON.stringify(pkg, null, 2) + "\n";
+  // The record is read by the app, by the watcher and by whatever else has the
+  // folder open, so it is claimed and replaced whole (see `noteContent`).
+  noteContent(path, text);
+  await writeFileAtomic(path, text);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +119,6 @@ async function ensureProjectId(dir: string): Promise<string> {
   if (existing) return existing;
 
   const id = nanoid();
-  markSelfWrite(dir, "package.json");
   await writePackage(dir, { ...(pkg ?? packageJson(basename(dir), basename(dir))), projectId: id });
   return id;
 }
@@ -188,6 +195,24 @@ export async function pickRoot(window: BrowserWindow | null): Promise<string | n
       return filePaths[0];
     }
   }
+}
+
+/**
+ * A folder to open as a single project, wherever it lives. Unlike `pickRoot`
+ * this leaves the projects root alone, and it does not vet the location: the
+ * folder goes through `initProject`, which asks about a synced one there.
+ */
+export async function pickFolder(window: BrowserWindow | null): Promise<string | null> {
+  const options: Electron.OpenDialogOptions = {
+    title: "Choose project folder",
+    defaultPath: app.getPath("videos"),
+    properties: ["openDirectory", "createDirectory"],
+  };
+
+  const { canceled, filePaths } = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  return canceled ? null : filePaths[0] ?? null;
 }
 
 /**
@@ -376,68 +401,27 @@ async function childDirs(root: string): Promise<string[]> {
     .map((name) => join(root, name));
 }
 
-/** Every direct child folder of `root` that holds an entry file. Reads only. */
-export async function listProjects(root: string): Promise<ProjectInfo[]> {
-  const dirs = await childDirs(root);
-  const projects = await Promise.all(dirs.map(describe));
+/**
+ * Every direct child folder of `root` that holds an entry file. The one
+ * search of the disk for projects there is: the app runs it when a projects
+ * root is chosen, to put the projects already in it on its list. Reads only.
+ */
+export async function scanProjects(root: string): Promise<ProjectInfo[]> {
+  const projects = await Promise.all((await childDirs(root)).map(describe));
   return projects.filter((project): project is ProjectInfo => project !== null);
 }
 
 /**
- * Where an id was last seen, so opening the project the URL names usually
- * costs one package.json read instead of a scan of the root. Never trusted
- * without rereading the file: a stale entry (folder renamed behind our back,
- * project deleted) just falls through to the scan.
+ * The project in `dir`, left holding an id — this is where a folder that
+ * predates ids, or was made by hand, gets one — so the caller can send the
+ * app to that id's URL. What the app calls when it opens a project; null
+ * when `dir` holds none.
  */
-const dirsById = new Map<string, string>();
-
-const cacheKey = (root: string, id: string): string => `${root}\n${id}`;
-
-/** Drops every cached id that pointed at `dir` (it moved, or is gone). */
-function forgetDir(dir: string): void {
-  for (const [key, cached] of dirsById) {
-    if (cached === dir) dirsById.delete(key);
-  }
-}
-
-/**
- * The project `ref` names under `root`: an id first, then a folder name, so
- * links made before ids existed still open. Whatever is found is left holding
- * an id — this is where a folder that predates them gets one — and the caller
- * can send the app to that id's URL.
- *
- * Ids live in a file the user can copy, so two folders can end up with the
- * same one. Nothing here can tell which was meant, so it settles for being
- * predictable: the cache answers first, so a project stays the one that was
- * already open, and a cold scan is ordered by folder name.
- */
-export async function resolveProject(root: string, ref: string): Promise<ProjectInfo | null> {
-  if (!ref) return null;
-
-  const found = async (dir: string): Promise<ProjectInfo | null> => {
-    dirsById.set(cacheKey(root, await ensureProjectId(dir)), dir);
-    return describe(dir);
-  };
-
-  const cached = dirsById.get(cacheKey(root, ref));
-  if (cached && recordedId(await readPackage(cached)) === ref) {
-    const project = await describe(cached);
-    if (project) return project;
-  }
-
-  let dirs: string[];
-  try {
-    dirs = await childDirs(root);
-  } catch {
-    return null;
-  }
-  const ids = await Promise.all(dirs.map(async (dir) => recordedId(await readPackage(dir))));
-
-  const byId = dirs[ids.indexOf(ref)];
-  if (byId) return found(byId);
-
-  const byName = dirs.find((dir) => basename(dir) === ref);
-  return byName ? found(byName) : null;
+export async function resolveProject(dir: string): Promise<ProjectInfo | null> {
+  const project = await describe(dir);
+  if (!project || project.id) return project;
+  await ensureProjectId(dir);
+  return describe(dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +483,6 @@ const SCRIPTS: Record<string, string> = {
   logs: "compound logs",
   screenshot: "compound screenshot",
   report: "compound report",
-  fetch: "compound fetch",
 };
 
 const packageJson = (name: string, displayName: string): PackageJson => ({
@@ -532,10 +515,11 @@ const TSCONFIG = `{
 }
 `;
 
-/** What a project folder produces but should not check in: installs, derived data (thumbnails, waveforms), and the app-owned docs. */
+/** What a project folder produces but should not check in: installs, derived data (thumbnails, waveforms), and the app-owned folder. */
 const GITIGNORE = `node_modules/
 cache/
 .compound/
+${TEMP_PREFIX}*
 `;
 
 const STARTER = `export default function Project() {
@@ -566,6 +550,14 @@ a plain npm package whose entry file is a [Solid](https://www.solidjs.com)
 component; the app compiles it and renders every element into an editable node
 on the canvas.
 
+## Agents
+
+Everything an agent needs is in the app's MCP server (\`dapi\`): its tools
+are the API, its instructions say how to work, and its resources are the
+authoring reference for the installed version. If it is not among your tools,
+add it — the app serves it at \`${MCP_URL}\` while it is running — and start
+a new session.
+
 ## Structure
 
 | Path | What it is |
@@ -573,11 +565,10 @@ on the canvas.
 | \`index.tsx\` | The entry. Its default export renders the composition. |
 | \`package.json\` | The project record: \`projectId\` (its identity, kept across renames), \`displayName\` (the name shown in the app), \`main\` (the entry), \`compound\` (how each scene is exported), and the compound commands as scripts. |
 | \`tsconfig.json\` | Types for the composition tags, through \`jsxImportSource\`. |
-| \`assets.yml\` | The asset library: for every asset its library path, where its bytes are, and what it was found to be. Written by the app; hand edits are read on the next load. |
+| \`assets.yml\` | The asset library: for every asset its library path, where its bytes are, and what it was found to be; for a generation without bytes, where it stands. Written by the app; hand edits are read on the next load. |
 | \`assets/\` | The library's files: put one here and it is taken in while the app watches, and the app writes its own here too — generations under \`assets/generated/\`. Media imported through the app is linked where it lies instead, never copied. |
 | \`cache/\` | Derived data (thumbnails, waveforms). Disposable, and not checked in. |
-| \`AGENTS.md\` | The agent entry point: what to read in \`.compound/docs/\` and how to work here. |
-| \`.compound/\` | App-owned. \`jsx/\` supplies the local authoring types; \`docs/\` is the authoring reference and examples for the installed app version; the app regenerates it, and it is not checked in. |
+| \`AGENTS.md\` | The agent entry point: how to work here, and where the docs are. |
 
 ## Authoring
 
@@ -639,7 +630,7 @@ yourself with \`npx tsc --noEmit\`.
 
 Every compound command is a script here: \`npm run\` lists them, and
 \`npm run <name> -- <args>\` runs one (\`npm run grab -- b-roll/drone.mp4 -c 6\`).
-All of them talk to the running app, except \`fonts\` and \`fetch\`.
+All of them talk to the running app, except \`fonts\`.
 
 | Script | Command | What it does |
 | ------ | ------- | ------------ |
@@ -659,22 +650,21 @@ All of them talk to the running app, except \`fonts\` and \`fetch\`.
 | \`logs\` | \`compound logs\` | Recent console output from the app. |
 | \`screenshot\` | \`compound screenshot\` | The whole app window as a PNG. |
 | \`report\` | \`compound report <title>\` | File a bug against the editor, with diagnostics attached. |
-| \`fetch\` | \`compound fetch <url>\` | Download a video with yt-dlp (installed separately). |
 
 ## Reference
 
-- [JSX reference](https://github.com/corporationdev/compound/blob/main/reference/jsx/README.md): elements, timing, paints, generation, captions
-- [CLI reference](https://github.com/corporationdev/compound/blob/main/reference/README.md): every command, its options and its output
-- [Examples](https://github.com/corporationdev/compound/tree/main/examples): runnable compositions to read
+- [JSX reference](https://github.com/corporationdev/compound/blob/main/docs/reference/jsx/README.md): elements, timing, paints, generation, captions
+- [Tool reference](https://github.com/corporationdev/compound/blob/main/docs/reference/tools/README.md): every tool and command, its options and its output
+- [Examples](https://github.com/corporationdev/compound/tree/main/docs/examples): runnable compositions to read
 `;
 
 /**
  * The agent entry point, written once like the README: the file coding agents
  * load without being asked, and therefore the one place a project is reliably
  * discovered from. Loaded into context whole, so it stays a thin index into
- * `.compound/docs` rather than the docs themselves — and being the author's
- * file after the first write, an agent can append project conventions to it
- * while the paths it points at stay put.
+ * what the app serves rather than the docs themselves — and being the
+ * author's file after the first write, an agent can append project
+ * conventions to it while what it points at stays put.
  */
 const AGENTS = `# Authoring this project
 
@@ -685,106 +675,49 @@ canvas. The source is the document in both directions: saving recompiles and
 remounts the project, and edits made in the app land back in the JSX as props
 on the element they were authored as.
 
-## Docs
+## The app
 
-\`.compound/docs/\` holds the authoring reference and runnable examples for
-the installed app version. The app regenerates it on version changes: read it,
-never edit it, and trust it over memory.
-
-| Read | For |
-| ---- | --- |
-| \`.compound/docs/reference/jsx/README.md\` | The JSX contract — elements, props, pipeline. Start here. |
-| \`.compound/docs/reference/jsx/timing.md\` | \`start\`/\`end\`/\`sourceIn\`/\`sourceOut\`, and the time formats. |
-| \`.compound/docs/reference/jsx/generate.md\` | Declaring AI-generated assets (\`generate.*\`). |
-| \`.compound/docs/reference/jsx/variables.md\` | \`@inspect\` variables: annotated consts as live inspector controls. |
-| \`.compound/docs/reference/README.md\` | Every compound command, its options and its output. |
-| \`.compound/docs/reference/library.md\` | Browse music/SFX with an empty search, inspect, import, and place audio. |
-| \`.compound/docs/examples/\` | Complete compositions, basics through shaders. |
+Compound is running on this machine and serves everything you need over MCP,
+as the \`compound\` server (\`${MCP_URL}\`). Its tools are the API — they appear
+to you as \`mcp__compound__*\` — and its instructions name the authoring
+reference, the guides and the runnable examples the app ships, as files on
+disk. Read those; trust them over memory; never edit them. If the \`compound\`
+tools are not among yours, add the server and start a new session.
 
 ## Working here
 
-- Every compound command is an npm script: \`npm run\` lists them, and
-  \`npm run <name> -- <args>\` runs one.
-- \`npm run context\` reports what the app has open, where its playhead sits,
-  and where generations stand.
-- Verify visually with \`npm run capture -- <sceneId>\`: it renders the
-  scene's frames exactly as an export encodes them. Do not export a video to
-  check work.
+- The tools are the way to talk to the app: \`mcp__compound__context\` reports
+  what it has open, where the playhead sits, and where generations stand.
+  Every command is also an npm script here (\`npm run\` lists them).
+- Verify visually with \`mcp__compound__capture\`: it renders a scene's frames
+  exactly as an export encodes them. Do not export a video to check work.
 - Position and size are explicit, in pixels. There is no layout pass and no CSS.
 - A composition you author from scratch marks one scene \`active\` and gives
   \`<stage>\` a \`camera\` framing it, or the project opens on an empty timeline
   with the frame off screen.
 - Times are seconds (\`1.5\`), frames (\`"45f"\`), or \`"MM:SS"\`.
+- Automatic captions and media analysis are available; image, video, voice and
+  audio generation is not — import media files instead.
+- \`.compound/\` is the app's folder in the project. It is not checked in and
+  is not yours to edit.
 - Types are stripped at compile time, never checked: run \`npx tsc --noEmit\`.
 `;
 
 // ---------------------------------------------------------------------------
-// Authoring docs
+// The app-owned folder
 
 /**
- * The project-relative folder the app owns outright. Everything else the
- * scaffold writes is written once and is the author's from then on; this
- * folder is regenerated wholesale, which is why it gets a namespace of its
- * own instead of files among the author's.
+ * The project-relative folder the app owns outright, ignored by git and by
+ * the project watcher. Earlier versions copied the authoring docs into it;
+ * the docs now live in the app's MCP server.
  */
 const APP_DIR = ".compound";
-
-/** Repo housekeeping that has no business in a project's copy of the docs. */
-const DOCS_SKIP = new Set(["tsconfig.json", ".DS_Store"]);
-
-/**
- * Where the shipped docs come from: staged app resources when packaged (see
- * scripts/stage-docs.mjs), the repo checkout in development. Both lay the
- * tree out as the repo does — `reference/` beside `examples/` — so the
- * relative links between the pages keep resolving after the copy.
- */
-function docsSources(): string {
-  return app.isPackaged ? join(process.resourcesPath, "docs") : join(app.getAppPath(), "..", "..");
-}
-
-/**
- * Copies the authoring reference and examples into `.compound/docs`, stamped
- * with the app version and refreshed whenever the stamp stops matching. Docs
- * that outlive the app they sit next to would lie about it, so unlike the
- * rest of the scaffold this is rewritten, not written once. The stamp only
- * moves with a release; in development a refresh is forced by deleting the
- * folder. This runs on every compile, so the up-to-date case is one read.
- */
-async function syncDocs(dir: string): Promise<void> {
-  const docsDir = join(dir, APP_DIR, "docs");
-  const stampFile = join(docsDir, ".version");
-  const version = app.getVersion();
-  try {
-    if ((await readFile(stampFile, "utf8")).trim() === version &&
-        await exists(join(dir, APP_DIR, "jsx", "package.json")) &&
-        await exists(join(docsDir, "reference", "library.md"))) return;
-  } catch {
-    // No stamp: never synced, or a copy that did not finish. Full copy below.
-  }
-  const source = docsSources();
-  // Ship the renamed authoring package locally; it need not be published to npm.
-  await cp(join(source, "packages", "jsx"), join(dir, APP_DIR, "jsx"), {
-    recursive: true,
-    filter: (path) => !["node_modules", "dist", ".DS_Store"].includes(basename(path)),
-  });
-  await rm(docsDir, { recursive: true, force: true });
-  await mkdir(docsDir, { recursive: true });
-  for (const name of ["reference", "examples"]) {
-    const src = join(source, name);
-    if (!(await exists(src))) continue;
-    await cp(src, join(docsDir, name), {
-      recursive: true,
-      filter: (path) => !DOCS_SKIP.has(basename(path)),
-    });
-  }
-  // Written last, so a copy that died refuses to pass for a synced one.
-  await writeFile(stampFile, version + "\n", "utf8");
-}
 
 async function writeIfMissing(dir: string, name: string, content: string): Promise<void> {
   const path = join(dir, name);
   if (await exists(path)) return;
-  await writeFile(path, content, "utf8");
+  noteContent(path, content);
+  await writeFileAtomic(path, content);
 }
 
 /** Adds the record fields to a package.json that predates them; leaves everything else alone. */
@@ -807,7 +740,6 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
     next.main !== pkg.main ||
     next.scripts !== pkg.scripts
   ) {
-    markSelfWrite(dir, "package.json");
     await writePackage(dir, next);
   }
 }
@@ -818,28 +750,13 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
  * from @compound/jsx (jsxImportSource), installed by the project.
  */
 export async function scaffold(dir: string, displayName = basename(dir)): Promise<void> {
-  const name = basename(dir);
-  let entry = await findEntry(dir);
+  const entry = await ensureRecord(dir, displayName);
   // JavaScript projects are left alone.
-  if (entry && !/\.tsx?$/.test(entry)) return;
-
-  if (!entry) {
-    await writeIfMissing(dir, "index.tsx", STARTER);
-    entry = "index.tsx";
-  }
-  await ensurePackage(dir, name, displayName, entry);
+  if (!entry) return;
   await writeIfMissing(dir, "tsconfig.json", TSCONFIG);
   await writeIfMissing(dir, ".gitignore", GITIGNORE);
   await writeIfMissing(dir, "README.md", readme(displayName));
   await writeIfMissing(dir, "AGENTS.md", AGENTS);
-
-  // The docs are auxiliary: a project must still open and compile without
-  // them, so a failed sync is a warning rather than a failed scaffold.
-  try {
-    await syncDocs(dir);
-  } catch (error) {
-    console.warn(`projects: could not sync the authoring docs into ${dir}`, error);
-  }
 
   if (!(await exists(join(dir, MANIFEST_FILE)))) {
     await writeManifest(dir, EMPTY_MANIFEST);
@@ -847,25 +764,46 @@ export async function scaffold(dir: string, displayName = basename(dir)): Promis
 }
 
 /**
+ * The part of the scaffold every project needs: an entry file, and the
+ * package.json record (`projectId`, `displayName`, `main`) the app remembers
+ * the folder by. Nothing a folder already has is touched. Returns the entry,
+ * or undefined for a JavaScript project, which is left entirely alone.
+ */
+async function ensureRecord(dir: string, displayName = basename(dir)): Promise<string | undefined> {
+  let entry = await findEntry(dir);
+  if (entry && !/\.tsx?$/.test(entry)) return undefined;
+  if (!entry) {
+    await writeIfMissing(dir, "index.tsx", STARTER);
+    entry = "index.tsx";
+  }
+  await ensurePackage(dir, basename(dir), displayName, entry);
+  return entry;
+}
+
+/**
  * Makes `dir` openable as a project, writing as little as that takes: the
- * folder if it does not exist, and — when nothing in it can be an entry — an
- * `index.tsx` holding an empty stage. Nothing else; a project is its JSX, and
- * the record, manifest, and the rest of the scaffold appear lazily, each when
- * something first needs it. A folder that is already a project comes back
- * untouched. How `compound open <path>` opens a folder anywhere on disk.
+ * folder if it does not exist, an `index.tsx` holding an empty stage when
+ * nothing in it can be an entry, and the package.json record the app
+ * remembers the folder by. Nothing else — no tsconfig, README, or
+ * .gitignore, which come with a project created from the dashboard (see
+ * `scaffold`); a folder opened from anywhere on disk stays the user's. A
+ * folder that is already a project comes back untouched. How
+ * `compound open <path>` opens a folder.
  */
 export async function initProject(window: BrowserWindow | null, dir: string): Promise<ProjectInfo> {
+  if (!isAbsolute(dir)) {
+    throw new Error(`The project folder must be an absolute path (got "${dir}").`);
+  }
+  const existing = await stat(dir).catch(() => null);
+  if (existing && !existing.isDirectory()) {
+    throw new Error(`${dir} exists but is not a folder.`);
+  }
   if (!(await confirmCloudLocation(window, dir, "Cancel"))) {
     throw new Error("Cancelled: that folder is synced.");
   }
 
   await mkdir(dir, { recursive: true });
-  if (!(await findEntry(dir))) {
-    await writeIfMissing(dir, "index.tsx", STARTER);
-  }
-  // Navigation and project-bound chats need the identity before the lazy
-  // compiler/scaffold runs, including for external project directories.
-  await ensureProjectId(dir);
+  await ensureRecord(dir);
   const project = await describe(dir);
   if (!project) throw new Error(noEntryError());
   return project;
@@ -895,7 +833,6 @@ export async function createProject(root: string, displayName: string): Promise<
 export async function renameProject(dir: string, displayName: string): Promise<ProjectInfo> {
   const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), displayName);
   const name = displayName.trim() || basename(dir);
-  markSelfWrite(dir, "package.json");
   await writePackage(dir, { ...pkg, displayName: name });
 
   const project = await describe(await renameFolder(dir, name));
@@ -925,7 +862,6 @@ async function renameFolder(dir: string, displayName: string): Promise<string> {
     // as soon as it hears where the project went.
     unwatchProject(dir);
     await rename(dir, target);
-    forgetDir(dir);
     return target;
   } catch {
     return dir;
@@ -956,11 +892,12 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
   return project;
 }
 
-/** Moves the folder to the trash. */
-export async function deleteProject(dir: string): Promise<void> {
+/** Moves the folder to the trash; resolves with the id it had ("" for none), for what is kept outside it. */
+export async function deleteProject(dir: string): Promise<string> {
+  const id = recordedId(await readPackage(dir));
   unwatchProject(dir);
   await shell.trashItem(dir);
-  forgetDir(dir);
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -1020,18 +957,19 @@ function solidLoader(root: string, projectPlugins: PluginItem[]): Plugin {
   };
 }
 
-/** The `./edit` context for a project folder, wired to the watcher's self-write log. */
+/** The `./edit` context for a project folder, wired to what the watcher knows. */
 const sourceContext = (dir: string): SourceContext => ({
   dir,
-  onWrite: (file) => markSelfWrite(dir, file),
+  onWrite: (file, text) => noteContent(join(dir, file), text),
 });
 
 export async function compileProject(dir: string): Promise<CompileResult> {
   const entry = await findEntry(dir);
   if (!entry) return { ok: false, error: noEntryError() };
 
-  // Fills in package.json/tsconfig for folders that predate the record.
-  await scaffold(dir);
+  // Fills in the package.json record for folders that predate it; the rest
+  // of the scaffold is the dashboard's (see `initProject`).
+  await ensureRecord(dir);
 
   // Names every element before it is numbered, so the ids this compile hands
   // the canvas are durable ones. A fully keyed project is not written to.
@@ -1070,7 +1008,8 @@ export async function compileProject(dir: string): Promise<CompileResult> {
  * Writes values the editor arrived at back into the JSX that produced them.
  * Deliberately not a compile: the canvas already shows these values, so this
  * is the file catching up with the scene rather than the other way round, and
- * the watcher is told to keep quiet about it (see `markSelfWrite`).
+ * the watcher is told what the file will hold so that it keeps quiet about it
+ * (see `noteContent`).
  */
 export async function writeProject(dir: string, edits: SourceEdit[]): Promise<WriteResult> {
   try {
@@ -1111,18 +1050,15 @@ export async function readManifest(dir: string): Promise<unknown> {
 
 /**
  * Writes the manifest as YAML. Atomic (temp file + rename), so a crash
- * mid-write leaves the old manifest, and marked as ours so the watcher does
- * not hand it back as a change.
+ * mid-write leaves the old manifest and no reader ever sees half of one, and
+ * claimed first so the watcher does not hand it back as a change.
  */
 export async function writeManifest(dir: string, manifest: unknown): Promise<void> {
   const path = join(dir, MANIFEST_FILE);
-  const temp = join(dir, `.${MANIFEST_FILE}.tmp`);
-  const text = stringifyYaml(manifest, { lineWidth: 0 });
-  markSelfWrite(dir, MANIFEST_FILE);
-  markSelfWrite(dir, `.${MANIFEST_FILE}.tmp`);
-  await writeFile(temp, `# Compound asset library. Edited by the app; hand edits are read on the next load.
-${text}`, "utf8");
-  await rename(temp, path);
+  const text = `# Compound asset library. Edited by the app; hand edits are read on the next load.
+${stringifyYaml(manifest, { lineWidth: 0 })}`;
+  noteContent(path, text);
+  await writeFileAtomic(path, text);
 }
 
 // ---------------------------------------------------------------------------
@@ -1149,7 +1085,6 @@ export async function writeConfig(dir: string, config: unknown): Promise<void> {
   delete next.diffusion;
   if (config === null || config === undefined) delete next[CONFIG_FIELD];
   else next[CONFIG_FIELD] = config;
-  markSelfWrite(dir, "package.json");
   await writePackage(dir, next);
 }
 
@@ -1237,7 +1172,7 @@ export async function removeEntry(dir: string, path: string): Promise<void> {
     throw new Error(`Refusing to remove ${path}: it really lives outside the project`);
   }
 
-  markSelfWrite(dir, path.split(sep).join("/"));
+  noteContent(target, null);
   await rm(target, { recursive: true, force: true });
 }
 
@@ -1246,47 +1181,87 @@ export async function removeEntry(dir: string, path: string): Promise<void> {
 
 const watchers = new Map<string, FSWatcher>();
 
-/** How long a file we wrote ourselves stays exempt from the watcher. */
-const SELF_WRITE_GRACE = 1000;
+/**
+ * What the app believes is on disk, by absolute path: a digest of the content
+ * of every file it has written, and of every change it has already been told
+ * about. The watcher stays on — anything else may be editing these files, and
+ * should still reach the canvas — but the app's own writes must not come back
+ * as a change, or every key stamp and every dragged rect would cost a
+ * recompile and a remount of the scene the user is looking at.
+ *
+ * Identity rather than timing, which is what makes this exact. A change is the
+ * app's own when the bytes on disk are the bytes it meant to put there, however
+ * long the event takes to arrive: an outside edit is never swallowed for
+ * landing too soon after one of ours, and one of ours never gets through for
+ * landing too late. A write that changes nothing — a formatter saving back what
+ * it was given, a checkout of the blob already there — costs nothing either.
+ */
+const known = new Map<string, string>();
+
+/** Digests for what has no content: a file that is not there, and a folder. */
+const ABSENT = "";
+const FOLDER = "folder";
 
 /**
- * Writes made on behalf of the editor, by file and time. The watcher stays on
- * — anything else may be editing these files, and should still reach the
- * canvas — but our own writes must not come back as a change, or every key
- * stamp and every dragged rect would cost a recompile and a remount of the
- * scene the user is looking at.
+ * Above this a file is fingerprinted by size and mtime rather than by content:
+ * the library holds whole videos, and re-reading one to answer an event would
+ * cost more than the reload it saves. A rename carries both across untouched,
+ * so a fingerprint taken from a temp file still answers for the file it
+ * becomes (see `noteRenamed`).
  */
-const selfWrites = new Map<string, number>();
+const DIGEST_MAX = 8 * 1024 * 1024;
 
-const writeKey = (dir: string, path: string): string => `${dir}\n${path}`;
+const digest = (content: Buffer | string): string => createHash("sha1").update(content).digest("hex");
 
-export function markSelfWrite(dir: string, path: string): void {
-  selfWrites.set(writeKey(dir, path), Date.now());
-}
-
-/** `markSelfWrite` for an absolute path, against whichever watched project holds it. */
-export function markSelfWriteAbsolute(path: string): void {
-  for (const dir of watchers.keys()) {
-    const rel = relative(dir, path);
-    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) {
-      markSelfWrite(dir, rel.split(sep).join("/"));
-    }
+/** What `path` holds now: a digest of its content, or `ABSENT` / `FOLDER`. */
+async function digestOf(path: string): Promise<string> {
+  try {
+    const info = await stat(path);
+    if (info.isDirectory()) return FOLDER;
+    if (info.size > DIGEST_MAX) return `${info.size}:${info.mtimeMs}`;
+    return digest(await readFile(path));
+  } catch {
+    return ABSENT;
   }
 }
 
-function isSelfWrite(dir: string, path: string): boolean {
-  const key = writeKey(dir, path);
-  const at = selfWrites.get(key);
-  if (at === undefined) return false;
-  if (Date.now() - at > SELF_WRITE_GRACE) {
-    selfWrites.delete(key);
-    return false;
-  }
-  return true;
+/**
+ * Claims the content a write is about to put at `path` — or, for null, that it
+ * is about to take what is there away. Before the write rather than after: the
+ * event can arrive the instant the bytes land, and it is answered by comparing
+ * them against this. A write that fails halfway leaves the claim wrong, which
+ * the next event corrects by reporting a change nobody made — the safe way
+ * round, and self-correcting either way.
+ */
+export function noteContent(path: string, text: string | null): void {
+  if (text === null) known.set(path, ABSENT);
+  else if (Buffer.byteLength(text) > DIGEST_MAX) known.delete(path);
+  else known.set(path, digest(text));
+}
+
+/**
+ * Claims the content of the temp file `temp` as what will be found at `as`.
+ *
+ * The one write whose content the app never holds in one piece is a streamed
+ * one — an asset encoded straight to disk. It lands in a temp file, which the
+ * watcher ignores, and is renamed into place once it is whole; claiming it
+ * from the temp just before that rename is what leaves no window at all. A
+ * rename changes neither the bytes nor the mtime, so what is claimed here is
+ * exactly what an event will find at `as`.
+ */
+export async function noteRenamed(temp: string, as: string): Promise<void> {
+  known.set(as, await digestOf(temp));
 }
 
 export function watchProject(window: BrowserWindow | null, dir: string): void {
   if (watchers.has(dir)) return;
+
+  // Events are answered one at a time: answering one means reading the file
+  // back, and two reads in flight could settle out of order, leaving `known`
+  // holding the older of two contents — and with it a change that would then
+  // never be reported.
+  let queue: Promise<void> = Promise.resolve();
+
   const watcher = watch(dir, { recursive: true }, (_event, filename) => {
     if (!filename) return;
     // Project-relative and `/`-separated; installs churn node_modules constantly.
@@ -1294,8 +1269,18 @@ export function watchProject(window: BrowserWindow | null, dir: string): void {
     if (path.startsWith("node_modules/") || path === "node_modules") return;
     // The app's folder: a docs refresh writes the whole tree in one burst.
     if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
-    if (isSelfWrite(dir, path)) return;
-    mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
+    // Half a file by definition, and renamed away the moment it is whole.
+    if (isTempPath(path)) return;
+
+    const file = join(dir, filename);
+    queue = queue
+      .then(async () => {
+        const current = await digestOf(file);
+        if (known.get(file) === current) return;
+        known.set(file, current);
+        mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
+      })
+      .catch(() => { });
   });
   watcher.on("error", () => unwatchProject(dir));
   watchers.set(dir, watcher);
@@ -1304,6 +1289,10 @@ export function watchProject(window: BrowserWindow | null, dir: string): void {
 export function unwatchProject(dir: string): void {
   watchers.get(dir)?.close();
   watchers.delete(dir);
+  // What the folder holds while nobody is watching is not the app's to
+  // remember: the next watch starts from a fresh load of the project anyway.
+  const prefix = dir.endsWith(sep) ? dir : dir + sep;
+  for (const path of known.keys()) if (path.startsWith(prefix)) known.delete(path);
 }
 
 export function unwatchAll(): void {
