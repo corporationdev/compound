@@ -2,8 +2,8 @@ import { test, expect, mock, jest, afterEach } from 'bun:test';
 let token = '';
 let handle: (request: any) => Promise<unknown>;
 mock.module('../src/lib/auth-client', () => ({ getToken: async () => token }));
-mock.module('../src/lib/ipc', () => ({ mainBridge: { call: async (_channel: string, request: unknown) => handle(request) } }));
-mock.module('@desktop/main-channels', () => ({ MAIN_CHANNELS: { CLOUD_MEDIA: 'cloud:media', CLOUD_UPLOAD: 'cloud:upload' } }));
+mock.module('../src/lib/ipc', () => ({ mainBridge: { call: async (_channel: string, request: unknown) => handle(request), handle: () => () => {} } }));
+mock.module('@desktop/main-channels', () => ({ MAIN_CHANNELS: { CLOUD_MEDIA: 'cloud:media', CLOUD_UPLOAD: 'cloud:upload', CLOUD_UPLOAD_PROGRESS: 'cloud:upload-progress', CLOUD_UPLOAD_CANCEL: 'cloud:upload-cancel' } }));
 const { transcribe } = await import('../src/lib/media-api');
 const { uploadBlob } = await import('../src/lib/uploads');
 const storage = new Map<string, string>();
@@ -20,8 +20,8 @@ test('the existing transcribe function returns unchanged captions after waiting 
   jest.useFakeTimers();
   let polls = 0;
   handle = async request => {
-    if (request.path === 'transcribe') return { jobId: 'job' };
-    expect(request.path).toBe('transcribe-status');
+    if (request.path === '/media/transcribe') return { jobId: 'job' };
+    expect(request.path).toBe('/media/transcribe-status');
     expect(request.body).toEqual({ jobId: 'job' });
     return ++polls === 1 ? { status: 'running', stage: 'aligning' } : { status: 'ready', segments };
   };
@@ -35,7 +35,7 @@ test('legacy results work and failed jobs reject without polling forever', async
   token = 'test';
   handle = async () => ({ segments });
   expect(await transcribe({ uploadId: 'old' })).toEqual(segments);
-  handle = async r => r.path === 'transcribe' ? { jobId: 'job' } : { status: 'failed', error: 'Alignment failed' };
+  handle = async r => r.path === '/media/transcribe' ? { jobId: 'job' } : { status: 'failed', error: 'Alignment failed' };
   await expect(transcribe({ uploadId: 'new' })).rejects.toThrow('Alignment failed');
 });
 
@@ -43,7 +43,11 @@ test('upload reuse survives repeated calls but respects scene seed and account b
   const jwt = (user: string) => 'header.' + btoa(JSON.stringify({ iss: 'https://test.convex.site', sub: user })) + '.signature';
   token = jwt('alice');
   let uploads = 0;
-  handle = async () => ({ uploadId: `upload-${++uploads}` });
+  handle = async request => {
+    expect(request.request).toEqual({ purpose: 'media', contentType: 'audio/wav' });
+    expect(request.source.bytes).toBeInstanceOf(Uint8Array);
+    return { id: `upload-${++uploads}`, size: 3 };
+  };
   const wav = new Blob(['pcm'], { type: 'audio/wav' });
   const first = await uploadBlob(wav, 'scene:0');
   expect(await uploadBlob(wav, 'scene:0')).toEqual(first);

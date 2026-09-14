@@ -37,16 +37,17 @@
     "typescript": "~5.9.3"
   },
   "dependencies": {
-    "@compound/config": "workspace:*",
     "@babel/core": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
+    "@compound/chat": "workspace:*",
     "@compound/cli": "*",
+    "@compound/config": "workspace:*",
     "@compound/jsx": "*",
     "babel-preset-solid": "^1.9.12",
     "esbuild": "^0.28.1",
     "nanoid": "^6.0.1",
     "ts-morph": "^28.0.0",
-    "yaml": "^2.9.0",
-    "@compound/chat": "workspace:*"
+    "update-electron-app": "^3.0.0",
+    "yaml": "^2.9.0"
   }
 }

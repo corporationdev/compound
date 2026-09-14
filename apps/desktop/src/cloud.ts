@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CatalogMedia, CatalogKind } from '@compound/backend/catalog';
+import type { CatalogMedia } from '@compound/backend/catalog';
 import { MAX_CATALOG_UPLOAD_BYTES } from '@compound/backend/catalog';
 import { downloadCatalogArtwork } from '@compound/backend/catalog-artwork';
 import { projectsFolderNameForStage, validateStage } from '@compound/config/runtime';
@@ -81,12 +81,16 @@ export async function authRequest(
     : operation === 'token' ? result : { success: true };
   return { data, sessionToken };
 }
-export async function mediaRequest(path: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
-  if (!['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish'].includes(path))
-    throw new Error('Unknown media operation');
+const SERVER_ROUTES = new Set([
+  ...['transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove'].map(operation => `/media/${operation}`),
+  '/social/media-url',
+]);
+/** A JSON call to the Worker. The packaged renderer has no allowed browser origin, so every server call goes through here. */
+export async function serverRequest(path: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
+  if (!SERVER_ROUTES.has(path)) throw new Error('Unknown server operation');
   if (!token) throw new Error('Sign in required');
   const config = await cloudConfig();
-  const response = await fetch(`${config.serverUrl}/media/${path}`, {
+  const response = await fetch(`${config.serverUrl}${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -96,15 +100,9 @@ export async function mediaRequest(path: string, body: Record<string, unknown>, 
   if (!response.ok) throw new Error(result.error ?? 'Media request failed');
   return result;
 }
-
-export async function uploadCatalogAudio(data: { title: string; kind: CatalogKind; mimeType: string; bytes: Uint8Array; token: string | null }) {
-  if (!data.bytes.byteLength || data.bytes.byteLength > MAX_CATALOG_UPLOAD_BYTES) throw new Error('Upload audio up to 100 MiB');
-  const upload = await mediaRequest('catalog-upload-url', { title: data.title, kind: data.kind, mimeType: data.mimeType, size: data.bytes.byteLength }, data.token) as { sourceId: string; url: string };
-  const response = await fetch(upload.url, { method: 'PUT', headers: { 'Content-Type': data.mimeType }, body: data.bytes as Uint8Array<ArrayBuffer>, signal: AbortSignal.timeout(240000) });
-  if (!response.ok) throw new Error('Library upload failed');
-  await response.body?.cancel();
-  await mediaRequest('catalog-upload-finish', { sourceId: upload.sourceId }, data.token);
-  return { sourceId: upload.sourceId };
+/** `/media/<operation>` calls. */
+export function mediaRequest(operation: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
+  return serverRequest(`/media/${operation}`, body, token);
 }
 
 export async function readCatalogAudio(sourceId: string, token: string | null) {
@@ -133,25 +131,4 @@ export async function readCatalogArtwork(sourceId: string, token: string | null)
   // The main process transports bytes only; caching stays in IndexedDB.
   const { url } = await mediaRequest('catalog-artwork', { sourceId }, token) as { url: string | null };
   return url === null ? null : downloadCatalogArtwork(url);
-}
-export async function uploadMedia(contentType: string, bytes: Uint8Array, token: string | null) {
-  if (
-    !(bytes instanceof Uint8Array) ||
-    bytes.byteLength < 1 ||
-    bytes.byteLength > 100 * 1024 * 1024
-  )
-    throw new Error('Upload must be between 1 byte and 100 MiB');
-  const result = (await mediaRequest('upload-url', { contentType, size: bytes.byteLength }, token)) as {
-    uploadId: string;
-    uploadUrl: string;
-  };
-  // The destination is obtained from the authenticated server, never supplied by the renderer.
-  const response = await fetch(result.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: bytes as Uint8Array<ArrayBuffer>,
-    signal: AbortSignal.timeout(240000),
-  });
-  if (!response.ok) throw new Error('Media upload failed');
-  return { uploadId: result.uploadId };
 }

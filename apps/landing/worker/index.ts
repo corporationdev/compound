@@ -1,4 +1,4 @@
-import { release, releaseVersion } from '@compound/config/release';
+import { release, releaseVersion, updateFeed } from '@compound/config/release';
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -12,15 +12,23 @@ export default {
       return env.ASSETS.fetch(request);
     if (!['GET', 'HEAD'].includes(request.method))
       return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } });
+    const feedPath = `/releases/${release.feed}`;
     // Preview sites download the production installer without owning its bucket.
-    if (!env.RELEASES) return Response.redirect(release.downloadUrl, 302);
-    if (url.pathname === '/download') {
+    if (!env.RELEASES) return Response.redirect(url.pathname === feedPath ? release.feedUrl : release.downloadUrl, 302);
+    if (url.pathname === '/download' || url.pathname === feedPath) {
       const latest = await env.RELEASES.get('latest.json');
       if (!latest) return new Response(request.method === 'HEAD' ? null : 'The first Compound release is not available yet.', {
         status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '300' },
       });
       const manifest = await latest.json<{ version: string }>();
       const version = releaseVersion(manifest.version);
+      if (url.pathname === feedPath) {
+        // The desktop app polls this; latest.json only advances after the zip is verified.
+        const body = JSON.stringify(updateFeed(version, latest.uploaded));
+        return new Response(request.method === 'HEAD' ? null : body, { headers: {
+          'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+        } });
+      }
       return new Response(null, { status: 302, headers: {
         Location: `/releases/v${version}/${release.dmg}`, 'Cache-Control': 'no-store',
       } });

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zernio posts · Isaac Dyor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.05);
+    --ig: #2a78d6; --tt: #eb6834; --s3: #1baf7a; --s4: #eda100; --gray: #c3c2b7;
+    --seq-1:#cde2fb; --seq-2:#b7d3f6; --seq-3:#9ec5f4; --seq-4:#86b6ef; --seq-5:#6da7ec; --seq-6:#5598e7; --seq-7:#3987e5; --seq-8:#2a78d6; --seq-9:#256abf; --seq-10:#1c5cab; --seq-11:#184f95; --seq-12:#104281; --seq-13:#0d366b;
+    --good:#006300; --bad:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink-2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+      --ig:#3987e5; --tt:#d95926; --s3:#199e70; --s4:#c98500; --gray:#4a4a47;
+      --good:#0ca30c; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink-2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+    --ig:#3987e5; --tt:#d95926; --s3:#199e70; --s4:#c98500; --gray:#4a4a47;
+    --good:#0ca30c; --bad:#e66767;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: inherit; }
+  header { padding: 20px 28px 8px; display:flex; align-items:flex-end; justify-content:space-between; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+  .avatars { display:flex; gap: 10px; align-items:center; }
+  .avatars img { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); object-fit: cover; }
+  .avatar { display:flex; align-items:center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+  .avatar b { color: var(--ink); font-weight: 600; }
+  .filters { position: sticky; top: 0; z-index: 5; background: var(--page); padding: 10px 28px; display:flex; gap: 8px; flex-wrap: wrap; align-items:center; border-bottom: 1px solid var(--border); }
+  .seg { display:inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow:hidden; background: var(--surface); }
+  .seg button { border:0; background: transparent; padding: 6px 10px; font: inherit; color: var(--ink-2); cursor:pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button:hover { background: var(--hover); }
+  .seg button[aria-pressed="true"] { color: var(--ink); font-weight: 600; background: var(--hover); }
+  .filters label { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .filters input[type=date], .filters select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); }
+  .filters .spacer { flex: 1; }
+  main { padding: 16px 28px 60px; display:grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+  section.group { grid-column: 1 / -1; margin-top: 12px; }
+  section.group h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  section.group p { margin:0; color: var(--ink-2); font-size: 13px; }
+  .card { grid-column: span 6; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px; min-width: 0; display:flex; flex-direction: column; }
+  .card.w4 { grid-column: span 4; } .card.w3 { grid-column: span 3; } .card.w12 { grid-column: span 12; } .card.w8 { grid-column: span 8; }
+  @media (max-width: 1100px) { .card, .card.w4, .card.w3, .card.w8 { grid-column: span 6; } }
+  @media (max-width: 720px) { .card, .card.w4, .card.w3, .card.w8, .card.w12 { grid-column: 1 / -1; } }
+  .card-head { display:flex; align-items:flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .card h3 { margin:0; font-size: 13.5px; font-weight: 600; }
+  .card .desc { color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .card .tools { display:flex; gap: 4px; flex-shrink:0; }
+  .card .tools button { border: 1px solid var(--border); background: transparent; color: var(--ink-2); font: inherit; font-size: 11px; padding: 2px 7px; border-radius: 6px; cursor:pointer; }
+  .card .tools button:hover { background: var(--hover); }
+  .card .tools button[aria-pressed="true"] { color: var(--ink); background: var(--hover); }
+  .card .body { flex: 1; min-height: 0; }
+  .legend { display:flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: 0 0 6px; }
+  .legend span { display:inline-flex; align-items:center; gap: 6px; }
+  .legend i { display:inline-block; width: 10px; height: 10px; border-radius: 2px; }
+  .legend i.line { height: 2px; width: 14px; border-radius: 1px; }
+  svg { display:block; width: 100%; height: auto; overflow: visible; font: 11px system-ui, -apple-system, sans-serif; }
+  svg text { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  svg .grid line { stroke: var(--grid); stroke-width: 1; }
+  svg .axis line, svg .axis path { stroke: var(--axis); stroke-width: 1; fill:none; }
+  svg .mark:hover, svg .mark:focus { filter: brightness(1.12); outline: none; }
+  svg .hit { fill: transparent; stroke: none; pointer-events: all; }
+  svg .crosshair { stroke: var(--axis); stroke-width: 1; pointer-events:none; }
+  svg .dlabel { fill: var(--ink-2); font-size: 11px; }
+  #tip { position: fixed; z-index: 50; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); max-width: 320px; display:none; color: var(--ink); }
+  #tip .t { color: var(--muted); margin-bottom: 4px; font-size: 11px; }
+  #tip .row { display:flex; gap: 8px; align-items:center; justify-content: space-between; }
+  #tip .row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tip .row .k { color: var(--ink-2); display:inline-flex; align-items:center; gap: 6px; }
+  #tip .row .k i { width: 12px; height: 2px; display:inline-block; }
+  #tip img { width: 100%; border-radius: 6px; margin-bottom: 6px; max-height: 160px; object-fit: cover; }
+  .kpis { grid-column: 1 / -1; display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .tile .l { font-size: 12px; color: var(--ink-2); }
+  .tile .v { font-size: 26px; font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+  .tile .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile .d.up { color: var(--good); } .tile .d.down { color: var(--bad); }
+  .tile svg { margin-top: 6px; }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.tbl th, table.tbl td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; white-space: nowrap; }
+  table.tbl th { color: var(--muted); font-weight: 500; font-size: 11.5px; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+  table.tbl th[aria-sort="descending"]::after { content: " ↓"; } table.tbl th[aria-sort="ascending"]::after { content: " ↑"; }
+  table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.tbl td.cap { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+  table.tbl tr:hover td { background: var(--hover); }
+  table.tbl img.th { width: 28px; height: 36px; object-fit: cover; border-radius: 4px; vertical-align: middle; background: var(--grid); }
+  .tablewrap { max-height: 420px; overflow: auto; }
+  .pill { display:inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
+  .pill i { display:inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .card .note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .empty { color: var(--muted); font-size: 12px; padding: 30px 0; text-align:center; }
+  .row2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  #detail { position: fixed; right: 0; top: 0; bottom: 0; width: min(460px, 100vw); background: var(--surface); border-left: 1px solid var(--border); box-shadow: -8px 0 30px rgba(0,0,0,0.12); z-index: 40; overflow:auto; padding: 16px 18px; transform: translateX(100%); transition: transform .18s ease; }
+  #detail.open { transform: none; }
+  #detail .close { position: absolute; top: 10px; right: 12px; border: 0; background: transparent; font-size: 18px; cursor: pointer; color: var(--ink-2); }
+  #detail h3 { margin: 0 0 4px; font-size: 14px; padding-right: 30px; }
+  #detail .meta { color: var(--ink-2); font-size: 12px; margin-bottom: 8px; }
+  #detail .thumb { width: 100%; max-height: 260px; object-fit: cover; border-radius: 8px; background: var(--grid); }
+  #detail dl { display:grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12.5px; margin: 10px 0; }
+  #detail dt { color: var(--muted); } #detail dd { margin:0; font-variant-numeric: tabular-nums; }
+  #detail pre { font-size: 11px; background: var(--page); padding: 8px; border-radius: 6px; overflow:auto; max-height: 240px; }
+  .stack { display:flex; flex-direction: column; gap: 10px; }
+</style>
+</head>
+<body>
+<div id="tip"></div>
+<aside id="detail"><button class="close" aria-label="Close">×</button><div id="detail-body"></div></aside>
+<header>
+  <div>
+    <h1>Zernio posts</h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+  <div class="avatars" id="accounts"></div>
+</header>
+<div class="filters" id="filters"></div>
+<main id="main"></main>
+<script src="data/dataset.js"></script>
+<script>
+(() => {
+const D = window.ZERNIO_DATA;
+const TZ = 'America/Los_Angeles';
+const PLAT = { instagram: { name: 'Instagram', color: 'var(--ig)' }, tiktok: { name: 'TikTok', color: 'var(--tt)' } };
+const METRICS = {
+  views: 'Views', likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves', engagement: 'Engagement (L+C+S+S)',
+  engagementRate: 'Engagement rate %', reach: 'Reach (IG)', igReelsAvgWatchTime: 'Avg watch time ms (IG)', reelsSkipRate: 'Skip rate % (IG)',
+};
+const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? '–' : Number(n).toLocaleString('en-US', { maximumFractionDigits: d });
+const compact = (n) => n == null ? '–' : Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.abs(n) >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.abs(n) >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : fmt(n, 1);
+const dayKey = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+const localParts = (iso) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return { weekday: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(p.weekday), hour: Number(p.hour) % 24 };
+};
+const shortDate = (iso) => iso ? new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }).format(new Date(iso)) : '–';
+const fullDate = (iso) => iso ? new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : '–';
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v != null) e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+const NS = 'http://www.w3.org/2000/svg';
+const sv = (tag, attrs = {}, ...kids) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v != null) e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+
+// ---------- posts enrichment
+const posts = D.posts.map((p) => {
+  const lp = p.publishedAt ? localParts(p.publishedAt) : { weekday: null, hour: null };
+  const m = p.metrics;
+  const dur = m.videoDurationSeconds;
+  const retention = p.platform === 'instagram' && dur && m.igReelsAvgWatchTime ? m.igReelsAvgWatchTime / 1000 / dur : null;
+  const tl = p.timeline;
+  const gain7 = tl.length >= 2 ? Object.fromEntries(['views','likes','comments','shares','saves'].map((k) => [k, (tl[tl.length-1][k] ?? 0) - (tl[0][k] ?? 0)])) : null;
+  return { ...p, day: p.publishedAt ? dayKey(p.publishedAt) : null, lweekday: lp.weekday, lhour: lp.hour, retention, gain7, er: m.engagementRate,
+    v: { ...m, engagement: p.engagement } };
+});
+const byId = new Map(posts.map((p) => [p.id, p]));
+const zernioGroups = new Map();
+for (const p of posts) if (p.zernioPostId) { const g = zernioGroups.get(p.zernioPostId) ?? {}; g[p.platform] = p; zernioGroups.set(p.zernioPostId, g); }
+
+// ---------- state
+const allDays = posts.map((p) => p.day).filter(Boolean).sort();
+const state = { from: '2026-08-13', to: allDays[allDays.length - 1], platform: 'all', source: 'all', metric: 'views', range: 'aug13' };
+const filtered = () => posts.filter((p) => p.day && p.day >= state.from && p.day <= state.to && (state.platform === 'all' || p.platform === state.platform) && (state.source === 'all' || p.source === state.source));
+const platformsIn = () => state.platform === 'all' ? ['instagram', 'tiktok'] : [state.platform];
+
+// ---------- tooltip
+const tip = document.getElementById('tip');
+function showTip(ev, html) { tip.replaceChildren(html); tip.style.display = 'block'; moveTip(ev); }
+function moveTip(ev) { const w = tip.offsetWidth, h = tip.offsetHeight; let x = ev.clientX + 14, y = ev.clientY + 14; if (x + w > innerWidth - 8) x = ev.clientX - w - 14; if (y + h > innerHeight - 8) y = ev.clientY - h - 14; tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+function hideTip() { tip.style.display = 'none'; }
+function tipBox(title, rows, img) {
+  const b = el('div'); if (img) b.append(el('img', { src: img, alt: '' })); b.append(el('div', { class: 't' }, title));
+  for (const r of rows) b.append(el('div', { class: 'row' }, el('span', { class: 'k' }, r.color ? el('i', { style: `background:${r.color}` }) : null, r.k), el('b', {}, r.v)));
+  return b;
+}
+function bindTip(node, fn) { node.addEventListener('pointerenter', (e) => showTip(e, fn())); node.addEventListener('pointermove', moveTip); node.addEventListener('pointerleave', hideTip); node.setAttribute('tabindex', '0'); node.addEventListener('focus', (e) => { const r = node.getBoundingClientRect(); showTip({ clientX: r.left + r.width / 2, clientY: r.top }, fn()); }); node.addEventListener('blur', hideTip); }
+
+// ---------- scales & axes
+const lin = (d0, d1, r0, r1) => { const f = (v) => d1 === d0 ? (r0 + r1) / 2 : r0 + (v - d0) / (d1 - d0) * (r1 - r0); f.domain = [d0, d1]; f.ticks = (n = 5) => niceTicks(d0, d1, n); return f; };
+const logs = (d0, d1, r0, r1) => { const l0 = Math.floor(Math.log10(Math.max(d0, 1))), l1 = Math.ceil(Math.log10(Math.max(d1, 10)) - 1e-9); const f = (v) => r0 + (Math.log10(Math.max(v, 1)) - l0) / (l1 - l0) * (r1 - r0); f.domain = [d0, d1]; f.ticks = () => { const t = []; for (let e = Math.floor(l0); e <= Math.ceil(l1); e++) t.push(10 ** e); return t; }; f.log = true; return f; };
+function niceTicks(a, b, n) { if (a === b) return [a]; const span = b - a, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)), r = step0 / mag; const step = (r >= 5 ? 5 : r >= 2 ? 2 : 1) * mag; const t = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) t.push(+v.toFixed(10)); return t; }
+function niceMax(v) { if (v <= 0) return 1; const t = niceTicks(0, v, 5); const last = t[t.length - 1]; return last >= v ? last : last + (t[1] - t[0]); }
+
+function frame(W, H, m) {
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img' });
+  const g = sv('g', { transform: `translate(${m.l},${m.t})` });
+  svg.append(g);
+  return { svg, g, w: W - m.l - m.r, h: H - m.t - m.b };
+}
+function yAxis(g, y, w, fmtFn = compact, n = 5) {
+  const grid = sv('g', { class: 'grid' }), ax = sv('g', { class: 'axis' });
+  for (const t of y.ticks(n)) { const yy = y(t); grid.append(sv('line', { x1: 0, x2: w, y1: yy, y2: yy })); ax.append(sv('text', { x: -8, y: yy + 4, 'text-anchor': 'end' }, fmtFn(t))); }
+  g.append(grid, ax);
+}
+function xAxisBand(g, labels, x, h, every = 1) {
+  const ax = sv('g', { class: 'axis' });
+  ax.append(sv('line', { x1: 0, x2: x.range, y1: h, y2: h }));
+  labels.forEach((l, i) => { if (i % every === 0) ax.append(sv('text', { x: x(i) + x.bw / 2, y: h + 16, 'text-anchor': 'middle' }, l)); });
+  g.append(ax);
+}
+function xAxisLin(g, x, h, fmtFn = compact) {
+  const ax = sv('g', { class: 'axis' });
+  ax.append(sv('line', { x1: 0, x2: x(x.domain[1]), y1: h, y2: h }));
+  for (const t of x.ticks()) ax.append(sv('text', { x: x(t), y: h + 16, 'text-anchor': 'middle' }, fmtFn(t)));
+  g.append(ax);
+}
+const band = (n, range, pad = 0.25) => { const step = range / Math.max(n, 1); const bw = Math.min(step * (1 - pad), 24); const f = (i) => i * step + (step - bw) / 2; f.bw = bw; f.step = step; f.range = range; return f; };
+
+// ---------- chart builders (each returns {node, table:{cols, rows}})
+function stackedColumns({ keys, series, colors, names, W = 640, H = 240, fmtFn = compact, tipTitle = (k) => k, everyLabel, labelFn = (k) => k, thumbs }) {
+  // series: {name: [values per key]}
+  const f = frame(W, H, { l: 44, r: 8, t: 8, b: 26 });
+  const totals = keys.map((_, i) => Object.values(series).reduce((s, arr) => s + (arr[i] ?? 0), 0));
+  const y = lin(0, niceMax(Math.max(...totals, 1)), f.h, 0);
+  const x = band(keys.length, f.w, 0.3);
+  yAxis(f.g, y, f.w, fmtFn);
+  xAxisBand(f.g, keys.map(labelFn), x, f.h, everyLabel ?? Math.ceil(keys.length / 10));
+  const sNames = Object.keys(series);
+  keys.forEach((k, i) => {
+    let acc = 0; const grp = sv('g');
+    sNames.forEach((s, si) => {
+      const v = series[s][i] ?? 0; if (!v) return;
+      const y1 = y(acc + v), y0 = y(acc); const gap = si > 0 && acc > 0 ? 2 : 0;
+      const h = Math.max(y0 - y1 - gap, 0);
+      const isTop = si === sNames.length - 1 || sNames.slice(si + 1).every((s2) => !(series[s2][i]));
+      const r = isTop ? 4 : 0;
+      const path = `M${x(i)},${y0 - gap} v${-(h - r)} a${r},${r} 0 0 1 ${r},${-r} h${x.bw - 2 * r} a${r},${r} 0 0 1 ${r},${r} v${h - r} z`;
+      grp.append(sv('path', { d: path, fill: colors[s], class: 'mark' }));
+      acc += v;
+    });
+    const hit = sv('rect', { x: x(i), y: 0, width: x.bw, height: f.h, class: 'hit' });
+    bindTip(hit, () => tipBox(tipTitle(k, i), sNames.map((s) => ({ k: names?.[s] ?? s, v: fmtFn(series[s][i] ?? 0), color: colors[s] })).concat(sNames.length > 1 ? [{ k: 'Total', v: fmtFn(totals[i]) }] : []), thumbs?.(k, i)));
+    grp.append(hit); f.g.append(grp);
+  });
+  return { node: f.svg, table: { cols: ['Key', ...sNames.map((s) => names?.[s] ?? s)], rows: keys.map((k, i) => [labelFn(k), ...sNames.map((s) => series[s][i] ?? 0)]) } };
+}
+function hbars({ items, W = 640, rowH = 22, fmtFn = compact, color = 'var(--ig)', colorFn, labelW = 150, onClick, tipFn, maxLabel = 24 }) {
+  const H = items.length * rowH + 6;
+  const f = frame(W, H, { l: labelW, r: 60, t: 2, b: 2 });
+  const max = Math.max(...items.map((d) => d.value), 1);
+  const x = lin(0, max, 0, f.w);
+  items.forEach((d, i) => {
+    const y = i * rowH + 3, bh = Math.min(rowH - 6, 18);
+    const w = Math.max(x(d.value), 0), r = Math.min(4, w / 2);
+    const label = d.label.length > maxLabel ? d.label.slice(0, maxLabel - 1) + '…' : d.label;
+    f.g.append(sv('text', { x: -8, y: y + bh / 2 + 4, 'text-anchor': 'end', style: 'fill: var(--ink-2)' }, label));
+    const path = `M0,${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${bh - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(w - r)} z`;
+    const bar = sv('path', { d: path, fill: colorFn ? colorFn(d) : color, class: 'mark' });
+    f.g.append(bar);
+    f.g.append(sv('text', { x: w + 6, y: y + bh / 2 + 4, class: 'dlabel' }, fmtFn(d.value)));
+    const hit = sv('rect', { x: -labelW, y, width: f.w + labelW + 60, height: bh, class: 'hit', style: onClick ? 'cursor:pointer' : '' });
+    bindTip(hit, () => tipFn ? tipFn(d) : tipBox(d.label, [{ k: 'Value', v: fmtFn(d.value) }]));
+    if (onClick) hit.addEventListener('click', () => onClick(d));
+    f.g.append(hit);
+  });
+  return { node: f.svg, table: { cols: ['Label', 'Value'], rows: items.map((d) => [d.label, d.value]) } };
+}
+function lines({ xs, series, colors, names, W = 640, H = 240, fmtFn = compact, xLabel = (v) => v, area = false, yTicksFmt, log = false, labelEvery, dots = false, yTicks = 5, fixedWidth }) {
+  const f = frame(W, H, { l: 44, r: 40, t: 8, b: 26 });
+  const all = Object.values(series).flat().filter((v) => v != null);
+  const y = log ? logs(1, Math.max(...all, 10), f.h, 0) : lin(0, niceMax(Math.max(...all, 1)), f.h, 0);
+  const n = xs.length; const x = (i) => n <= 1 ? f.w / 2 : i / (n - 1) * f.w;
+  yAxis(f.g, y, f.w, yTicksFmt ?? fmtFn, yTicks);
+  if (fixedWidth) f.svg.style.width = W + 'px';
+  const ax = sv('g', { class: 'axis' }); ax.append(sv('line', { x1: 0, x2: f.w, y1: f.h, y2: f.h }));
+  const every = labelEvery ?? Math.ceil(n / 8);
+  const lastLabeled = Math.floor((n - 1) / every) * every;
+  xs.forEach((v, i) => { if (i % every === 0 || (i === n - 1 && (n - 1 - lastLabeled) * (f.w / Math.max(n - 1, 1)) > 48)) ax.append(sv('text', { x: x(i), y: f.h + 16, 'text-anchor': i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle' }, xLabel(v, i))); });
+  f.g.append(ax);
+  const sNames = Object.keys(series);
+  for (const s of sNames) {
+    const pts = series[s].map((v, i) => v == null ? null : [x(i), y(v)]);
+    let d = '', started = false;
+    pts.forEach((p) => { if (!p) { started = false; return; } d += (started ? 'L' : 'M') + p[0] + ',' + p[1]; started = true; });
+    if (area) { const first = pts.find(Boolean), last = [...pts].reverse().find(Boolean); if (first && last) f.g.append(sv('path', { d: d + `L${last[0]},${f.h} L${first[0]},${f.h} Z`, fill: colors[s], opacity: 0.1 })); }
+    f.g.append(sv('path', { d, fill: 'none', stroke: colors[s], 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    const last = [...pts].reverse().find(Boolean);
+    if (last) { f.g.append(sv('circle', { cx: last[0], cy: last[1], r: 4, fill: colors[s], stroke: 'var(--surface)', 'stroke-width': 2 })); const lv = [...series[s]].reverse().find((v) => v != null); f.g.append(sv('text', { x: last[0] + 8, y: last[1] + 4, class: 'dlabel' }, fmtFn(lv))); }
+    if (dots) pts.forEach((p) => p && f.g.append(sv('circle', { cx: p[0], cy: p[1], r: 3, fill: colors[s], stroke: 'var(--surface)', 'stroke-width': 2 })));
+  }
+  // crosshair
+  const cross = sv('line', { class: 'crosshair', y1: 0, y2: f.h, style: 'display:none' }); f.g.append(cross);
+  const hit = sv('rect', { x: 0, y: 0, width: f.w, height: f.h, class: 'hit' });
+  hit.addEventListener('pointermove', (e) => { const r = f.svg.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width * W - 44; const i = Math.max(0, Math.min(n - 1, Math.round(px / f.w * (n - 1)))); cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = ''; showTip(e, tipBox(xLabel(xs[i], i, true), sNames.map((s) => ({ k: names?.[s] ?? s, v: fmtFn(series[s][i]), color: colors[s] })))); });
+  hit.addEventListener('pointerleave', () => { cross.style.display = 'none'; hideTip(); });
+  f.g.append(hit);
+  return { node: f.svg, table: { cols: ['X', ...sNames.map((s) => names?.[s] ?? s)], rows: xs.map((v, i) => [xLabel(v, i, true), ...sNames.map((s) => series[s][i])]) } };
+}
+function scatter({ pts, W = 640, H = 260, xLabel, yLabel, logX = false, logY = false, fmtX = compact, fmtY = compact, onClick }) {
+  // pts: {x, y, color, label, sub, img, post}
+  const f = frame(W, H, { l: 48, r: 12, t: 8, b: 34 });
+  const valid = pts.filter((p) => p.x != null && p.y != null && Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (!valid.length) return { node: el('div', { class: 'empty' }, 'No data in this range'), table: { cols: [], rows: [] } };
+  const xs = valid.map((p) => p.x), ys = valid.map((p) => p.y);
+  const x = logX ? logs(Math.min(...xs), Math.max(...xs), 0, f.w) : lin(0, niceMax(Math.max(...xs)), 0, f.w);
+  const y = logY ? logs(Math.min(...ys), Math.max(...ys), f.h, 0) : lin(0, niceMax(Math.max(...ys)), f.h, 0);
+  yAxis(f.g, y, f.w, fmtY);
+  const ax = sv('g', { class: 'axis' }); ax.append(sv('line', { x1: 0, x2: f.w, y1: f.h, y2: f.h }));
+  for (const t of x.ticks()) ax.append(sv('text', { x: x(t), y: f.h + 16, 'text-anchor': 'middle' }, fmtX(t)));
+  f.g.append(ax);
+  f.g.append(sv('text', { x: f.w / 2, y: f.h + 30, 'text-anchor': 'middle' }, xLabel));
+  f.g.append(sv('text', { transform: `translate(-38,${f.h / 2}) rotate(-90)`, 'text-anchor': 'middle' }, yLabel));
+  for (const p of valid) {
+    const c = sv('circle', { cx: x(p.x), cy: y(p.y), r: 4.5, fill: p.color, stroke: 'var(--surface)', 'stroke-width': 2, class: 'mark', opacity: 0.9 });
+    f.g.append(c);
+    const hit = sv('circle', { cx: x(p.x), cy: y(p.y), r: 12, class: 'hit', style: onClick ? 'cursor:pointer' : '' });
+    bindTip(hit, () => tipBox(p.label, [{ k: xLabel, v: fmtX(p.x) }, { k: yLabel, v: fmtY(p.y) }, ...(p.sub ?? [])], p.img));
+    if (onClick) hit.addEventListener('click', () => onClick(p));
+    f.g.append(hit);
+  }
+  return { node: f.svg, table: { cols: ['Label', xLabel, yLabel], rows: valid.map((p) => [p.label, p.x, p.y]) } };
+}
+function heatmap({ rows, cols, values, counts, W = 640, rowLabels, colLabels, fmtFn = compact, cell = 'value', title = 'Avg' }) {
+  const cw = (W - 44) / cols.length, ch = 22, H = rows.length * ch + 30;
+  const f = frame(W, H, { l: 40, r: 4, t: 4, b: 22 });
+  const max = Math.max(...values.flat().filter((v) => v != null), 1);
+  const steps = 13;
+  rows.forEach((r, ri) => {
+    f.g.append(sv('text', { x: -8, y: ri * ch + ch / 2 + 4, 'text-anchor': 'end' }, rowLabels[ri]));
+    cols.forEach((c, ci) => {
+      const v = values[ri][ci]; const n = counts?.[ri]?.[ci] ?? 0;
+      const step = v == null ? null : Math.max(1, Math.ceil(v / max * steps));
+      const rect = sv('rect', { x: ci * cw + 1, y: ri * ch + 1, width: cw - 2, height: ch - 2, rx: 3, fill: step ? `var(--seq-${step})` : 'var(--grid)', class: 'mark', opacity: step ? 1 : 0.5 });
+      bindTip(rect, () => tipBox(`${rowLabels[ri]} · ${colLabels[ci]}`, [{ k: title, v: v == null ? '–' : fmtFn(v) }, { k: 'Posts', v: n }]));
+      f.g.append(rect);
+    });
+  });
+  cols.forEach((c, ci) => { if (ci % 2 === 0) f.g.append(sv('text', { x: ci * cw + cw / 2, y: rows.length * ch + 14, 'text-anchor': 'middle' }, colLabels[ci])); });
+  return { node: f.svg, table: { cols: ['', ...colLabels], rows: rows.map((r, ri) => [rowLabels[ri], ...values[ri].map((v) => v == null ? '' : Math.round(v))]) } };
+}
+function histogram({ groups, edges, colors, names, W = 640, H = 220, fmtFn = compact }) {
+  // groups: {name: values[]}; log bins
+  const keys = edges.slice(0, -1).map((e, i) => `${compact(e)}–${compact(edges[i + 1])}`);
+  const series = {};
+  for (const [name, vals] of Object.entries(groups)) series[name] = edges.slice(0, -1).map((e, i) => vals.filter((v) => v >= e && v < edges[i + 1]).length);
+  return stackedColumns({ keys, series, colors, names, W, H, fmtFn: (v) => fmt(v), everyLabel: 1, tipTitle: (k) => `${METRICS[state.metric]} ${k}` });
+}
+function dumbbell({ items, W = 640, rowH = 22, fmtFn = compact, aName, bName, aColor, bColor, log = true, onClick }) {
+  const H = items.length * rowH + 30;
+  const f = frame(W, H, { l: 160, r: 30, t: 4, b: 24 });
+  const all = items.flatMap((d) => [d.a, d.b]).filter((v) => v > 0);
+  const x = log ? logs(Math.min(...all, 10), Math.max(...all, 100), 0, f.w) : lin(0, niceMax(Math.max(...all)), 0, f.w);
+  const grid = sv('g', { class: 'grid' }); for (const t of x.ticks()) { grid.append(sv('line', { x1: x(t), x2: x(t), y1: 0, y2: f.h })); f.g.append(sv('text', { x: x(t), y: f.h + 16, 'text-anchor': 'middle' }, compact(t))); } f.g.append(grid);
+  items.forEach((d, i) => {
+    const y = i * rowH + rowH / 2;
+    const label = d.label.length > 26 ? d.label.slice(0, 25) + '…' : d.label;
+    f.g.append(sv('text', { x: -8, y: y + 4, 'text-anchor': 'end', style: 'fill: var(--ink-2)' }, label));
+    f.g.append(sv('line', { x1: x(d.a), x2: x(d.b), y1: y, y2: y, stroke: 'var(--axis)', 'stroke-width': 2 }));
+    f.g.append(sv('circle', { cx: x(d.a), cy: y, r: 5, fill: aColor, stroke: 'var(--surface)', 'stroke-width': 2 }));
+    f.g.append(sv('circle', { cx: x(d.b), cy: y, r: 5, fill: bColor, stroke: 'var(--surface)', 'stroke-width': 2 }));
+    const hit = sv('rect', { x: -160, y: y - rowH / 2, width: f.w + 190, height: rowH, class: 'hit', style: onClick ? 'cursor:pointer' : '' });
+    bindTip(hit, () => tipBox(d.label, [{ k: aName, v: fmtFn(d.a), color: aColor }, { k: bName, v: fmtFn(d.b), color: bColor }, { k: 'Ratio IG:TT', v: d.b ? (d.a / d.b).toFixed(1) + '×' : '–' }], d.img));
+    if (onClick) hit.addEventListener('click', () => onClick(d));
+    f.g.append(hit);
+  });
+  return { node: f.svg, table: { cols: ['Post', aName, bName], rows: items.map((d) => [d.label, d.a, d.b]) } };
+}
+function sparkline(values, color, W = 120, H = 28) {
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, style: 'width:120px;height:28px' });
+  const vs = values.filter((v) => v != null); if (vs.length < 2) return svg;
+  const mn = Math.min(...vs), mx = Math.max(...vs);
+  const pts = values.map((v, i) => [i / (values.length - 1) * (W - 6) + 3, mx === mn ? H / 2 : H - 3 - (v - mn) / (mx - mn) * (H - 6)]);
+  svg.append(sv('path', { d: pts.map((p, i) => (i ? 'L' : 'M') + p.join(',')).join(''), fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+  const l = pts[pts.length - 1]; svg.append(sv('circle', { cx: l[0], cy: l[1], r: 3, fill: color, stroke: 'var(--surface)', 'stroke-width': 2 }));
+  return svg;
+}
+function stackedShareBar({ rows, keys, colors, names, W = 640 }) {
+  // rows: {label, values:{key:number}} -> 100% horizontal stacked bar
+  const rowH = 34, H = rows.length * rowH + 4;
+  const f = frame(W, H, { l: 90, r: 8, t: 2, b: 2 });
+  rows.forEach((r, i) => {
+    const total = keys.reduce((s, k) => s + (r.values[k] ?? 0), 0) || 1;
+    const y = i * rowH + 6;
+    f.g.append(sv('text', { x: -8, y: y + 15, 'text-anchor': 'end', style: 'fill: var(--ink-2)' }, r.label));
+    let acc = 0;
+    keys.forEach((k, ki) => {
+      const v = r.values[k] ?? 0; if (!v) return;
+      const x0 = acc / total * f.w, w = v / total * f.w - (ki < keys.length - 1 ? 2 : 0);
+      const rect = sv('rect', { x: x0, y, width: Math.max(w, 0), height: 20, rx: ki === 0 || ki === keys.length - 1 ? 3 : 0, fill: colors[k], class: 'mark' });
+      bindTip(rect, () => tipBox(r.label, keys.map((kk) => ({ k: names[kk], v: `${fmt(r.values[kk] ?? 0)} (${((r.values[kk] ?? 0) / total * 100).toFixed(1)}%)`, color: colors[kk] }))));
+      f.g.append(rect);
+      if (w > 44) f.g.append(sv('text', { x: x0 + w / 2, y: y + 14, 'text-anchor': 'middle', style: 'fill:#fff; font-weight:600' }, `${(v / total * 100).toFixed(0)}%`));
+      acc += v;
+    });
+  });
+  return { node: f.svg, table: { cols: ['Row', ...keys.map((k) => names[k])], rows: rows.map((r) => [r.label, ...keys.map((k) => r.values[k] ?? 0)]) } };
+}
+
+// ---------- card scaffold
+function card({ title, desc, w = 6, legend, build, note, cls }) {
+  const c = el('div', { class: `card w${w} ${cls ?? ''}` });
+  const tools = el('div', { class: 'tools' });
+  const body = el('div', { class: 'body' });
+  c.append(el('div', { class: 'card-head' }, el('div', {}, el('h3', {}, title), desc ? el('div', { class: 'desc' }, desc) : null), tools));
+  if (legend) c.append(el('div', { class: 'legend' }, legend.map((l) => el('span', {}, el('i', { class: l.line ? 'line' : '', style: `background:${l.color}` }), l.name))));
+  c.append(body);
+  if (note) c.append(el('div', { class: 'note' }, note));
+  let mode = 'chart', last;
+  const tbtn = el('button', { 'aria-pressed': 'false', onclick: () => { mode = mode === 'chart' ? 'table' : 'chart'; tbtn.setAttribute('aria-pressed', mode === 'table'); render(); } }, 'Table');
+  tools.append(tbtn);
+  function render() {
+    last = build();
+    body.replaceChildren(mode === 'chart' ? last.node : tableView(last.table));
+  }
+  c.render = render;
+  return c;
+}
+function tableView({ cols, rows }) {
+  if (!cols.length) return el('div', { class: 'empty' }, 'No data');
+  const t = el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, cols.map((c, i) => el('th', { class: i ? 'num' : '' }, c)))), el('tbody', {}, rows.map((r) => el('tr', {}, r.map((v, i) => el('td', { class: i ? 'num' : '' }, typeof v === 'number' ? fmt(v, 2) : v ?? ''))))));
+  return el('div', { class: 'tablewrap' }, t);
+}
+
+// ---------- detail panel
+const detail = document.getElementById('detail'), detailBody = document.getElementById('detail-body');
+detail.querySelector('.close').addEventListener('click', () => detail.classList.remove('open'));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') detail.classList.remove('open'); });
+function openDetail(p) {
+  const m = p.metrics; const other = p.zernioPostId ? Object.values(zernioGroups.get(p.zernioPostId) ?? {}).filter((o) => o.id !== p.id) : [];
+  const tl = p.timeline;
+  detailBody.replaceChildren(...[
+    el('h3', {}, p.content || '(no caption)'),
+    el('div', { class: 'meta' }, el('span', { class: 'pill' }, el('i', { style: `background:${PLAT[p.platform].color}` }), PLAT[p.platform].name), ' ', fullDate(p.publishedAt), ' · ', p.source === 'zernio' ? 'posted via Zernio' : 'synced from platform', p.url ? [' · ', el('a', { href: p.url, target: '_blank', rel: 'noopener' }, 'open post ↗')] : null),
+    p.thumbnailUrl ? el('img', { class: 'thumb', src: p.thumbnailUrl, alt: '' }) : null,
+    el('dl', {},
+      ...[['Views', m.views], ['Reach', m.reach], ['Likes', m.likes], ['Comments', m.comments], ['Shares', m.shares], ['Saves', m.saves], ['Reposts', m.reposts], ['Engagement rate', m.engagementRate == null ? null : m.engagementRate.toFixed(2) + '%'],
+        ['Duration', m.videoDurationSeconds ? m.videoDurationSeconds + 's' : null], ['Avg watch time', m.igReelsAvgWatchTime ? (m.igReelsAvgWatchTime / 1000).toFixed(1) + 's' : null], ['Retention', p.retention ? (p.retention * 100).toFixed(0) + '%' : null], ['Skip rate', m.reelsSkipRate ? m.reelsSkipRate + '%' : null], ['Total watch time', m.igReelsVideoViewTotalTime ? (m.igReelsVideoViewTotalTime / 3.6e6).toFixed(1) + ' h' : null],
+        ['Caption length', p.contentLength + ' chars'], ['Media type', p.mediaProductType ?? p.mediaType], ['Status', p.status], ['Platform post id', p.platformPostId], ['Zernio post id', p.zernioPostId], ['Analytics updated', p.lastUpdated], ['Timezone', p.timezone]]
+        .filter(([, v]) => v != null && v !== '').flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, typeof v === 'number' ? fmt(v) : v)])),
+    other.length ? el('div', { class: 'meta' }, 'Also posted to ', other.map((o) => el('a', { href: '#', onclick: (e) => { e.preventDefault(); openDetail(o); } }, `${PLAT[o.platform].name} (${compact(o.metrics.views)} views)`))) : null,
+    tl.length > 1 ? el('div', {}, el('div', { class: 'desc' }, `Daily snapshots (${tl[0].date} → ${tl[tl.length - 1].date})`), lines({ xs: tl.map((t) => t.date), series: { views: tl.map((t) => t.views) }, colors: { views: PLAT[p.platform].color }, names: { views: 'Views' }, W: 420, H: 150, xLabel: (v) => v.slice(5), fixedWidth: true }).node) : null,
+    el('details', {}, el('summary', {}, 'Raw record'), el('pre', {}, JSON.stringify({ ...p, timeline: undefined, v: undefined }, null, 1))),
+  ].filter(Boolean));
+  detail.classList.add('open');
+}
+
+// ---------- header
+document.getElementById('subtitle').textContent = `${D.posts.length} platform posts · ${D.groups.length} unique posts · fetched ${fullDate(D.fetchedAt)} · ${D.apiCalls} API calls`;
+document.getElementById('accounts').append(...D.accounts.map((a) => el('div', { class: 'avatar' }, el('img', { src: a.profilePicture, alt: '' }), el('span', {}, el('b', {}, `@${a.username}`), ` ${PLAT[a.platform]?.name ?? a.platform} · ${fmt(a.followersCount)} followers`))));
+
+// ---------- filters
+const filters = document.getElementById('filters');
+function seg(options, get, set) {
+  const s = el('div', { class: 'seg' });
+  const btns = options.map(([v, label]) => el('button', { 'aria-pressed': String(get() === v), onclick: () => { set(v); refresh(); } }, label));
+  s.append(...btns); s.update = () => btns.forEach((b, i) => b.setAttribute('aria-pressed', String(get() === options[i][0])));
+  return s;
+}
+const lastDay = allDays[allDays.length - 1];
+const minus = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() - n); return x.toISOString().slice(0, 10); };
+const rangeSeg = seg([['aug13', 'Since Aug 13'], ['30', 'Last 30d'], ['90', 'Last 90d'], ['all', 'All time'], ['custom', 'Custom']], () => state.range, (v) => { state.range = v; if (v === 'aug13') { state.from = '2026-08-13'; state.to = lastDay; } else if (v === '30') { state.from = minus(lastDay, 29); state.to = lastDay; } else if (v === '90') { state.from = minus(lastDay, 89); state.to = lastDay; } else if (v === 'all') { state.from = allDays[0]; state.to = lastDay; } });
+const fromIn = el('input', { type: 'date', value: state.from, onchange: (e) => { state.from = e.target.value; state.range = 'custom'; refresh(); } });
+const toIn = el('input', { type: 'date', value: state.to, onchange: (e) => { state.to = e.target.value; state.range = 'custom'; refresh(); } });
+const platSeg = seg([['all', 'Both'], ['instagram', 'Instagram'], ['tiktok', 'TikTok']], () => state.platform, (v) => { state.platform = v; });
+const srcSeg = seg([['all', 'All'], ['zernio', 'Via Zernio'], ['external', 'External']], () => state.source, (v) => { state.source = v; });
+const metricSel = el('select', { onchange: (e) => { state.metric = e.target.value; refresh(); } }, Object.entries(METRICS).map(([k, v]) => el('option', { value: k }, v)));
+const themeBtn = el('button', { class: 'seg', style: 'padding:6px 10px; cursor:pointer; font:inherit; color:var(--ink-2)', onclick: () => { const r = document.documentElement; const cur = r.getAttribute('data-theme'); const isDark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.setAttribute('data-theme', isDark ? 'light' : 'dark'); } }, 'Theme');
+filters.append(el('label', {}, 'Published'), rangeSeg, fromIn, el('span', { style: 'color:var(--muted)' }, '→'), toIn, el('label', {}, 'Platform'), platSeg, el('label', {}, 'Source'), srcSeg, el('label', {}, 'Metric'), metricSel, el('div', { class: 'spacer' }), themeBtn);
+
+// ---------- sections
+const main = document.getElementById('main');
+const cards = [];
+function group(title, desc) { main.append(el('section', { class: 'group' }, el('h2', {}, title), desc ? el('p', {}, desc) : null)); }
+function add(c) { cards.push(c); main.append(c); return c; }
+const colors = { instagram: 'var(--ig)', tiktok: 'var(--tt)' };
+const names = { instagram: 'Instagram', tiktok: 'TikTok' };
+const legendPT = () => platformsIn().map((p) => ({ name: names[p], color: colors[p] }));
+const M = () => state.metric;
+const mval = (p, k = M()) => p.v[k];
+const RATE = new Set(['engagementRate', 'reelsSkipRate', 'igReelsAvgWatchTime']);
+const isRate = () => RATE.has(M());
+const aggOf = (g) => { const vs = g.map((p) => mval(p)).filter((v) => v != null); if (!vs.length) return 0; return isRate() ? vs.reduce((s, v) => s + v, 0) / vs.length : vs.reduce((s, v) => s + v, 0); };
+const mean = (a) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const quantile = (a, q) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+const dayRange = (from, to) => { const out = []; for (let d = from; d <= to; d = minus(d, -1)) out.push(d); return out; };
+const weekKey = (day) => { const d = new Date(day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+const postTip = (p, extra = []) => tipBox(`${PLAT[p.platform].name} · ${fullDate(p.publishedAt)}`, [{ k: 'Caption', v: (p.content || '(none)').slice(0, 60) }, { k: 'Views', v: fmt(p.metrics.views) }, { k: 'Likes', v: fmt(p.metrics.likes) }, { k: 'Comments', v: fmt(p.metrics.comments) }, { k: 'Shares', v: fmt(p.metrics.shares) }, { k: 'Saves', v: fmt(p.metrics.saves) }, { k: 'Eng. rate', v: p.er?.toFixed(2) + '%' }, ...extra], p.thumbnailUrl);
+
+// KPI row
+const kpis = el('div', { class: 'kpis' }); main.append(kpis);
+function renderKpis() {
+  const ps = filtered();
+  const sum = (k) => ps.reduce((s, p) => s + (p.v[k] ?? 0), 0);
+  const uniq = new Set(ps.map((p) => p.zernioPostId ?? p.id)).size;
+  const tiles = [
+    ['Unique posts', fmt(uniq), `${ps.length} platform posts`],
+    ['Views', compact(sum('views')), `median ${compact(median(ps.map((p) => p.v.views)))} per post`],
+    ['Likes', compact(sum('likes')), `${(sum('likes') / Math.max(sum('views'), 1) * 100).toFixed(2)}% of views`],
+    ['Comments', compact(sum('comments')), `avg ${fmt(mean(ps.map((p) => p.v.comments)), 1)} per post`],
+    ['Shares', compact(sum('shares')), `avg ${fmt(mean(ps.map((p) => p.v.shares)), 1)} per post`],
+    ['Saves', compact(sum('saves')), 'Instagram only'],
+    ['Avg engagement rate', fmt(mean(ps.map((p) => p.er).filter((v) => v != null)), 2) + '%', `top 10% posts ≥ ${compact(quantile(ps.map((p) => p.v.views), 0.9))} views`],
+  ];
+  kpis.replaceChildren(...tiles.map(([l, v, d]) => el('div', { class: 'tile' }, el('div', { class: 'l' }, l), el('div', { class: 'v' }, v), el('div', { class: 'd' }, d))));
+  for (const a of D.accounts) {
+    const fs = D.followerStats.daily.stats[a.id] ?? [];
+    const acc = D.followerStats.daily.accounts.find((x) => x._id === a.id);
+    const t = el('div', { class: 'tile' }, el('div', { class: 'l' }, `${PLAT[a.platform].name} followers`), el('div', { class: 'v' }, fmt(a.followersCount)), el('div', { class: 'd ' + (acc?.growth > 0 ? 'up' : acc?.growth < 0 ? 'down' : '') }, acc ? `${acc.growth >= 0 ? '+' : ''}${fmt(acc.growth)} (${acc.growthPercentage}%) over ${acc.dataPoints} days` : ''), sparkline(fs.map((x) => x.followers), colors[a.platform]));
+    kpis.append(t);
+  }
+}
+
+// --- Over time
+group('Over time', 'Everything below respects the filter row. Times are America/Los_Angeles.');
+add(card({ title: 'Posts published per day', w: 6, legend: legendPT(), build: () => {
+  const ps = filtered(); const days = dayRange(state.from, state.to);
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, days.map((d) => ps.filter((p) => p.day === d && p.platform === pl).length)]));
+  return stackedColumns({ keys: days, series, colors, names, fmtFn: (v) => fmt(v), labelFn: (d) => shortDate(d + 'T12:00:00'), tipTitle: (d) => shortDate(d + 'T12:00:00') });
+} }));
+add(card({ title: '', w: 6, legend: legendPT(), build: () => {
+  const ps = filtered(); const days = dayRange(state.from, state.to);
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, days.map((d) => aggOf(ps.filter((p) => p.day === d && p.platform === pl)))]));
+  if (isRate()) return lines({ xs: days, series, colors, names, xLabel: (d) => shortDate(d + 'T12:00:00'), dots: true, fmtFn: (v) => v == null ? '–' : fmt(v, 2) });
+  return stackedColumns({ keys: days, series, colors, names, labelFn: (d) => shortDate(d + 'T12:00:00'), tipTitle: (d) => shortDate(d + 'T12:00:00'), thumbs: (d) => ps.filter((p) => p.day === d).sort((a, b) => mval(b) - mval(a))[0]?.thumbnailUrl });
+} })).querySelector('h3').dataset.metricTitle = 'by publish day';
+add(card({ title: '', w: 6, legend: legendPT(), build: () => {
+  const ps = filtered(); const days = dayRange(state.from, state.to);
+  const series = {};
+  for (const pl of platformsIn()) { let acc = 0, n = 0; series[pl] = days.map((d) => { const g = ps.filter((p) => p.day === d && p.platform === pl); for (const p of g) { const v = mval(p); if (v != null) { acc += v; n++; } } return isRate() ? (n ? acc / n : null) : acc; }); }
+  return lines({ xs: days, series, colors, names, xLabel: (d) => shortDate(d + 'T12:00:00'), area: !isRate(), fmtFn: isRate() ? (v) => v == null ? '–' : fmt(v, 2) : compact });
+} })).querySelector('h3').dataset.metricTitle = 'cumulative';
+add(card({ title: 'Engagement received per day', desc: 'Zernio "received" attribution: the day the likes, comments, shares and saves actually arrived, regardless of when the post went up. Only the last week has daily snapshots.', w: 6, legend: legendPT(), build: () => {
+  const rows = (D.aggregates.daily_received_all.dailyData ?? []).filter((r) => r.date >= state.from && r.date <= state.to && r.date >= '2026-09-05');
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, rows.map((r) => { const m = r.platformMetrics?.[pl]; return m ? m.likes + m.comments + m.shares + m.saves : 0; })]));
+  if (!rows.length) return { node: el('div', { class: 'empty' }, 'No daily snapshots in this range (snapshots begin 2026-09-05)'), table: { cols: [], rows: [] } };
+  return stackedColumns({ keys: rows.map((r) => r.date), series, colors, names, labelFn: (d) => shortDate(d + 'T12:00:00'), everyLabel: 1, tipTitle: (d) => shortDate(d + 'T12:00:00') });
+} }));
+add(card({ title: 'Posts per week', w: 4, legend: legendPT(), build: () => {
+  const ps = filtered(); const weeks = [...new Set(ps.map((p) => weekKey(p.day)))].sort();
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, weeks.map((w) => ps.filter((p) => weekKey(p.day) === w && p.platform === pl).length)]));
+  return stackedColumns({ keys: weeks, series, colors, names, W: 420, H: 200, fmtFn: (v) => fmt(v), labelFn: (d) => shortDate(d + 'T12:00:00'), everyLabel: 1, tipTitle: (w) => 'Week of ' + shortDate(w + 'T12:00:00') });
+} }));
+add(card({ title: '', w: 4, legend: legendPT(), build: () => {
+  const ps = filtered(); const weeks = [...new Set(ps.map((p) => weekKey(p.day)))].sort();
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, weeks.map((w) => { const g = ps.filter((p) => weekKey(p.day) === w && p.platform === pl); return g.length ? mean(g.map((p) => mval(p) ?? 0)) : null; })]));
+  return lines({ xs: weeks, series, colors, names, W: 420, H: 200, xLabel: (d) => shortDate(d + 'T12:00:00'), labelEvery: 1, dots: true });
+} })).querySelector('h3').dataset.metricTitle = 'per post, weekly average';
+add(card({ title: '', w: 4, legend: legendPT(), desc: 'Median is less swayed by one viral post than the average.', build: () => {
+  const ps = filtered(); const weeks = [...new Set(ps.map((p) => weekKey(p.day)))].sort();
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, weeks.map((w) => { const g = ps.filter((p) => weekKey(p.day) === w && p.platform === pl); return g.length ? median(g.map((p) => mval(p) ?? 0)) : null; })]));
+  return lines({ xs: weeks, series, colors, names, W: 420, H: 200, xLabel: (d) => shortDate(d + 'T12:00:00'), labelEvery: 1, dots: true });
+} })).querySelector('h3').dataset.metricTitle = 'per post, weekly median';
+
+// --- Posts
+group('Posts', 'Click any bar, dot or row to open the full record.');
+add(card({ title: '', w: 6, desc: 'Top 15 in range', build: () => {
+  const ps = filtered().sort((a, b) => (mval(b) ?? 0) - (mval(a) ?? 0)).slice(0, 15);
+  return hbars({ items: ps.map((p) => ({ label: `${p.content || '(no caption)'}`, value: mval(p) ?? 0, post: p })), colorFn: (d) => colors[d.post.platform], onClick: (d) => openDetail(d.post), tipFn: (d) => postTip(d.post), labelW: 180, W: 640 });
+} })).querySelector('h3').dataset.metricTitle = 'top posts';
+add(card({ title: '', w: 6, desc: 'Bottom 15 in range', build: () => {
+  const ps = filtered().sort((a, b) => (mval(a) ?? 0) - (mval(b) ?? 0)).slice(0, 15);
+  return hbars({ items: ps.map((p) => ({ label: `${p.content || '(no caption)'}`, value: mval(p) ?? 0, post: p })), colorFn: (d) => colors[d.post.platform], onClick: (d) => openDetail(d.post), tipFn: (d) => postTip(d.post), labelW: 180, W: 640 });
+} })).querySelector('h3').dataset.metricTitle = 'weakest posts';
+add(card({ title: 'All posts', w: 12, desc: 'Sortable. Click a row for the full record and daily snapshots.', build: () => buildTable() }));
+let sortKey = 'publishedAt', sortDir = -1;
+function buildTable() {
+  const ps = filtered();
+  const cols = [['', 'thumb'], ['Platform', 'platform'], ['Published', 'publishedAt'], ['Caption', 'content'], ['Views', 'views'], ['Likes', 'likes'], ['Comments', 'comments'], ['Shares', 'shares'], ['Saves', 'saves'], ['Eng. rate', 'engagementRate'], ['Duration', 'videoDurationSeconds'], ['Retention', 'retention'], ['Skip', 'reelsSkipRate'], ['Views +7d', 'gain7'], ['Source', 'source'], ['Link', 'url']];
+  const get = (p, k) => k === 'retention' ? p.retention : k === 'gain7' ? p.gain7?.views : k in p.metrics ? p.metrics[k] : p[k];
+  const sorted = [...ps].sort((a, b) => { const x = get(a, sortKey), y = get(b, sortKey); if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
+  const t = el('table', { class: 'tbl' },
+    el('thead', {}, el('tr', {}, cols.map(([l, k]) => el('th', { class: ['views','likes','comments','shares','saves','engagementRate','videoDurationSeconds','retention','reelsSkipRate','gain7'].includes(k) ? 'num' : '', 'aria-sort': sortKey === k ? (sortDir < 0 ? 'descending' : 'ascending') : null, onclick: () => { if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = -1; } cardTable.render(); } }, l)))),
+    el('tbody', {}, sorted.map((p) => el('tr', { onclick: (e) => { if (e.target.tagName !== 'A') openDetail(p); }, style: 'cursor:pointer' },
+      el('td', {}, p.thumbnailUrl ? el('img', { class: 'th', src: p.thumbnailUrl, loading: 'lazy', alt: '' }) : ''),
+      el('td', {}, el('span', { class: 'pill' }, el('i', { style: `background:${colors[p.platform]}` }), names[p.platform])),
+      el('td', {}, fullDate(p.publishedAt)),
+      el('td', { class: 'cap', title: p.content }, p.content || '(no caption)'),
+      el('td', { class: 'num' }, fmt(p.metrics.views)), el('td', { class: 'num' }, fmt(p.metrics.likes)), el('td', { class: 'num' }, fmt(p.metrics.comments)), el('td', { class: 'num' }, fmt(p.metrics.shares)), el('td', { class: 'num' }, fmt(p.metrics.saves)),
+      el('td', { class: 'num' }, p.er == null ? '–' : p.er.toFixed(2) + '%'), el('td', { class: 'num' }, p.metrics.videoDurationSeconds ? p.metrics.videoDurationSeconds + 's' : '–'), el('td', { class: 'num' }, p.retention ? (p.retention * 100).toFixed(0) + '%' : '–'), el('td', { class: 'num' }, p.metrics.reelsSkipRate ? p.metrics.reelsSkipRate + '%' : '–'), el('td', { class: 'num' }, p.gain7 ? '+' + fmt(p.gain7.views) : '–'),
+      el('td', {}, p.source), el('td', {}, p.url ? el('a', { href: p.url, target: '_blank', rel: 'noopener' }, 'open ↗') : '')))));
+  return { node: el('div', { class: 'tablewrap', style: 'max-height:520px' }, t), table: { cols: cols.map((c) => c[0]).slice(1, -1), rows: sorted.map((p) => [names[p.platform], fullDate(p.publishedAt), p.content, p.metrics.views, p.metrics.likes, p.metrics.comments, p.metrics.shares, p.metrics.saves, p.er, p.metrics.videoDurationSeconds, p.retention, p.metrics.reelsSkipRate, p.gain7?.views, p.source]) } };
+}
+const cardTable = cards[cards.length - 1];
+
+// --- Distribution
+group('Distribution', 'How spread out performance is. Most posts cluster low and a few carry the totals.');
+add(card({ title: '', w: 6, legend: legendPT(), desc: 'Log-spaced bins', build: () => {
+  const ps = filtered(); const vals = ps.map((p) => mval(p) ?? 0);
+  const max = Math.max(...vals, 10); const edges = [0, 1]; while (edges[edges.length - 1] <= max) { const l = edges[edges.length - 1]; edges.push(l * (l < 10 ? 10 : Math.sqrt(10)) | 0 || 10); }
+  const groups = Object.fromEntries(platformsIn().map((pl) => [pl, ps.filter((p) => p.platform === pl).map((p) => mval(p) ?? 0)]));
+  return histogram({ groups, edges: edges.map(Math.round), colors, names });
+} })).querySelector('h3').dataset.metricTitle = 'per post, histogram';
+add(card({ title: '', w: 6, legend: legendPT(), desc: 'Sorted per post, largest to smallest. A steep drop means a few posts dominate.', build: () => {
+  const ps = filtered();
+  const series = {}; let n = 0;
+  for (const pl of platformsIn()) { const vs = ps.filter((p) => p.platform === pl).map((p) => mval(p) ?? 0).sort((a, b) => b - a); series[pl] = vs; n = Math.max(n, vs.length); }
+  for (const pl of Object.keys(series)) while (series[pl].length < n) series[pl].push(null);
+  return lines({ xs: Array.from({ length: n }, (_, i) => i + 1), series, colors, names, xLabel: (v) => '#' + v, log: true, yTicksFmt: compact });
+} })).querySelector('h3').dataset.metricTitle = 'rank curve (log scale)';
+add(card({ title: 'Share of total views held by the top posts', w: 6, legend: legendPT(), desc: 'Concentration: what fraction of all views in range came from the top N posts.', build: () => {
+  const ps = filtered(); const series = {}; const xs = [1, 3, 5, 10, 20, 30, 50];
+  for (const pl of platformsIn()) { const vs = ps.filter((p) => p.platform === pl).map((p) => p.v.views ?? 0).sort((a, b) => b - a); const tot = vs.reduce((s, v) => s + v, 0) || 1; series[pl] = xs.map((n) => vs.slice(0, n).reduce((s, v) => s + v, 0) / tot * 100); }
+  return lines({ xs, series, colors, names, xLabel: (v) => 'top ' + v, fmtFn: (v) => v == null ? '–' : v.toFixed(0) + '%', labelEvery: 1, dots: true });
+} }));
+add(card({ title: 'Engagement mix', w: 6, desc: 'Share of each interaction type in total engagement, per platform.', legend: [{ name: 'Likes', color: 'var(--ig)' }, { name: 'Comments', color: 'var(--tt)' }, { name: 'Shares', color: 'var(--s3)' }, { name: 'Saves', color: 'var(--s4)' }], build: () => {
+  const ps = filtered();
+  const rows = platformsIn().map((pl) => ({ label: names[pl], values: Object.fromEntries(['likes', 'comments', 'shares', 'saves'].map((k) => [k, ps.filter((p) => p.platform === pl).reduce((s, p) => s + (p.v[k] ?? 0), 0)])) }));
+  return stackedShareBar({ rows, keys: ['likes', 'comments', 'shares', 'saves'], colors: { likes: 'var(--ig)', comments: 'var(--tt)', shares: 'var(--s3)', saves: 'var(--s4)' }, names: { likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves' } });
+} }));
+
+// --- Timing
+group('Timing', 'When posting seems to work. Cells are the average of the selected metric for posts published in that slot.');
+add(card({ title: '', w: 8, desc: 'Weekday × hour of publish (local time). Darker = higher average. Hover for post counts; be wary of cells with 1 post.', build: () => {
+  const ps = filtered(); const rows = [0, 1, 2, 3, 4, 5, 6], cols = Array.from({ length: 24 }, (_, i) => i);
+  const values = rows.map((r) => cols.map((c) => { const g = ps.filter((p) => p.lweekday === r && p.lhour === c); return g.length ? mean(g.map((p) => mval(p) ?? 0)) : null; }));
+  const counts = rows.map((r) => cols.map((c) => ps.filter((p) => p.lweekday === r && p.lhour === c).length));
+  return heatmap({ rows, cols, values, counts, rowLabels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], colLabels: cols.map((h) => h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : h - 12 + 'p'), title: 'Avg ' + METRICS[M()] });
+} })).querySelector('h3').dataset.metricTitle = 'by weekday and hour';
+add(card({ title: '', w: 4, desc: 'Average by weekday of publish', legend: legendPT(), build: () => {
+  const ps = filtered(); const keys = [0, 1, 2, 3, 4, 5, 6]; const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, keys.map((k) => { const g = ps.filter((p) => p.lweekday === k && p.platform === pl); return g.length ? mean(g.map((p) => mval(p) ?? 0)) : 0; })]));
+  // grouped: render as separate thin columns by offsetting? Keep stacked-free: average per platform shown side by side via two series in stack would mislead. Use lines with dots instead.
+  return lines({ xs: keys, series, colors, names, W: 420, H: 220, xLabel: (v) => labels[v], labelEvery: 1, dots: true });
+} })).querySelector('h3').dataset.metricTitle = 'by weekday';
+add(card({ title: '', w: 6, desc: 'Average by hour of publish (local). Lines, one per platform.', legend: legendPT(), build: () => {
+  const ps = filtered(); const keys = Array.from({ length: 24 }, (_, i) => i);
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, keys.map((k) => { const g = ps.filter((p) => p.lhour === k && p.platform === pl); return g.length ? mean(g.map((p) => mval(p) ?? 0)) : null; })]));
+  return lines({ xs: keys, series, colors, names, H: 220, xLabel: (h) => h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : h - 12 + 'pm', labelEvery: 3, dots: true });
+} })).querySelector('h3').dataset.metricTitle = 'by hour of day';
+add(card({ title: 'Posts published by hour', w: 6, desc: 'Your posting habit, for context on the chart to the left.', legend: legendPT(), build: () => {
+  const ps = filtered(); const keys = Array.from({ length: 24 }, (_, i) => i);
+  const series = Object.fromEntries(platformsIn().map((pl) => [pl, keys.map((k) => ps.filter((p) => p.lhour === k && p.platform === pl).length)]));
+  return stackedColumns({ keys, series, colors, names, H: 220, fmtFn: (v) => fmt(v), labelFn: (h) => h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : h - 12 + 'pm', everyLabel: 3, tipTitle: (h) => `Hour ${h}:00` });
+} }));
+add(card({ title: 'Zernio best-time model', w: 6, desc: 'Zernio\'s own engagement-per-slot ranking (UTC hours, all history). Top 12 slots.', build: () => {
+  const key = state.platform === 'all' ? 'best_time_all' : `best_time_${state.platform}`;
+  const slots = (D.aggregates[key]?.slots ?? []).slice(0, 12); const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return hbars({ items: slots.map((s) => ({ label: `${dn[s.day_of_week]} ${s.hour}:00 UTC (${s.post_count} post${s.post_count > 1 ? 's' : ''})`, value: Math.round(s.avg_engagement) })), labelW: 170, fmtFn: (v) => fmt(v), maxLabel: 40 });
+} }));
+
+// --- Relationships
+group('What correlates with performance', 'Each dot is one platform post. Color = platform. Log axes where the spread is huge.');
+const scatterCard = (title, desc, xk, yk, opts = {}) => add(card({ title, desc, w: 6, legend: legendPT(), build: () => {
+  const ps = filtered().filter(opts.filter ?? (() => true));
+  return scatter({ pts: ps.map((p) => ({ x: xk(p), y: yk(p), color: colors[p.platform], label: `${names[p.platform]} · ${p.content || '(no caption)'}`.slice(0, 70), img: p.thumbnailUrl, post: p, sub: [{ k: 'Published', v: shortDate(p.publishedAt) }] })), xLabel: opts.xLabel, yLabel: opts.yLabel, logX: opts.logX, logY: opts.logY, fmtX: opts.fmtX, fmtY: opts.fmtY, onClick: (d) => openDetail(d.post) });
+} }));
+scatterCard('Views vs engagement rate', 'Do the posts that get seen also get engaged with?', (p) => p.v.views, (p) => p.er, { xLabel: 'Views', yLabel: 'Engagement rate %', logX: true, fmtY: (v) => fmt(v, 1) });
+scatterCard('Video length vs views', 'Instagram only (TikTok does not report duration).', (p) => p.metrics.videoDurationSeconds, (p) => p.v.views, { xLabel: 'Duration (s)', yLabel: 'Views', logY: true, filter: (p) => p.metrics.videoDurationSeconds, fmtX: (v) => fmt(v) });
+scatterCard('Retention vs views', 'Instagram: average watch time ÷ duration. Higher retention should feed the algorithm.', (p) => p.retention == null ? null : p.retention * 100, (p) => p.v.views, { xLabel: 'Retention %', yLabel: 'Views', logY: true, filter: (p) => p.retention != null, fmtX: (v) => fmt(v) });
+scatterCard('Skip rate vs views', 'Instagram reels skip rate (viewers who scrolled past within 3s).', (p) => p.metrics.reelsSkipRate, (p) => p.v.views, { xLabel: 'Skip rate %', yLabel: 'Views', logY: true, filter: (p) => p.platform === 'instagram' && p.metrics.reelsSkipRate, fmtX: (v) => fmt(v) });
+scatterCard('Caption length vs views', 'Characters in the caption.', (p) => p.contentLength, (p) => p.v.views, { xLabel: 'Caption chars', yLabel: 'Views', logY: true, fmtX: (v) => fmt(v) });
+scatterCard('Shares vs saves', 'Instagram. Both are strong distribution signals; which do your posts earn?', (p) => p.v.shares, (p) => p.v.saves, { xLabel: 'Shares', yLabel: 'Saves', logX: true, logY: true, filter: (p) => p.platform === 'instagram' && p.v.shares > 0 && p.v.saves > 0 });
+scatterCard('Comments vs views', 'Conversation relative to reach.', (p) => p.v.views, (p) => p.v.comments, { xLabel: 'Views', yLabel: 'Comments', logX: true, logY: true, filter: (p) => p.v.comments > 0 });
+scatterCard('Retention vs skip rate', 'Instagram. Two sides of the hook: do people stop scrolling, and do they stay?', (p) => p.metrics.reelsSkipRate, (p) => p.retention == null ? null : p.retention * 100, { xLabel: 'Skip rate %', yLabel: 'Retention %', filter: (p) => p.retention != null && p.metrics.reelsSkipRate, fmtX: (v) => fmt(v), fmtY: (v) => fmt(v) });
+
+// --- Cross-posting
+group('Cross-posting', 'The same video on both platforms. Only Zernio-authored posts carry the link between the two.');
+add(card({ title: 'Instagram vs TikTok views, same video', w: 6, desc: 'Log-log. Dots above the diagonal did better on TikTok. Hover for the ratio.', legend: [{ name: 'One video', color: 'var(--s3)' }], build: () => {
+  const pairs = [...zernioGroups.values()].filter((g) => g.instagram && g.tiktok && g.instagram.day >= state.from && g.instagram.day <= state.to);
+  const f = frame(640, 300, { l: 48, r: 12, t: 8, b: 34 });
+  if (!pairs.length) return { node: el('div', { class: 'empty' }, 'No cross-posted pairs in range'), table: { cols: [], rows: [] } };
+  const all = pairs.flatMap((g) => [g.instagram.v.views, g.tiktok.v.views]).filter((v) => v > 0);
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const x = logs(lo, hi, 0, f.w), y = logs(lo, hi, f.h, 0);
+  yAxis(f.g, y, f.w); const ax = sv('g', { class: 'axis' }); ax.append(sv('line', { x1: 0, x2: f.w, y1: f.h, y2: f.h })); for (const t of x.ticks()) ax.append(sv('text', { x: x(t), y: f.h + 16, 'text-anchor': 'middle' }, compact(t))); f.g.append(ax);
+  f.g.append(sv('line', { x1: x(lo), y1: y(lo), x2: x(hi), y2: y(hi), stroke: 'var(--axis)', 'stroke-width': 1 }));
+  f.g.append(sv('text', { x: f.w / 2, y: f.h + 30, 'text-anchor': 'middle' }, 'Instagram views'));
+  f.g.append(sv('text', { transform: `translate(-38,${f.h / 2}) rotate(-90)`, 'text-anchor': 'middle' }, 'TikTok views'));
+  for (const g of pairs) { const a = g.instagram, b = g.tiktok; f.g.append(sv('circle', { cx: x(a.v.views), cy: y(b.v.views), r: 4.5, fill: 'var(--s3)', stroke: 'var(--surface)', 'stroke-width': 2, class: 'mark' })); const hit = sv('circle', { cx: x(a.v.views), cy: y(b.v.views), r: 12, class: 'hit', style: 'cursor:pointer' }); bindTip(hit, () => tipBox(a.content || '(no caption)', [{ k: 'Instagram', v: fmt(a.v.views), color: colors.instagram }, { k: 'TikTok', v: fmt(b.v.views), color: colors.tiktok }, { k: 'IG ÷ TT', v: (a.v.views / Math.max(b.v.views, 1)).toFixed(1) + '×' }], a.thumbnailUrl)); hit.addEventListener('click', () => openDetail(a)); f.g.append(hit); }
+  return { node: f.svg, table: { cols: ['Caption', 'Instagram views', 'TikTok views'], rows: pairs.map((g) => [g.instagram.content, g.instagram.v.views, g.tiktok.v.views]) } };
+} }));
+add(card({ title: 'Side by side, top cross-posts', w: 6, desc: 'Blue = Instagram, orange = TikTok, sorted by combined views. Log scale.', legend: [{ name: 'Instagram', color: 'var(--ig)' }, { name: 'TikTok', color: 'var(--tt)' }], build: () => {
+  const pairs = [...zernioGroups.values()].filter((g) => g.instagram && g.tiktok && g.instagram.day >= state.from && g.instagram.day <= state.to).sort((a, b) => (b.instagram.v.views + b.tiktok.v.views) - (a.instagram.v.views + a.tiktok.v.views)).slice(0, 14);
+  if (!pairs.length) return { node: el('div', { class: 'empty' }, 'No cross-posted pairs in range'), table: { cols: [], rows: [] } };
+  return dumbbell({ items: pairs.map((g) => ({ label: g.instagram.content || '(no caption)', a: Math.max(g.instagram.v.views, 1), b: Math.max(g.tiktok.v.views, 1), img: g.instagram.thumbnailUrl, post: g.instagram })), aName: 'Instagram', bName: 'TikTok', aColor: colors.instagram, bColor: colors.tiktok, onClick: (d) => openDetail(d.post) });
+} }));
+add(card({ title: 'Cross-post summary', w: 12, build: () => {
+  const pairs = [...zernioGroups.values()].filter((g) => g.instagram && g.tiktok && g.instagram.day >= state.from && g.instagram.day <= state.to);
+  const ig = pairs.map((g) => g.instagram.v.views), tt = pairs.map((g) => g.tiktok.v.views);
+  const ttWins = pairs.filter((g) => g.tiktok.v.views > g.instagram.v.views).length;
+  const igOnly = filtered().filter((p) => p.platform === 'instagram' && !(zernioGroups.get(p.zernioPostId)?.tiktok)).map((p) => p.v.views);
+  const ttOnly = filtered().filter((p) => p.platform === 'tiktok' && !(zernioGroups.get(p.zernioPostId)?.instagram)).map((p) => p.v.views);
+  const rows = [['Cross-posted videos in range', pairs.length], ['Median Instagram views (cross-posted)', median(ig)], ['Median TikTok views (cross-posted)', median(tt)], ['Median IG ÷ TT ratio', median(pairs.map((g) => g.instagram.v.views / Math.max(g.tiktok.v.views, 1)))], ['Videos where TikTok beat Instagram', `${ttWins} of ${pairs.length}`], ['Median views, Instagram-only posts', median(igOnly)], ['Median views, TikTok-only posts', median(ttOnly)]];
+  return { node: el('div', { class: 'kpis', style: 'grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))' }, rows.map(([l, v]) => el('div', { class: 'tile' }, el('div', { class: 'l' }, l), el('div', { class: 'v', style: 'font-size:22px' }, typeof v === 'number' ? fmt(v, 1) : v ?? '–')))), table: { cols: ['Stat', 'Value'], rows } };
+} }));
+
+// --- Momentum
+group('Momentum (last 7 days)', 'Zernio began daily snapshots on 2026-09-05, so "gained" means between the first and latest snapshot for each post.');
+add(card({ title: 'Views gained in the snapshot window', w: 6, desc: 'Which posts are still moving. Top 15 in range.', build: () => {
+  const ps = filtered().filter((p) => p.gain7).sort((a, b) => b.gain7.views - a.gain7.views).slice(0, 15);
+  if (!ps.length) return { node: el('div', { class: 'empty' }, 'No snapshot data in range'), table: { cols: [], rows: [] } };
+  return hbars({ items: ps.map((p) => ({ label: p.content || '(no caption)', value: p.gain7.views, post: p })), colorFn: (d) => colors[d.post.platform], onClick: (d) => openDetail(d.post), tipFn: (d) => postTip(d.post, [{ k: 'Views gained', v: '+' + fmt(d.post.gain7.views) }, { k: 'Likes gained', v: '+' + fmt(d.post.gain7.likes) }]), labelW: 180 });
+} }));
+add(card({ title: 'Daily views, top 8 movers', w: 6, desc: 'Small multiples: cumulative views per snapshot day for the posts gaining the most. Each panel has its own scale.', build: () => {
+  const ps = filtered().filter((p) => p.gain7 && p.timeline.length > 2).sort((a, b) => b.gain7.views - a.gain7.views).slice(0, 8);
+  if (!ps.length) return { node: el('div', { class: 'empty' }, 'No snapshot data in range'), table: { cols: [], rows: [] } };
+  const grid = el('div', { style: 'display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 16px' });
+  for (const p of ps) {
+    const tl = p.timeline;
+    const panel = el('div', { style: 'cursor:pointer', onclick: () => openDetail(p) },
+      el('div', { class: 'desc', style: 'display:flex; justify-content:space-between; gap:8px' }, el('span', { style: 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap' }, el('i', { style: `display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:${colors[p.platform]}` }), p.content || '(no caption)'), el('span', { style: 'white-space:nowrap' }, '+' + compact(p.gain7.views))),
+      lines({ xs: tl.map((t) => t.date), series: { v: tl.map((t) => t.views) }, colors: { v: colors[p.platform] }, names: { v: 'Views' }, W: 300, H: 90, xLabel: (d) => d.slice(5), labelEvery: 99, yTicks: 2, fixedWidth: true }).node);
+    grid.append(panel);
+  }
+  return { node: grid, table: { cols: ['Post', 'First snapshot', 'Latest', 'Gained'], rows: ps.map((p) => [p.content, p.timeline[0].views, p.timeline[p.timeline.length - 1].views, p.gain7.views]) } };
+} }));
+
+// --- Account
+group('Account level', 'From Zernio\'s account-insight endpoints. Not affected by the post filters except where noted.');
+add(card({ title: 'Instagram daily reach (account level)', w: 8, desc: 'Accounts reached per day across all surfaces, last 88 days. Data may lag up to 48h.', build: () => {
+  const ig = Object.values(D.instagram)[0]; const vals = ig?.reachSeries?.metrics?.reach?.values ?? [];
+  return lines({ xs: vals.map((v) => v.date), series: { reach: vals.map((v) => v.value) }, colors: { reach: colors.instagram }, names: { reach: 'Reach' }, W: 860, H: 240, xLabel: (d) => shortDate(d + 'T12:00:00'), area: true });
+} }));
+add(card({ title: 'Instagram, last 88 days', w: 4, build: () => {
+  const ig = Object.values(D.instagram)[0]; const m = ig?.totals?.metrics ?? {};
+  const rows = [['Reach', m.reach?.total], ['Views', m.views?.total], ['Accounts engaged', m.accounts_engaged?.total], ['Total interactions', m.total_interactions?.total], ['Likes', m.likes?.total], ['Comments', m.comments?.total], ['Saves', m.saves?.total], ['Shares', m.shares?.total], ['Reposts', m.reposts?.total]];
+  const ft = ig?.byFollowType?.metrics?.reach?.breakdowns ?? []; const nf = ft.find((b) => b.dimension === 'NON_FOLLOWER')?.value, fo = ft.find((b) => b.dimension === 'FOLLOWER')?.value;
+  if (nf != null) rows.push(['Reach from non-followers', `${(nf / (nf + fo) * 100).toFixed(1)}%`]);
+  return { node: el('div', { class: 'kpis', style: 'grid-template-columns: 1fr 1fr' }, rows.map(([l, v]) => el('div', { class: 'tile', style: 'padding:8px 10px' }, el('div', { class: 'l' }, l), el('div', { class: 'v', style: 'font-size:18px' }, typeof v === 'number' ? compact(v) : v ?? '–')))), table: { cols: ['Metric', 'Value'], rows } };
+} }));
+add(card({ title: 'Followers, daily', w: 6, desc: 'Both accounts. Separate scales would mislead, so each is indexed: change since the first snapshot.', legend: legendPT(), build: () => {
+  const st = D.followerStats.daily.stats; const ids = Object.fromEntries(D.accounts.map((a) => [a.platform, a.id]));
+  const days = [...new Set(Object.values(st).flat().map((x) => x.date))].sort();
+  const series = {}; for (const pl of platformsIn()) { const arr = st[ids[pl]] ?? []; const base = arr[0]?.followers ?? 0; series[pl] = days.map((d) => { const r = arr.find((x) => x.date === d); return r ? r.followers - base : null; }); }
+  return lines({ xs: days, series, colors, names, H: 220, xLabel: (d) => shortDate(d + 'T12:00:00'), labelEvery: 1, dots: true, fmtFn: (v) => v == null ? '–' : (v >= 0 ? '+' : '') + fmt(v) });
+} }));
+add(card({ title: 'Instagram followers gained per day', w: 6, legend: [], build: () => {
+  const ig = Object.values(D.instagram)[0]; const g = ig?.followerHistory?.metrics?.followers_gained?.values ?? []; const l = ig?.followerHistory?.metrics?.followers_lost?.values ?? [];
+  const days = g.map((v) => v.date);
+  return stackedColumns({ keys: days, series: { gained: g.map((v) => v.value) }, colors: { gained: colors.instagram }, names: { gained: 'Gained' }, H: 220, fmtFn: (v) => fmt(v), labelFn: (d) => shortDate(d + 'T12:00:00'), everyLabel: 1, tipTitle: (d, i) => `${shortDate(d + 'T12:00:00')} · lost ${l[i]?.value ?? 0}` });
+} }));
+add(card({ title: 'TikTok account counters, daily', w: 6, desc: 'Lifetime likes on the account and follower count, from Zernio snapshots. Indexed to first snapshot.', legend: [{ name: 'Likes', color: 'var(--tt)' }, { name: 'Followers', color: 'var(--s4)' }], build: () => {
+  const tt = Object.values(D.tiktok)[0]?.series?.metrics ?? {}; const lk = tt.likes_count?.values ?? [], fl = tt.follower_count?.values ?? [];
+  const days = lk.map((v) => v.date);
+  return lines({ xs: days, series: { likes: lk.map((v) => v.value - lk[0].value), followers: fl.map((v) => v.value - fl[0].value) }, colors: { likes: colors.tiktok, followers: 'var(--s4)' }, names: { likes: 'Likes gained', followers: 'Followers gained' }, H: 220, xLabel: (d) => shortDate(d + 'T12:00:00'), labelEvery: 1, dots: true, fmtFn: (v) => v == null ? '–' : '+' + fmt(v) });
+} }));
+add(card({ title: 'Instagram reach by content type (88d)', w: 6, build: () => {
+  const ig = Object.values(D.instagram)[0]; const b = ig?.byMediaType?.metrics?.reach?.breakdowns ?? [];
+  return hbars({ items: b.map((x) => ({ label: x.dimension, value: x.value })), labelW: 90, W: 640, rowH: 28 });
+} }));
+
+// --- Audience
+group('Audience', 'Instagram follower demographics (this month). TikTok exposes no demographics via its public API, and Zernio returned an empty engaged-audience breakdown for this account.');
+const demoCard = (title, dim, w, top) => add(card({ title, w, build: () => {
+  const ig = Object.values(D.instagram)[0]; const arr = [...(ig?.followerDemographics?.demographics?.[dim] ?? [])].sort((a, b) => dim === 'age' ? a.dimension.localeCompare(b.dimension, undefined, { numeric: true }) : b.value - a.value).slice(0, top ?? 99);
+  const total = (ig?.followerDemographics?.demographics?.[dim] ?? []).reduce((s, x) => s + x.value, 0) || 1;
+  const labels = { M: 'Men', F: 'Women', U: 'Unknown' };
+  return hbars({ items: arr.map((x) => ({ label: labels[x.dimension] ?? x.dimension, value: x.value })), labelW: 110, W: w === 3 ? 320 : 640, rowH: 24, fmtFn: (v) => `${fmt(v)} (${(v / total * 100).toFixed(0)}%)`, maxLabel: 18 });
+} }));
+demoCard('Followers by age', 'age', 3); demoCard('Followers by gender', 'gender', 3); demoCard('Top countries', 'country', 3, 12); demoCard('Top cities', 'city', 3, 12);
+// --- Content
+group('Content', 'Words in captions vs performance, and Zernio\'s content-lifecycle models.');
+add(card({ title: '', w: 6, desc: 'Caption words appearing in at least 3 posts, ranked by average of the selected metric. Top 15.', build: () => {
+  const ps = filtered(); const stop = new Set('the a an and or of to in on for is it my i you this that with be are was as at by from but not so if we they your its just like about have has do what how why can will'.split(' '));
+  const map = new Map();
+  for (const p of ps) for (const w of new Set((p.content || '').toLowerCase().replace(/[^a-z0-9#' ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !stop.has(w)))) { const e = map.get(w) ?? { n: 0, sum: 0 }; e.n++; e.sum += mval(p) ?? 0; map.set(w, e); }
+  const items = [...map].filter(([, e]) => e.n >= 3).map(([w, e]) => ({ label: `${w} (${e.n})`, value: e.sum / e.n })).sort((a, b) => b.value - a.value).slice(0, 15);
+  if (!items.length) return { node: el('div', { class: 'empty' }, 'Not enough repeated words in range'), table: { cols: [], rows: [] } };
+  return hbars({ items, labelW: 130 });
+} })).querySelector('h3').dataset.metricTitle = 'by caption word';
+add(card({ title: 'Caption length buckets', w: 6, desc: 'Average of the selected metric by caption length. Count in parentheses.', build: () => {
+  const ps = filtered(); const buckets = [[0, 0, 'empty'], [1, 20, '1–20'], [21, 50, '21–50'], [51, 100, '51–100'], [101, 200, '101–200'], [201, 1e9, '200+']];
+  const items = buckets.map(([lo, hi, l]) => { const g = ps.filter((p) => p.contentLength >= lo && p.contentLength <= hi); return { label: `${l} chars (${g.length})`, value: g.length ? mean(g.map((p) => mval(p) ?? 0)) : 0 }; });
+  return hbars({ items, labelW: 130, rowH: 28 });
+} }));
+add(card({ title: 'How fast engagement arrives', w: 6, desc: 'Zernio content-decay model: share of a post\'s final engagement reached by each age. All history.', build: () => {
+  const key = state.platform === 'all' ? 'content_decay_all' : `content_decay_${state.platform}`; const b = D.aggregates[key]?.buckets ?? [];
+  return lines({ xs: b.map((x) => x.bucket_label), series: { pct: b.map((x) => x.avg_pct_of_final) }, colors: { pct: colors[state.platform === 'tiktok' ? 'tiktok' : 'instagram'] }, names: { pct: '% of final engagement' }, H: 220, xLabel: (v) => v, labelEvery: 1, dots: true, fmtFn: (v) => v == null ? '–' : v.toFixed(0) + '%', area: true });
+} }));
+add(card({ title: 'Posting frequency vs engagement rate', w: 6, desc: 'Zernio model: average engagement rate for weeks with N posts on that platform. Dots = platform.', legend: [{ name: 'Instagram', color: 'var(--ig)' }, { name: 'TikTok', color: 'var(--tt)' }], build: () => {
+  const f = D.aggregates.posting_frequency_all?.frequency ?? [];
+  return scatter({ pts: f.filter((r) => state.platform === 'all' || r.platform === state.platform).map((r) => ({ x: r.posts_per_week, y: r.avg_engagement_rate, color: colors[r.platform], label: `${names[r.platform]} · ${r.posts_per_week} posts/week`, sub: [{ k: 'Weeks observed', v: r.weeks_count }, { k: 'Avg engagement', v: fmt(r.avg_engagement) }] })), xLabel: 'Posts per week', yLabel: 'Avg engagement rate %', fmtX: (v) => fmt(v), fmtY: (v) => fmt(v, 1), H: 220 });
+} }));
+add(card({ title: 'Instagram: average watch time vs duration', w: 6, desc: 'Each dot is a reel. The diagonal is 100% retention. Dots on the line are watched to the end (or looped).', legend: [{ name: 'Reel', color: 'var(--ig)' }], build: () => {
+  const ps = filtered().filter((p) => p.platform === 'instagram' && p.metrics.videoDurationSeconds && p.metrics.igReelsAvgWatchTime);
+  const f = frame(640, 260, { l: 48, r: 12, t: 8, b: 34 });
+  if (!ps.length) return { node: el('div', { class: 'empty' }, 'No Instagram reels in range'), table: { cols: [], rows: [] } };
+  const maxD = niceMax(Math.max(...ps.map((p) => p.metrics.videoDurationSeconds))); const x = lin(0, maxD, 0, f.w), y = lin(0, maxD, f.h, 0);
+  yAxis(f.g, y, f.w, (v) => v + 's'); xAxisLin(f.g, x, f.h, (v) => v + 's');
+  f.g.append(sv('line', { x1: 0, y1: f.h, x2: x(maxD), y2: y(maxD), stroke: 'var(--axis)' }));
+  f.g.append(sv('text', { x: f.w / 2, y: f.h + 30, 'text-anchor': 'middle' }, 'Duration')); f.g.append(sv('text', { transform: `translate(-38,${f.h / 2}) rotate(-90)`, 'text-anchor': 'middle' }, 'Avg watch time'));
+  for (const p of ps) { const cx = x(p.metrics.videoDurationSeconds), cy = y(p.metrics.igReelsAvgWatchTime / 1000); f.g.append(sv('circle', { cx, cy, r: 4.5, fill: colors.instagram, stroke: 'var(--surface)', 'stroke-width': 2, class: 'mark' })); const hit = sv('circle', { cx, cy, r: 12, class: 'hit', style: 'cursor:pointer' }); bindTip(hit, () => postTip(p, [{ k: 'Duration', v: p.metrics.videoDurationSeconds + 's' }, { k: 'Avg watch', v: (p.metrics.igReelsAvgWatchTime / 1000).toFixed(1) + 's' }, { k: 'Retention', v: (p.retention * 100).toFixed(0) + '%' }])); hit.addEventListener('click', () => openDetail(p)); f.g.append(hit); }
+  return { node: f.svg, table: { cols: ['Caption', 'Duration s', 'Avg watch s'], rows: ps.map((p) => [p.content, p.metrics.videoDurationSeconds, p.metrics.igReelsAvgWatchTime / 1000]) } };
+} }));
+add(card({ title: 'Total watch time, top reels', w: 6, desc: 'Instagram total hours watched. Views × watch time, the truest "attention" number here.', build: () => {
+  const ps = filtered().filter((p) => p.metrics.igReelsVideoViewTotalTime).sort((a, b) => b.metrics.igReelsVideoViewTotalTime - a.metrics.igReelsVideoViewTotalTime).slice(0, 15);
+  if (!ps.length) return { node: el('div', { class: 'empty' }, 'No Instagram reels in range'), table: { cols: [], rows: [] } };
+  return hbars({ items: ps.map((p) => ({ label: p.content || '(no caption)', value: p.metrics.igReelsVideoViewTotalTime / 3.6e6, post: p })), fmtFn: (v) => fmt(v, 1) + ' h', onClick: (d) => openDetail(d.post), tipFn: (d) => postTip(d.post, [{ k: 'Watch time', v: fmt(d.value, 1) + ' hours' }]), labelW: 180 });
+} }));
+
+// ---------- refresh
+function refresh() {
+  rangeSeg.update(); platSeg.update(); srcSeg.update(); fromIn.value = state.from; toIn.value = state.to;
+  renderKpis();
+  for (const c of cards) {
+    const h = c.querySelector('h3'); if (h.dataset.metricTitle) h.textContent = `${METRICS[state.metric]} ${h.dataset.metricTitle === 'cumulative' && isRate() ? 'running average' : h.dataset.metricTitle}`;
+    const lg = c.querySelector('.legend'); if (lg && lg.dataset.pt !== 'fixed' && lg.childElementCount && ['Instagram', 'TikTok'].includes(lg.firstChild.textContent.trim())) { lg.replaceChildren(...legendPT().map((l) => el('span', {}, el('i', { style: `background:${l.color}` }), l.name))); }
+    c.render();
+  }
+}
+refresh();
+})();
+</script>
+</body>
+</html>

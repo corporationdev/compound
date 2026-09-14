@@ -34,6 +34,7 @@ import { Computed, FrameRate, Source } from "@compound/runtime";
 import { useDerived } from "@/engine/hooks";
 import { useProjectConfig } from "@/engine/project-config";
 import { useExport } from "@/context/export";
+import { usePostScene } from "@/components/social/post-scene";
 import {
   DEFAULT_EXPORT_TEMPLATE_ID,
   TEMPLATE_BY_ID,
@@ -100,6 +101,7 @@ export function ExportPanel(props: ExportPanelProps) {
   const world = useWorld();
   const config = useProjectConfig();
   const { exportScene, exporting } = useExport();
+  const postScene = usePostScene();
   const entity = () => props.selection[0]!;
 
   const [isInspectorOpen, setIsInspectorOpen] = createSignal(false);
@@ -219,6 +221,13 @@ export function ExportPanel(props: ExportPanelProps) {
       audio: current.audio,
     });
   };
+  // Post renders the same scene with these settings (as MP4) and opens the
+  // composer with the result attached.
+  const runPost = () => {
+    const current = settings();
+    if (!current) return;
+    void postScene(entity(), { format: current.format, video: current.video, audio: current.audio });
+  };
 
   const estimatedFileSize = createMemo(() => {
     const size = selectedResolution();
@@ -269,9 +278,17 @@ export function ExportPanel(props: ExportPanelProps) {
         </ItemRow>
         <Tooltip disabled={exportSupported()}>
           <TooltipTrigger as="div" class="w-full">
-            <Button class="w-full" onClick={runExport} disabled={exporting() || !exportSupported()}>
-              Export
-            </Button>
+            <div class="flex w-full gap-1">
+              <Button class="flex-1" onClick={runExport} disabled={exporting() || !exportSupported()}>
+                Export
+              </Button>
+              <Show when={!!window.desktop}>
+                <Button class="flex-1" variant="secondary" onClick={runPost} disabled={exporting() || !exportSupported()}>
+                  <Icon name="posts" class="size-4 mr-1" />
+                  Post
+                </Button>
+              </Show>
+            </div>
           </TooltipTrigger>
           <TooltipContent class="max-w-64">
             This browser cannot encode {(settings()?.video?.codec ?? "avc").toUpperCase()} at{" "}

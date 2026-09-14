@@ -13,7 +13,7 @@ import { useEngineContext } from "@/engine";
 import { useProject } from "@/context/project";
 import { track } from "@/lib/analytics";
 import { ExportProgress, type ExportConfig } from "@/components/sidebar-right/inspector/export-progress";
-import { renderScene, renderOverlay, cancelRender } from "@/context/render";
+import { renderScene, renderOverlay, renderActive, cancelRender } from "@/context/render";
 import {
   MIME_TYPES,
   getDefaultExportTemplate,
@@ -35,7 +35,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
   const world = useWorld();
   const project = useProject();
 
-  const exporting = () => !!renderOverlay();
+  const exporting = () => renderActive();
 
   const sceneDurationSeconds = (scene: Entity) =>
     (scene.get(Computed)?.duration ?? 0) / (world.get(FrameRate)?.value || 30);

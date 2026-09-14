@@ -1,0 +1,406 @@
+{
+  "slots": [
+    {
+      "day_of_week": 1,
+      "hour": 18,
+      "avg_engagement": 3667,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 0,
+      "hour": 15,
+      "avg_engagement": 2757.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 2,
+      "hour": 4,
+      "avg_engagement": 2460,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 15,
+      "avg_engagement": 2112,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 3,
+      "hour": 0,
+      "avg_engagement": 951.6666666666666,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 4,
+      "hour": 7,
+      "avg_engagement": 817.5,
+      "post_count": 4
+    },
+    {
+      "day_of_week": 1,
+      "hour": 22,
+      "avg_engagement": 808,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 0,
+      "hour": 6,
+      "avg_engagement": 727.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 5,
+      "hour": 3,
+      "avg_engagement": 712,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 1,
+      "hour": 2,
+      "avg_engagement": 406.3333333333333,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 5,
+      "hour": 7,
+      "avg_engagement": 374.25,
+      "post_count": 4
+    },
+    {
+      "day_of_week": 1,
+      "hour": 1,
+      "avg_engagement": 278,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 0,
+      "hour": 7,
+      "avg_engagement": 234.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 6,
+      "hour": 1,
+      "avg_engagement": 233,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 3,
+      "hour": 3,
+      "avg_engagement": 212.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 1,
+      "hour": 3,
+      "avg_engagement": 201,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 23,
+      "avg_engagement": 200.75,
+      "post_count": 4
+    },
+    {
+      "day_of_week": 4,
+      "hour": 6,
+      "avg_engagement": 198.83333333333334,
+      "post_count": 6
+    },
+    {
+      "day_of_week": 2,
+      "hour": 23,
+      "avg_engagement": 190,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 3,
+      "hour": 5,
+      "avg_engagement": 135.71428571428572,
+      "post_count": 7
+    },
+    {
+      "day_of_week": 3,
+      "hour": 6,
+      "avg_engagement": 127.6,
+      "post_count": 5
+    },
+    {
+      "day_of_week": 0,
+      "hour": 14,
+      "avg_engagement": 120,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 1,
+      "hour": 23,
+      "avg_engagement": 112,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 1,
+      "hour": 5,
+      "avg_engagement": 106.33333333333333,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 3,
+      "hour": 14,
+      "avg_engagement": 105,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 2,
+      "avg_engagement": 102.66666666666667,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 4,
+      "hour": 5,
+      "avg_engagement": 102,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 16,
+      "avg_engagement": 100,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 1,
+      "hour": 0,
+      "avg_engagement": 98,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 2,
+      "hour": 21,
+      "avg_engagement": 92,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 2,
+      "hour": 5,
+      "avg_engagement": 91.25,
+      "post_count": 4
+    },
+    {
+      "day_of_week": 6,
+      "hour": 2,
+      "avg_engagement": 86,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 0,
+      "hour": 5,
+      "avg_engagement": 84.33333333333333,
+      "post_count": 6
+    },
+    {
+      "day_of_week": 6,
+      "hour": 6,
+      "avg_engagement": 75.8,
+      "post_count": 5
+    },
+    {
+      "day_of_week": 1,
+      "hour": 19,
+      "avg_engagement": 75,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 2,
+      "hour": 1,
+      "avg_engagement": 74.75,
+      "post_count": 4
+    },
+    {
+      "day_of_week": 5,
+      "hour": 6,
+      "avg_engagement": 74,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 2,
+      "hour": 22,
+      "avg_engagement": 69.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 3,
+      "hour": 2,
+      "avg_engagement": 68,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 6,
+      "hour": 4,
+      "avg_engagement": 65,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 0,
+      "hour": 23,
+      "avg_engagement": 63,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 1,
+      "avg_engagement": 63,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 0,
+      "avg_engagement": 62.333333333333336,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 5,
+      "hour": 2,
+      "avg_engagement": 62,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 6,
+      "hour": 16,
+      "avg_engagement": 58,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 5,
+      "avg_engagement": 56,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 2,
+      "hour": 10,
+      "avg_engagement": 56,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 0,
+      "hour": 17,
+      "avg_engagement": 55,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 1,
+      "hour": 16,
+      "avg_engagement": 55,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 14,
+      "avg_engagement": 51,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 3,
+      "avg_engagement": 51,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 1,
+      "hour": 6,
+      "avg_engagement": 48.666666666666664,
+      "post_count": 3
+    },
+    {
+      "day_of_week": 3,
+      "hour": 15,
+      "avg_engagement": 47,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 18,
+      "avg_engagement": 45,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 6,
+      "hour": 0,
+      "avg_engagement": 42.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 2,
+      "hour": 19,
+      "avg_engagement": 36,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 4,
+      "avg_engagement": 30,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 5,
+      "hour": 19,
+      "avg_engagement": 29,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 1,
+      "avg_engagement": 25,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 6,
+      "hour": 8,
+      "avg_engagement": 24,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 0,
+      "hour": 11,
+      "avg_engagement": 24,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 19,
+      "avg_engagement": 23,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 5,
+      "hour": 17,
+      "avg_engagement": 22,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 22,
+      "avg_engagement": 20.5,
+      "post_count": 2
+    },
+    {
+      "day_of_week": 1,
+      "hour": 20,
+      "avg_engagement": 16,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 1,
+      "hour": 4,
+      "avg_engagement": 13,
+      "post_count": 1
+    },
+    {
+      "day_of_week": 4,
+      "hour": 23,
+      "avg_engagement": 11,
+      "post_count": 1
+    }
+  ]
+}

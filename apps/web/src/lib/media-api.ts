@@ -8,12 +8,11 @@ export type TranscriptSegment = {
 export type FileRef = { uploadId: string };
 export async function mediaRequest<T>(
   path:
-    | 'upload-url'
     | 'transcribe'
     | 'transcribe-status'
     | 'transcribe-cancel'
     | 'analyze'
-    | `catalog-${'list' | 'get' | 'artwork' | 'search' | 'search-status' | 'resolve' | 'prepare' | 'playback' | 'save' | 'remove' | 'upload-url' | 'upload-finish'}`,
+    | `catalog-${'list' | 'get' | 'artwork' | 'search' | 'search-status' | 'resolve' | 'prepare' | 'playback' | 'save' | 'remove'}`,
   body: Record<string, unknown>,
   accessToken?: string,
 ): Promise<T> {
@@ -21,7 +20,7 @@ export async function mediaRequest<T>(
   if (!token) throw new Error('Sign in required');
   if (window.desktop)
     return (await mainBridge.call(MAIN_CHANNELS.CLOUD_MEDIA, {
-      path,
+      path: `/media/${path}`,
       body,
       token,
     })) as T;

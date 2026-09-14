@@ -1,0 +1,1638 @@
+{
+  "dailyData": [
+    {
+      "date": "2026-06-24",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 111,
+          "comments": 3,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 2427,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 111,
+        "comments": 3,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 2427
+      }
+    },
+    {
+      "date": "2026-06-25",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 30,
+          "comments": 0,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 794,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 30,
+        "comments": 0,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 794
+      }
+    },
+    {
+      "date": "2026-06-26",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 1863,
+          "comments": 133,
+          "shares": 86,
+          "saves": 0,
+          "clicks": 0,
+          "views": 36715,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 1863,
+        "comments": 133,
+        "shares": 86,
+        "saves": 0,
+        "clicks": 0,
+        "views": 36715
+      }
+    },
+    {
+      "date": "2026-06-27",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 65,
+          "comments": 1,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 918,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 65,
+        "comments": 1,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 918
+      }
+    },
+    {
+      "date": "2026-06-28",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 48,
+          "comments": 5,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1296,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 48,
+        "comments": 5,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1296
+      }
+    },
+    {
+      "date": "2026-06-29",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 71,
+          "comments": 7,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1292,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 71,
+        "comments": 7,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1292
+      }
+    },
+    {
+      "date": "2026-06-30",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 6,
+          "comments": 1,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 353,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 6,
+        "comments": 1,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 353
+      }
+    },
+    {
+      "date": "2026-07-06",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 112,
+          "comments": 14,
+          "shares": 6,
+          "saves": 0,
+          "clicks": 0,
+          "views": 4176,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 112,
+        "comments": 14,
+        "shares": 6,
+        "saves": 0,
+        "clicks": 0,
+        "views": 4176
+      }
+    },
+    {
+      "date": "2026-07-07",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 6,
+          "comments": 0,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 900,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 6,
+        "comments": 0,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 900
+      }
+    },
+    {
+      "date": "2026-07-16",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 110,
+          "comments": 6,
+          "shares": 8,
+          "saves": 0,
+          "clicks": 0,
+          "views": 4018,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 110,
+        "comments": 6,
+        "shares": 8,
+        "saves": 0,
+        "clicks": 0,
+        "views": 4018
+      }
+    },
+    {
+      "date": "2026-07-17",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 14,
+          "comments": 1,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 683,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 14,
+        "comments": 1,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 683
+      }
+    },
+    {
+      "date": "2026-07-18",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 44,
+          "comments": 3,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1009,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 44,
+        "comments": 3,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1009
+      }
+    },
+    {
+      "date": "2026-07-23",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 54,
+          "comments": 1,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1100,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 54,
+        "comments": 1,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1100
+      }
+    },
+    {
+      "date": "2026-07-24",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 12,
+          "comments": 1,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 376,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 12,
+        "comments": 1,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 376
+      }
+    },
+    {
+      "date": "2026-07-28",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 7,
+          "comments": 3,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 283,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 7,
+        "comments": 3,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 283
+      }
+    },
+    {
+      "date": "2026-07-29",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 14,
+          "comments": 0,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 569,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 14,
+        "comments": 0,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 569
+      }
+    },
+    {
+      "date": "2026-07-30",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 77,
+          "comments": 12,
+          "shares": 4,
+          "saves": 0,
+          "clicks": 0,
+          "views": 2390,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 77,
+        "comments": 12,
+        "shares": 4,
+        "saves": 0,
+        "clicks": 0,
+        "views": 2390
+      }
+    },
+    {
+      "date": "2026-07-31",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 59,
+          "comments": 5,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1311,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 59,
+        "comments": 5,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1311
+      }
+    },
+    {
+      "date": "2026-08-02",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 14,
+          "comments": 0,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 348,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 14,
+        "comments": 0,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 348
+      }
+    },
+    {
+      "date": "2026-08-05",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 31,
+          "comments": 24,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1146,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 31,
+        "comments": 24,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1146
+      }
+    },
+    {
+      "date": "2026-08-06",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 47,
+          "comments": 1,
+          "shares": 2,
+          "saves": 0,
+          "clicks": 0,
+          "views": 905,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 47,
+        "comments": 1,
+        "shares": 2,
+        "saves": 0,
+        "clicks": 0,
+        "views": 905
+      }
+    },
+    {
+      "date": "2026-08-07",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 13,
+          "comments": 1,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 831,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 13,
+        "comments": 1,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 831
+      }
+    },
+    {
+      "date": "2026-08-08",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 6,
+          "comments": 0,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 622,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 6,
+        "comments": 0,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 622
+      }
+    },
+    {
+      "date": "2026-08-09",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 6,
+          "comments": 0,
+          "shares": 5,
+          "saves": 0,
+          "clicks": 0,
+          "views": 341,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 6,
+        "comments": 0,
+        "shares": 5,
+        "saves": 0,
+        "clicks": 0,
+        "views": 341
+      }
+    },
+    {
+      "date": "2026-08-10",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 6,
+          "comments": 0,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 191,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 6,
+        "comments": 0,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 191
+      }
+    },
+    {
+      "date": "2026-08-12",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 10,
+          "comments": 1,
+          "shares": 4,
+          "saves": 0,
+          "clicks": 0,
+          "views": 366,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 10,
+        "comments": 1,
+        "shares": 4,
+        "saves": 0,
+        "clicks": 0,
+        "views": 366
+      }
+    },
+    {
+      "date": "2026-08-14",
+      "postCount": 5,
+      "platforms": {
+        "tiktok": 5
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 26,
+          "comments": 2,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1151,
+          "postCount": 5
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 26,
+        "comments": 2,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1151
+      }
+    },
+    {
+      "date": "2026-08-15",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 20,
+          "comments": 0,
+          "shares": 4,
+          "saves": 0,
+          "clicks": 0,
+          "views": 446,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 20,
+        "comments": 0,
+        "shares": 4,
+        "saves": 0,
+        "clicks": 0,
+        "views": 446
+      }
+    },
+    {
+      "date": "2026-08-16",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 13,
+          "comments": 1,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 636,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 13,
+        "comments": 1,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 636
+      }
+    },
+    {
+      "date": "2026-08-17",
+      "postCount": 4,
+      "platforms": {
+        "tiktok": 4
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 133,
+          "comments": 29,
+          "shares": 8,
+          "saves": 0,
+          "clicks": 0,
+          "views": 4805,
+          "postCount": 4
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 133,
+        "comments": 29,
+        "shares": 8,
+        "saves": 0,
+        "clicks": 0,
+        "views": 4805
+      }
+    },
+    {
+      "date": "2026-08-18",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 74,
+          "comments": 4,
+          "shares": 9,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1928,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 74,
+        "comments": 4,
+        "shares": 9,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1928
+      }
+    },
+    {
+      "date": "2026-08-19",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 16,
+          "comments": 0,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 325,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 16,
+        "comments": 0,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 325
+      }
+    },
+    {
+      "date": "2026-08-20",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 24,
+          "comments": 4,
+          "shares": 3,
+          "saves": 0,
+          "clicks": 0,
+          "views": 898,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 24,
+        "comments": 4,
+        "shares": 3,
+        "saves": 0,
+        "clicks": 0,
+        "views": 898
+      }
+    },
+    {
+      "date": "2026-08-21",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 35,
+          "comments": 4,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 989,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 35,
+        "comments": 4,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 989
+      }
+    },
+    {
+      "date": "2026-08-22",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 82,
+          "comments": 1,
+          "shares": 6,
+          "saves": 0,
+          "clicks": 0,
+          "views": 2276,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 82,
+        "comments": 1,
+        "shares": 6,
+        "saves": 0,
+        "clicks": 0,
+        "views": 2276
+      }
+    },
+    {
+      "date": "2026-08-23",
+      "postCount": 4,
+      "platforms": {
+        "tiktok": 4
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 42,
+          "comments": 3,
+          "shares": 3,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1532,
+          "postCount": 4
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 42,
+        "comments": 3,
+        "shares": 3,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1532
+      }
+    },
+    {
+      "date": "2026-08-24",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 18,
+          "comments": 1,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 859,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 18,
+        "comments": 1,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 859
+      }
+    },
+    {
+      "date": "2026-08-25",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 36,
+          "comments": 1,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 832,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 36,
+        "comments": 1,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 832
+      }
+    },
+    {
+      "date": "2026-08-26",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 27,
+          "comments": 10,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1935,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 27,
+        "comments": 10,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1935
+      }
+    },
+    {
+      "date": "2026-08-27",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 132,
+          "comments": 0,
+          "shares": 10,
+          "saves": 0,
+          "clicks": 0,
+          "views": 5714,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 132,
+        "comments": 0,
+        "shares": 10,
+        "saves": 0,
+        "clicks": 0,
+        "views": 5714
+      }
+    },
+    {
+      "date": "2026-08-28",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 47,
+          "comments": 1,
+          "shares": 6,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1769,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 47,
+        "comments": 1,
+        "shares": 6,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1769
+      }
+    },
+    {
+      "date": "2026-08-29",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 73,
+          "comments": 3,
+          "shares": 3,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1558,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 73,
+        "comments": 3,
+        "shares": 3,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1558
+      }
+    },
+    {
+      "date": "2026-08-30",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 100,
+          "comments": 9,
+          "shares": 9,
+          "saves": 0,
+          "clicks": 0,
+          "views": 3817,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 100,
+        "comments": 9,
+        "shares": 9,
+        "saves": 0,
+        "clicks": 0,
+        "views": 3817
+      }
+    },
+    {
+      "date": "2026-08-31",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 91,
+          "comments": 4,
+          "shares": 21,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1778,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 91,
+        "comments": 4,
+        "shares": 21,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1778
+      }
+    },
+    {
+      "date": "2026-09-01",
+      "postCount": 4,
+      "platforms": {
+        "tiktok": 4
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 82,
+          "comments": 4,
+          "shares": 15,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1966,
+          "postCount": 4
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 82,
+        "comments": 4,
+        "shares": 15,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1966
+      }
+    },
+    {
+      "date": "2026-09-02",
+      "postCount": 2,
+      "platforms": {
+        "tiktok": 2
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 34,
+          "comments": 3,
+          "shares": 0,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1298,
+          "postCount": 2
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 34,
+        "comments": 3,
+        "shares": 0,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1298
+      }
+    },
+    {
+      "date": "2026-09-03",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 73,
+          "comments": 19,
+          "shares": 8,
+          "saves": 0,
+          "clicks": 0,
+          "views": 3624,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 73,
+        "comments": 19,
+        "shares": 8,
+        "saves": 0,
+        "clicks": 0,
+        "views": 3624
+      }
+    },
+    {
+      "date": "2026-09-04",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 41,
+          "comments": 4,
+          "shares": 2,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1116,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 41,
+        "comments": 4,
+        "shares": 2,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1116
+      }
+    },
+    {
+      "date": "2026-09-05",
+      "postCount": 5,
+      "platforms": {
+        "tiktok": 5
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 130,
+          "comments": 0,
+          "shares": 10,
+          "saves": 0,
+          "clicks": 0,
+          "views": 3519,
+          "postCount": 5
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 130,
+        "comments": 0,
+        "shares": 10,
+        "saves": 0,
+        "clicks": 0,
+        "views": 3519
+      }
+    },
+    {
+      "date": "2026-09-06",
+      "postCount": 1,
+      "platforms": {
+        "tiktok": 1
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 18,
+          "comments": 0,
+          "shares": 1,
+          "saves": 0,
+          "clicks": 0,
+          "views": 528,
+          "postCount": 1
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 18,
+        "comments": 0,
+        "shares": 1,
+        "saves": 0,
+        "clicks": 0,
+        "views": 528
+      }
+    },
+    {
+      "date": "2026-09-07",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 82,
+          "comments": 0,
+          "shares": 4,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1797,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 82,
+        "comments": 0,
+        "shares": 4,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1797
+      }
+    },
+    {
+      "date": "2026-09-08",
+      "postCount": 6,
+      "platforms": {
+        "tiktok": 6
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 162,
+          "comments": 0,
+          "shares": 10,
+          "saves": 0,
+          "clicks": 0,
+          "views": 4322,
+          "postCount": 6
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 162,
+        "comments": 0,
+        "shares": 10,
+        "saves": 0,
+        "clicks": 0,
+        "views": 4322
+      }
+    },
+    {
+      "date": "2026-09-10",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 62,
+          "comments": 4,
+          "shares": 3,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1248,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 62,
+        "comments": 4,
+        "shares": 3,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1248
+      }
+    },
+    {
+      "date": "2026-09-11",
+      "postCount": 3,
+      "platforms": {
+        "tiktok": 3
+      },
+      "platformMetrics": {
+        "tiktok": {
+          "impressions": 0,
+          "reach": 0,
+          "likes": 59,
+          "comments": 6,
+          "shares": 2,
+          "saves": 0,
+          "clicks": 0,
+          "views": 1040,
+          "postCount": 3
+        }
+      },
+      "metrics": {
+        "impressions": 0,
+        "reach": 0,
+        "likes": 59,
+        "comments": 6,
+        "shares": 2,
+        "saves": 0,
+        "clicks": 0,
+        "views": 1040
+      }
+    }
+  ],
+  "platformBreakdown": [
+    {
+      "platform": "tiktok",
+      "postCount": 123,
+      "impressions": 0,
+      "reach": 0,
+      "likes": 4568,
+      "comments": 340,
+      "shares": 264,
+      "saves": 0,
+      "clicks": 0,
+      "views": 119066
+    }
+  ]
+}

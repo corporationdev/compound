@@ -1,12 +1,13 @@
 import { getToken } from './auth-client';
-import { mediaRequest, type FileRef } from './media-api';
-import { mainBridge } from './ipc';
-import { MAIN_CHANNELS } from '@desktop/main-channels';
+import type { FileRef } from './media-api';
+import { uploadToCloud } from './upload';
 import {
   MAX_AUDIO_BYTES,
   TRANSCRIPTION_VERSION,
 } from '@compound/config/transcription';
 export const MAX_UPLOAD_BYTES = MAX_AUDIO_BYTES;
+const MEDIA_TYPES = ['audio/ogg', 'audio/wav', 'video/mp4'] as const;
+type MediaType = (typeof MEDIA_TYPES)[number];
 export async function uploadBlob(
   blob: Blob,
   cacheScope = '',
@@ -15,16 +16,15 @@ export async function uploadBlob(
     throw new Error(
       'Prepared media must be between 1 byte and 100 MiB. Choose a shorter clip.',
     );
+  if (!(MEDIA_TYPES as readonly string[]).includes(blob.type))
+    throw new Error('Unsupported upload. Use WAV/Ogg audio or MP4 video.');
   const token = await getToken();
   if (!token) throw new Error('Sign in required');
-  const bytes =
-    blob.type === 'audio/wav' || window.desktop
-      ? new Uint8Array(await blob.arrayBuffer())
-      : undefined;
   // Re-encoding the same PCM after a reload rejoins the existing upload/job.
   // Only an upload reference is cached; ownership is rechecked by the server.
   let cacheKey: string | undefined;
-  if (blob.type === 'audio/wav' && bytes) {
+  if (blob.type === 'audio/wav') {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
     try {
       const claims = JSON.parse(
         atob(token.split('.')[1].replaceAll('-', '+').replaceAll('_', '/')),
@@ -42,27 +42,9 @@ export async function uploadBlob(
       /* Storage may be disabled; uploading still works. */
     }
   }
-  let file: FileRef;
-  if (window.desktop) {
-    file = await mainBridge.call(MAIN_CHANNELS.CLOUD_UPLOAD, {
-      token,
-      contentType: blob.type,
-      bytes: bytes!,
-    });
-  } else {
-    const { uploadId, uploadUrl } = await mediaRequest<{
-      uploadId: string;
-      uploadUrl: string;
-    }>('upload-url', { size: blob.size, contentType: blob.type });
-    const response = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': blob.type },
-      body: blob,
-      signal: AbortSignal.timeout(240000),
-    });
-    if (!response.ok) throw new Error('Media upload failed');
-    file = { uploadId };
-  }
+  const file: FileRef = {
+    uploadId: await uploadToCloud({ purpose: 'media', contentType: blob.type as MediaType }, { blob }),
+  };
   if (cacheKey) {
     try {
       localStorage.setItem(

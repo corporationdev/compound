@@ -1,0 +1,177 @@
+{
+  "accounts": [
+    {
+      "_id": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "__v": 0,
+      "adsNextSyncDueAt": "1970-01-01T00:00:00.000Z",
+      "adsSyncFailureCount": 0,
+      "analyticsLastEnqueuedAt": "2026-09-11T21:50:46.075Z",
+      "analyticsLastRequestedAt": null,
+      "analyticsLastSyncError": null,
+      "analyticsLastSyncedAt": "2026-09-11T21:51:07.310Z",
+      "analyticsSyncFailureCount": 0,
+      "byokCredentials": {
+        "isActive": false
+      },
+      "createdAt": "2026-09-05T04:42:14.866Z",
+      "displayName": "Isaac Dyor",
+      "enabled": true,
+      "externalPostCount": 145,
+      "followersCount": 2076,
+      "followersLastUpdated": "2026-09-11T05:28:06.707Z",
+      "inboxAuthErrorAt": null,
+      "inboxConversationsSyncedAt": null,
+      "inboxSyncFailCount": 0,
+      "inboxSyncFailedAt": null,
+      "intentionalDisconnectAt": null,
+      "isActive": true,
+      "lastSyncDurationMs": 3008,
+      "metadata": {
+        "scope": null,
+        "expires_in": 5105344,
+        "profileData": {
+          "id": "26992784200420659",
+          "username": "isaacdyor",
+          "displayName": "Isaac Dyor",
+          "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+          "profileUrl": "https://instagram.com/isaacdyor",
+          "followersCount": 2076,
+          "bio": "San Francisco \n     _____\n /  ___ \\\n|  o   o |\n \\  --- /\n   \\___/\n  /====\\",
+          "website": "https://postbob.app/",
+          "extraData": {
+            "followsCount": 76,
+            "mediaCount": 142,
+            "accountType": "MEDIA_CREATOR",
+            "instagramScopedId": "17841461196408663"
+          }
+        },
+        "connectedAt": "2026-09-05T04:42:14.806Z",
+        "instagramScopedId": "17841461196408663"
+      },
+      "needsReconnection": false,
+      "parentAccountId": null,
+      "permissions": [
+        "instagram_business_basic",
+        "instagram_business_content_publish",
+        "instagram_business_manage_insights",
+        "instagram_business_manage_comments",
+        "instagram_business_manage_messages"
+      ],
+      "platformStatus": "active",
+      "platformStatusAt": null,
+      "platformStatusReason": null,
+      "platformUserId": "26992784200420659",
+      "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+      "profileUrl": "https://instagram.com/isaacdyor",
+      "rateLimitCount": 0,
+      "tokenExpiresAt": "2026-11-03T06:51:18.806Z",
+      "updatedAt": "2026-09-11T22:30:22.907Z",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "username": "isaacdyor",
+      "xCapabilities": {
+        "analytics": false,
+        "inbox": false
+      },
+      "xCapabilitiesAutoDisabled": {
+        "analytics": false,
+        "inbox": false
+      },
+      "youtubeCanUploadThumbnails": null,
+      "youtubeThumbnailCapCheckedAt": null,
+      "dmHistoryBackfillAt": "2026-09-05T04:44:18.151Z",
+      "dmHistoryBackfillStatus": "done",
+      "profileId": {
+        "_id": "6a9b9d75f4348b5122c72715",
+        "name": "Postbob k1776znwrxkvn9w1brfxj9jqk58dad7d"
+      },
+      "adsStatus": "connected"
+    },
+    {
+      "_id": "6a9b9dc477555aae01de7895",
+      "platform": "tiktok",
+      "__v": 0,
+      "adsNextSyncDueAt": "1970-01-01T00:00:00.000Z",
+      "adsSyncFailureCount": 0,
+      "analyticsLastEnqueuedAt": "2026-09-11T21:44:42.507Z",
+      "analyticsLastRequestedAt": null,
+      "analyticsLastSyncError": null,
+      "analyticsLastSyncedAt": "2026-09-11T21:46:37.203Z",
+      "analyticsSyncFailureCount": 0,
+      "byokCredentials": {
+        "isActive": false
+      },
+      "createdAt": "2026-09-05T04:42:43.948Z",
+      "displayName": "Isaac Dyor",
+      "enabled": true,
+      "externalPostCount": 123,
+      "followersCount": 260,
+      "followersLastUpdated": "2026-09-11T05:28:07.034Z",
+      "inboxAuthErrorAt": null,
+      "inboxConversationsSyncedAt": null,
+      "inboxSyncFailCount": 0,
+      "inboxSyncFailedAt": null,
+      "intentionalDisconnectAt": null,
+      "isActive": true,
+      "lastSyncDurationMs": 1622,
+      "metadata": {
+        "scope": "video.upload,user.info.basic,user.info.profile,user.info.stats,video.list,video.publish",
+        "expires_in": 86400,
+        "profileData": {
+          "id": "-000cDApyzW7ClFAXDVpHW9vNya23VYs5gC4",
+          "username": "isaacdyor",
+          "displayName": "Isaac Dyor",
+          "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+          "profileUrl": "https://tiktok.com/@isaacdyor",
+          "followersCount": 260,
+          "bio": "Software Engineer",
+          "extraData": {
+            "followingCount": 7,
+            "likesCount": 4504,
+            "videoCount": 120
+          }
+        },
+        "connectedAt": "2026-09-05T04:42:43.898Z",
+        "refreshEnqueuedAt": "2026-09-08T06:11:30.262Z",
+        "lastTokenRefreshAt": "2026-09-08T06:12:20.007Z"
+      },
+      "needsReconnection": false,
+      "parentAccountId": null,
+      "permissions": [
+        "video.upload",
+        "user.info.basic",
+        "user.info.profile",
+        "user.info.stats",
+        "video.list",
+        "video.publish"
+      ],
+      "platformStatus": "active",
+      "platformStatusAt": null,
+      "platformStatusReason": null,
+      "platformUserId": "-000cDApyzW7ClFAXDVpHW9vNya23VYs5gC4",
+      "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+      "profileUrl": "https://tiktok.com/@isaacdyor",
+      "rateLimitCount": 0,
+      "tokenExpiresAt": "2026-09-12T07:23:24.744Z",
+      "updatedAt": "2026-09-11T21:46:37.203Z",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "username": "isaacdyor",
+      "xCapabilities": {
+        "analytics": false,
+        "inbox": false
+      },
+      "xCapabilitiesAutoDisabled": {
+        "analytics": false,
+        "inbox": false
+      },
+      "youtubeCanUploadThumbnails": null,
+      "youtubeThumbnailCapCheckedAt": null,
+      "profileId": {
+        "_id": "6a9b9d75f4348b5122c72715",
+        "name": "Postbob k1776znwrxkvn9w1brfxj9jqk58dad7d"
+      },
+      "adsStatus": "not_connected"
+    }
+  ],
+  "hasAnalyticsAccess": true
+}

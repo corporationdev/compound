@@ -23,6 +23,7 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
             throw new Error('Account cleanup requires an action context');
           await ctx.runMutation(internal.uploads.removeForUser, { ownerId: user.id });
           await ctx.runMutation(internal.catalog.removeForUser, { ownerId: user.id });
+          await ctx.runMutation(internal.social_connections.removeForUser, { ownerId: user.id });
         },
       },
     },

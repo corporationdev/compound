@@ -1,0 +1,67 @@
+{
+  "frequency": [
+    {
+      "platform": "tiktok",
+      "posts_per_week": 2,
+      "avg_engagement_rate": 3.0327567153810726,
+      "avg_engagement": 56,
+      "weeks_count": 2
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 3,
+      "avg_engagement_rate": 4.54759715492725,
+      "avg_engagement": 23,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 6,
+      "avg_engagement_rate": 4.421950390231296,
+      "avg_engagement": 211.25,
+      "weeks_count": 2
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 8,
+      "avg_engagement_rate": 2.4192246151586616,
+      "avg_engagement": 17,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 9,
+      "avg_engagement_rate": 3.749693155076796,
+      "avg_engagement": 21.77777777777778,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 10,
+      "avg_engagement_rate": 2.9728935349847507,
+      "avg_engagement": 9,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 15,
+      "avg_engagement_rate": 4.949684509326758,
+      "avg_engagement": 26.266666666666666,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 20,
+      "avg_engagement_rate": 3.2372841338140885,
+      "avg_engagement": 24.35,
+      "weeks_count": 1
+    },
+    {
+      "platform": "tiktok",
+      "posts_per_week": 21,
+      "avg_engagement_rate": 4.055521220510634,
+      "avg_engagement": 24.785714285714285,
+      "weeks_count": 2
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { UPLOAD_PART_BYTES } from '@compound/config/upload';
 import { test, expect, mock, beforeEach, afterAll } from 'bun:test';
 import { mkdtemp, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,7 +9,8 @@ const directory = await mkdtemp(join(tmpdir(), 'compound-auth-test-'));
 // No safeStorage mock: login must work without accessing the OS credential store.
 mock.module('electron', () => ({ app: { getAppPath: () => directory } }));
 const originalFetch = globalThis.fetch;
-const { authRequest, mediaRequest, uploadMedia, readCatalogArtwork } = await import('../src/cloud');
+const { authRequest, mediaRequest, serverRequest, readCatalogArtwork } = await import('../src/cloud');
+const { uploadToCloud, cancelCloudUpload } = await import('../src/cloud-upload');
 const values = new Map<string, string>();
 const authUrl = 'https://test.convex.site';
 const storageKey = `compound:${authUrl}:native-session`;
@@ -156,20 +158,88 @@ test('account deletion clears saved login and missing signed login header is rej
 });
 
 test('native media and uploads use the access token obtained by the renderer', async () => {
+  const parts = new Map<string, Uint8Array>();
   globalThis.fetch = (async (url, init) => {
-    if (String(url) === 'https://upload.example.com/object') {
+    const target = new URL(String(url));
+    if (target.hostname === 'r2.example.com') {
       expect(init?.method).toBe('PUT');
       expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+      parts.set(target.searchParams.get('partNumber')!, new Uint8Array(init!.body as Uint8Array));
       return new Response(null, { status: 200 });
     }
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer convex.jwt');
-    return String(url).endsWith('/upload-url')
-      ? Response.json({ uploadId: 'upload', uploadUrl: 'https://upload.example.com/object' })
-      : Response.json({ result: 'analysis' });
+    if (target.pathname === '/upload/begin') {
+      const body = JSON.parse(String(init?.body));
+      expect(body).toEqual({ purpose: 'media', contentType: 'audio/wav', size: 3 });
+      return Response.json({ id: 'upload', uploadId: 'mp', partSize: UPLOAD_PART_BYTES, urls: ['https://r2.example.com/o?partNumber=1&uploadId=mp'] });
+    }
+    if (target.pathname === '/upload/complete') return Response.json({ ok: true });
+    return Response.json({ result: 'analysis' });
   }) as typeof fetch;
   expect(await mediaRequest('analyze', { uploadId: 'upload' }, 'convex.jwt'))
     .toEqual({ result: 'analysis' });
-  expect(await uploadMedia('audio/wav', new Uint8Array([1]), 'convex.jwt'))
-    .toEqual({ uploadId: 'upload' });
+  const progress: number[] = [];
+  expect(
+    await uploadToCloud(
+      { uploadId: 'u1', request: { purpose: 'media', contentType: 'audio/wav' }, source: { bytes: new Uint8Array([1, 2, 3]) }, token: 'convex.jwt' },
+      (event) => progress.push(event.sent),
+    ),
+  ).toEqual({ id: 'upload', size: 3 });
+  expect([...parts.get('1')!]).toEqual([1, 2, 3]);
+  expect(progress.at(-1)).toBe(3);
   await expect(mediaRequest('analyze', {}, null)).rejects.toThrow('Sign in required');
+  await expect(serverRequest('/upload/begin', {}, 'convex.jwt')).rejects.toThrow('Unknown server operation');
+});
+
+test('desktop uploads stream a file from disk in parts and can be cancelled', async () => {
+  const path = join(directory, 'clip.mp4');
+  const size = UPLOAD_PART_BYTES + 5;
+  const bytes = new Uint8Array(size);
+  bytes[0] = 7;
+  bytes[size - 1] = 9;
+  await writeFile(path, bytes);
+  const received: Record<string, Uint8Array> = {};
+  let aborted = false;
+  globalThis.fetch = (async (url, init) => {
+    const target = new URL(String(url));
+    if (target.hostname === 'r2.example.com') {
+      received[target.searchParams.get('partNumber')!] = new Uint8Array(init!.body as Uint8Array);
+      return new Response(null, { status: 200 });
+    }
+    if (target.pathname === '/upload/begin') {
+      expect(JSON.parse(String(init?.body))).toMatchObject({ purpose: 'social', kind: 'video', size });
+      return Response.json({ id: 'media', uploadId: 'mp', partSize: UPLOAD_PART_BYTES, urls: [1, 2].map((n) => `https://r2.example.com/o?partNumber=${n}&uploadId=mp`) });
+    }
+    if (target.pathname === '/upload/abort') aborted = true;
+    return Response.json({ ok: true });
+  }) as typeof fetch;
+  const result = await uploadToCloud(
+    { uploadId: 'u2', request: { purpose: 'social', kind: 'video', contentType: 'video/mp4' }, source: { path }, token: 'convex.jwt' },
+    () => {},
+  );
+  expect(result).toEqual({ id: 'media', size });
+  expect(received['1']!.byteLength).toBe(UPLOAD_PART_BYTES);
+  expect(received['1']![0]).toBe(7);
+  expect(received['2']!.byteLength).toBe(5);
+  expect(received['2']![4]).toBe(9);
+
+  // Cancel while the first part is in flight: the Worker is told to discard the object.
+  globalThis.fetch = (async (url, init) => {
+    const target = new URL(String(url));
+    if (target.hostname === 'r2.example.com') {
+      cancelCloudUpload('u3');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      init!.signal!.throwIfAborted();
+      return new Response(null, { status: 200 });
+    }
+    if (target.pathname === '/upload/begin')
+      return Response.json({ id: 'media', uploadId: 'mp', partSize: UPLOAD_PART_BYTES, urls: [1, 2].map((n) => `https://r2.example.com/o?partNumber=${n}&uploadId=mp`) });
+    if (target.pathname === '/upload/abort') aborted = true;
+    return Response.json({ ok: true });
+  }) as typeof fetch;
+  aborted = false;
+  await expect(
+    uploadToCloud({ uploadId: 'u3', request: { purpose: 'social', kind: 'video', contentType: 'video/mp4' }, source: { path }, token: 'convex.jwt' }, () => {}),
+  ).rejects.toThrow('Upload cancelled');
+  expect(aborted).toBe(true);
 });

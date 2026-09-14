@@ -8,6 +8,7 @@ import { Match, Show, Switch } from "solid-js";
 import { DashboardAccountView } from "@/components/dashboard/account-view";
 import { DashboardGetDesktopApp } from "@/components/dashboard/get-desktop-app";
 import { DashboardHelpView } from "@/components/dashboard/help-view";
+import { DashboardPostsView } from "@/components/dashboard/posts-view";
 import { DashboardProjectsView } from "@/components/dashboard/projects-view";
 import { DashboardSettingsView } from "@/components/dashboard/settings-view";
 import { DashboardSidebarHeader, DashboardSidebarNav, DashboardSidebarUser, DashboardSidebarItem } from "@/components/dashboard/sidebar";
@@ -18,6 +19,7 @@ import type { DashboardView } from "@/components/dashboard/types";
 
 const DASHBOARD_VIEWS: readonly DashboardView[] = [
   "projects",
+  "posts",
   "account",
   "settings",
   "help",
@@ -51,6 +53,7 @@ export function DashboardPage() {
           }
         >
           <DashboardSidebarItem active={view() === "projects"} onClick={() => setView("projects")} icon="compound-project-file" label="Projects" />
+          <DashboardSidebarItem active={view() === "posts"} onClick={() => setView("posts")} icon="posts" label="Posts" />
         </DashboardSidebarNav>
         <DashboardSidebarUser active={view() === "account"} onClick={() => setView("account")} />
       </aside>
@@ -61,6 +64,9 @@ export function DashboardPage() {
         <Switch>
           <Match when={view() === "projects"}>
             <DashboardProjectsView />
+          </Match>
+          <Match when={view() === "posts"}>
+            <DashboardPostsView />
           </Match>
           <Match when={view() === "account"}>
             <DashboardAccountView />

@@ -25,7 +25,7 @@ The desktop initializes a default projects folder on startup: `~/Movies/compound
 
 The authenticated Worker API is:
 
-- `POST /media/upload-url { contentType, size }` → `{ uploadId, uploadUrl }`. The client PUTs the prepared file to that R2 URL.
+- `POST /upload/begin { purpose: 'media', contentType, size }` → `{ id, uploadId, partSize, urls }`. The client PUTs each part to its signed R2 URL, then calls `POST /upload/complete { purpose, id, uploadId }`; the Worker assembles and verifies the object. `id` is the `uploadId` the media routes take.
 - `POST /media/transcribe { uploadId, language? }` → `{ jobId }` for WAV, or the legacy `{ segments }` result for Ogg.
 - `POST /media/transcribe-status { jobId }` → status, or `{ status: "ready", segments, quality }`. The existing client waits internally and still returns the segment array.
 - `POST /media/transcribe-cancel { jobId }` cancels an owned job.

@@ -45,10 +45,6 @@ export const playback = action({ args: { sourceId: v.id('catalogSources') }, han
   const { key, ...media } = await ctx.runQuery(api.catalog.media, args);
   return { ...media, url: await catalogUrl(key) };
 } });
-export const uploadUrl = action({ args: { title: v.string(), kind: catalogKind, size: v.number(), mimeType: v.string() }, handler: async (ctx, args): Promise<{ sourceId: string; url: string }> => {
-  const { key, sourceId } = await ctx.runMutation(api.catalog.createUpload, args);
-  return { sourceId, url: await catalogUrl(key, 'PUT', args.mimeType) };
-} });
 export const searchProvider = internalAction({ args: { searchId: v.id('catalogSearches') }, handler: async (ctx, args): Promise<void> => {
   const search = await ctx.runQuery(internal.catalog.searchContext, args);
   if (!search || search.status !== 'running') return;

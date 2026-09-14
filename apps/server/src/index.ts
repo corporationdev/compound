@@ -7,6 +7,9 @@ import { AwsClient } from 'aws4fetch';
 import { z } from 'zod';
 import { analyze, transcribe } from './providers';
 import { CATALOG_OPERATIONS, catalogRequest } from './catalog';
+import { SOCIAL_OPERATIONS, SocialError, socialMediaResponse, socialRequest } from './social';
+import { MultipartStore, UPLOAD_OPERATIONS, uploadRequest, type UploadOperation } from './upload';
+import { HttpError } from './errors';
 export interface Env {
   CONVEX_URL: string;
   CORS_ORIGIN: string;
@@ -19,12 +22,6 @@ export interface Env {
   GOOGLE_GENERATIVE_AI_API_KEY: string;
 }
 const MAX_BYTES = 100 * 1024 * 1024;
-const uploadSchema = z
-  .object({
-    size: z.number().int().min(1).max(MAX_BYTES),
-    contentType: z.enum(['audio/ogg', 'audio/wav', 'video/mp4']),
-  })
-  .strict();
 const operationSchema = z
   .object({
     uploadId: z.string().min(1).max(100),
@@ -35,44 +32,26 @@ const operationSchema = z
     prompt: z.string().max(12000).optional(),
   })
   .strict();
-class HttpError extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new HttpError(400, 'Invalid request');
   return result.data;
 }
-async function signedUrl(
-  env: Env,
-  key: string,
-  method: 'PUT' | 'GET',
-  contentType?: string,
-  size?: number,
-) {
-  const signer = new AwsClient({
+function awsClient(env: Env) {
+  return new AwsClient({
     accessKeyId: env.R2_ACCESS_KEY_ID,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY,
     service: 's3',
     region: 'auto',
   });
+}
+/** A short-lived signed GET for an object the Worker has already verified. */
+async function signedUrl(env: Env, key: string) {
   const url = new URL(
     `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${key}`,
   );
-  url.searchParams.set('X-Amz-Expires', method === 'PUT' ? '900' : '600');
-  return (
-    await signer.sign(url, {
-      method,
-      ...(contentType
-        ? { headers: { 'Content-Type': contentType, 'Content-Length': String(size) } }
-        : {}),
-      aws: { signQuery: true, allHeaders: true },
-    })
-  ).url;
+  url.searchParams.set('X-Amz-Expires', '600');
+  return (await awsClient(env).sign(url, { method: 'GET', aws: { signQuery: true } })).url;
 }
 async function readBody(request: Request) {
   const reader = request.body?.getReader();
@@ -119,12 +98,16 @@ export default {
     };
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), { status, headers });
+    const sign = (key: string) => signedUrl(env, key);
     try {
+      const path = new URL(request.url).pathname;
+      // Zernio fetches post media here with no session and no browser origin.
+      if (path.startsWith('/social/media/') && (request.method === 'GET' || request.method === 'HEAD'))
+        return await socialMediaResponse(env, sign, request);
       if (origin && !allowed) throw new HttpError(403, 'Origin not allowed');
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
-      const path = new URL(request.url).pathname;
       if (path === '/health' && request.method === 'GET') return json({ ok: true });
-      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
+      if (!['/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`), ...SOCIAL_OPERATIONS.map(operation => `/social/${operation}`), ...UPLOAD_OPERATIONS.map(operation => `/upload/${operation}`)].includes(path))
         throw new HttpError(404, 'Not found');
       if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -133,20 +116,28 @@ export default {
       const user = await client.query(api.auth.getCurrentUser, {}).catch(() => null);
       if (!user) throw new HttpError(401, 'Session expired. Sign in again.');
       const body = await readBody(request);
+      if (path.startsWith('/upload/')) {
+        try {
+          return json(await uploadRequest(client, env, new MultipartStore(env, awsClient(env)), path.slice('/upload/'.length) as UploadOperation, body));
+        } catch (error) {
+          if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid upload request');
+          throw error;
+        }
+      }
+      if (path.startsWith('/social/')) {
+        try { return json(await socialRequest(client, sign, path.slice('/social/'.length) as (typeof SOCIAL_OPERATIONS)[number], body)); }
+        catch (error) {
+          if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid post media request');
+          if (error instanceof SocialError) throw new HttpError(error.status, error.message);
+          throw error;
+        }
+      }
       if (path.startsWith('/media/catalog-')) {
         try { return json(await catalogRequest(client, path.slice('/media/'.length), body)); }
         catch (error) {
           if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid library request');
           throw error;
         }
-      }
-      if (path === '/media/upload-url') {
-        const upload = await client.mutation(api.uploads.create, parseInput(uploadSchema, body));
-        if (!upload) throw new Error('Could not register upload');
-        return json({
-          uploadId: upload._id,
-          uploadUrl: await signedUrl(env, upload.key, 'PUT', upload.contentType, upload.size),
-        });
       }
       if (path === '/media/transcribe-status' || path === '/media/transcribe-cancel') {
         const input = parseInput(z.object({ jobId: z.string().min(1).max(100) }).strict(), body);
@@ -191,7 +182,7 @@ export default {
           segments: await transcribe({
             key: env.DEEPGRAM_API_KEY,
             model: DEEPGRAM_MODEL,
-            url: await signedUrl(env, upload.key, 'GET'),
+            url: await signedUrl(env, upload.key),
             language: input.language,
             signal,
           }),

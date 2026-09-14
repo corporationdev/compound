@@ -33,3 +33,5 @@ for (const script of ['dev:backend', 'dev:infra', 'dev:desktop']) {
 }
 process.on('SIGINT', () => stop(0));
 process.on('SIGTERM', () => stop(0));
+// A closed terminal sends SIGHUP; without this the detached children outlive us.
+process.on('SIGHUP', () => stop(0));

@@ -1,3 +1,4 @@
+import { UPLOAD_PART_BYTES } from '@compound/config/upload';
 import { test, expect, afterEach } from 'bun:test';
 import worker, { type Env } from '../src/index';
 import { analyze, parseTranscript, transcribe } from '../src/providers';
@@ -124,7 +125,7 @@ const env = {
   DEEPGRAM_API_KEY: 'test',
 } as Env;
 const request = (path: string, body: unknown, origin?: string, token = 'valid-jwt') =>
-  new Request(`https://worker.example/media/${path}`, {
+  new Request(`https://worker.example/${path.includes('/') ? path : `media/${path}`}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -133,65 +134,104 @@ const request = (path: string, body: unknown, origin?: string, token = 'valid-jw
     },
     body: JSON.stringify(body),
   });
-function backend(user: unknown, upload: unknown = null) {
-  globalThis.fetch = (async (_url, init) => {
-    const input = JSON.parse(String(init?.body));
+type Storage = Record<string, (request: Request, body: string) => Response>;
+function backend(user: unknown, upload: unknown = null, storage: Storage = {}) {
+  const calls: Request[] = [];
+  globalThis.fetch = (async (url, init) => {
+    // aws4fetch signs a Request object; the Convex client passes url + init.
+    const request = url instanceof Request ? url : new Request(url, init);
+    const target = new URL(request.url);
+    const body = await request.text();
+    if (target.hostname.endsWith('r2.cloudflarestorage.com')) {
+      calls.push(request);
+      const key = `${request.method} ${target.search.split('&X-Amz')[0]}`;
+      const handler = Object.entries(storage).find(([pattern]) => key.startsWith(pattern))?.[1];
+      return handler ? handler(request, body) : new Response('<Error/>', { status: 500 });
+    }
+    const input = JSON.parse(body);
     const value = input.path === 'auth:getCurrentUser' ? user : upload;
     return Response.json({ status: 'success', value });
   }) as typeof fetch;
+  return calls;
 }
 test('Worker requires a current session and exact browser origin before any upload', async () => {
   backend(null);
-  expect((await worker.fetch(request('upload-url', {}, undefined, ''), env)).status).toBe(401);
-  expect((await worker.fetch(request('upload-url', {}), env)).status).toBe(401);
-  expect((await worker.fetch(request('upload-url', {}, 'null'), env)).status).toBe(403);
-  expect((await worker.fetch(request('upload-url', {}, 'https://evil.example'), env)).status).toBe(
+  expect((await worker.fetch(request('upload/begin', {}, undefined, ''), env)).status).toBe(401);
+  expect((await worker.fetch(request('upload/begin', {}), env)).status).toBe(401);
+  expect((await worker.fetch(request('upload/begin', {}, 'null'), env)).status).toBe(403);
+  expect((await worker.fetch(request('upload/begin', {}, 'https://evil.example'), env)).status).toBe(
     403,
   );
   const cors = await worker.fetch(
-    new Request('https://worker.example/media/upload-url', {
+    new Request('https://worker.example/upload/begin', {
       method: 'OPTIONS',
       headers: { Origin: env.CORS_ORIGIN },
     }),
     env,
   );
   expect(cors.headers.get('Access-Control-Allow-Origin')).toBe(env.CORS_ORIGIN);
+  expect((await worker.fetch(request('upload-url', {}), env)).status).toBe(404);
 });
-test('Worker signs server-owned keys, binds declared bytes/type and rejects arbitrary references', async () => {
-  backend(
+test('Worker opens a multipart upload on a server-owned key and signs one URL per part', async () => {
+  const size = UPLOAD_PART_BYTES + 1;
+  const calls = backend(
     { id: 'owner' },
-    { _id: 'owned-id', key: 'media/owned-id', contentType: 'audio/ogg', size: 10 },
+    { _id: 'owned-id', key: 'media/owned-id', contentType: 'audio/ogg', size },
+    { 'POST ?uploads=': () => new Response('<InitiateMultipartUploadResult><UploadId>mp-1</UploadId></InitiateMultipartUploadResult>') },
   );
-  const response = await worker.fetch(
-    request('upload-url', { contentType: 'audio/ogg', size: 10 }),
-    env,
-  );
+  const response = await worker.fetch(request('upload/begin', { purpose: 'media', contentType: 'audio/ogg', size }), env);
   expect(response.status).toBe(200);
-  const data = (await response.json()) as { uploadUrl: string; uploadId: string };
-  const signed = new URL(data.uploadUrl);
+  const data = (await response.json()) as { id: string; uploadId: string; partSize: number; urls: string[] };
+  expect(data).toMatchObject({ id: 'owned-id', uploadId: 'mp-1', partSize: UPLOAD_PART_BYTES });
+  expect(data.urls).toHaveLength(2);
+  const signed = new URL(data.urls[1]!);
   expect(signed.pathname).toBe('/compound-media-dev/media/owned-id');
-  expect(signed.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
-  expect(data.uploadId).toBe('owned-id');
-  expect(
-    (
-      await worker.fetch(
-        request('upload-url', { contentType: 'audio/ogg', size: 100 * 1024 * 1024 + 1 }),
-        env,
-      )
-    ).status,
-  ).toBe(400);
-  expect(
-    (
-      await worker.fetch(
-        request('transcribe', { uploadId: 'owned-id', url: 'https://evil.example' }),
-        env,
-      )
-    ).status,
-  ).toBe(400);
+  expect(signed.searchParams.get('partNumber')).toBe('2');
+  expect(signed.searchParams.get('uploadId')).toBe('mp-1');
+  expect(signed.searchParams.get('X-Amz-Expires')).toBe('21600');
+  expect(signed.searchParams.has('X-Amz-Signature')).toBe(true);
+  expect(new URL(calls[0]!.url).pathname).toBe('/compound-media-dev/media/owned-id');
+  expect(calls[0]!.headers.get('Content-Type')).toBe('audio/ogg');
+  expect((await worker.fetch(request('upload/begin', { purpose: 'media', contentType: 'audio/ogg', size: 100 * 1024 * 1024 + 1 }), env)).status).toBe(400);
+  expect((await worker.fetch(request('upload/begin', { purpose: 'social', kind: 'video', contentType: 'audio/ogg', size: 10 }), env)).status).toBe(400);
+  expect((await worker.fetch(request('transcribe', { uploadId: 'owned-id', url: 'https://evil.example' }), env)).status).toBe(400);
   backend({ id: 'owner' });
-  expect((await worker.fetch(request('transcribe', { uploadId: 'other-id' }), env)).status).toBe(
-    404,
+  expect((await worker.fetch(request('transcribe', { uploadId: 'other-id' }), env)).status).toBe(404);
+});
+test('Worker completes an upload only when the parts R2 holds add up to the declared size', async () => {
+  const size = UPLOAD_PART_BYTES + 1;
+  const row = { _id: 'owned-id', key: 'media/owned-id', contentType: 'audio/ogg', size };
+  const parts = (sizes: number[]) =>
+    `<ListPartsResult>${sizes.map((s, i) => `<Part><PartNumber>${i + 1}</PartNumber><ETag>&quot;e${i + 1}&quot;</ETag><Size>${s}</Size></Part>`).join('')}</ListPartsResult>`;
+  let completed: string | undefined;
+  let aborted = 0;
+  const storage: Storage = {
+    'GET ?uploadId=mp-1': () => new Response(parts([UPLOAD_PART_BYTES, 1])),
+    'POST ?uploadId=mp-1': (_request, body) => {
+      completed = body;
+      return new Response('<CompleteMultipartUploadResult/>');
+    },
+    'DELETE ?uploadId=': () => {
+      aborted++;
+      return new Response(null, { status: 204 });
+    },
+  };
+  backend({ id: 'owner' }, row, storage);
+  const media = { head: async () => ({ size, httpMetadata: { contentType: 'audio/ogg' } }), delete: async () => {} } as unknown as R2Bucket;
+  const ok = await worker.fetch(request('upload/complete', { purpose: 'media', id: 'owned-id', uploadId: 'mp-1' }), { ...env, MEDIA: media });
+  expect(ok.status).toBe(200);
+  expect(completed).toBe(
+    '<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag></Part><Part><PartNumber>2</PartNumber><ETag>&quot;e2&quot;</ETag></Part></CompleteMultipartUpload>',
   );
+  backend({ id: 'owner' }, row, { ...storage, 'GET ?uploadId=mp-1': () => new Response(parts([UPLOAD_PART_BYTES])) });
+  const short = await worker.fetch(request('upload/complete', { purpose: 'media', id: 'owned-id', uploadId: 'mp-1' }), { ...env, MEDIA: media });
+  expect(short.status).toBe(400);
+  expect(aborted).toBe(1);
+  backend({ id: 'owner' }, row, storage);
+  const wrongType = { head: async () => ({ size, httpMetadata: { contentType: 'video/mp4' } }), delete: async () => {} } as unknown as R2Bucket;
+  expect((await worker.fetch(request('upload/complete', { purpose: 'media', id: 'owned-id', uploadId: 'mp-1' }), { ...env, MEDIA: wrongType })).status).toBe(400);
+  expect((await worker.fetch(request('upload/abort', { purpose: 'media', id: 'owned-id', uploadId: 'mp-1' }), { ...env, MEDIA: media })).status).toBe(200);
+  expect(aborted).toBe(2);
 });
 test('Worker refuses incomplete uploads before provider calls', async () => {
   backend(

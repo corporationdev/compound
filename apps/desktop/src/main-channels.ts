@@ -32,11 +32,16 @@ export const MAIN_CHANNELS = {
   CLOUD_AUTH: "cloud:auth",
   CLOUD_MEDIA: "cloud:media",
   CLOUD_UPLOAD: "cloud:upload",
-  CLOUD_CATALOG_UPLOAD: "cloud:catalog-upload",
+  CLOUD_UPLOAD_CANCEL: "cloud:upload-cancel",
+  RENDER_CACHE_LOOKUP: "render-cache:lookup",
+  RENDER_CACHE_STORE: "render-cache:store",
+  CLOUD_UPLOAD_PROGRESS: "cloud:upload-progress",
   CLOUD_CATALOG_FILE: "cloud:catalog-file",
   CLOUD_CATALOG_ARTWORK: "cloud:catalog-artwork",
   // Renderer→Main requests
   APP_OPEN_EXTERNAL: "app:open-external",
+  APP_DEEP_LINK_TAKE: "app:deep-link-take",
+  SOCIAL_PICK_VIDEO: "social:pick-video",
   APP_SHOW_IN_FOLDER: "app:show-in-folder",
   CLI_IS_INSTALLED: "cli:is-installed",
   CLI_INSTALL: "cli:install",
@@ -75,6 +80,7 @@ export const MAIN_CHANNELS = {
   PROJECTS_FS_REAL_PATH: "projects:fs-real-path",
 
   // Main→Renderer events
+  APP_DEEP_LINK: "app:deep-link",
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
   HEADLESS_MODE: "headless:mode",
   PROJECTS_CHANGED: "projects:changed",
@@ -126,9 +132,6 @@ export type { SourceEdit, WriteResult };
 
 export type MainChannel = (typeof MAIN_CHANNELS)[keyof typeof MAIN_CHANNELS];
 
-// Events fed by a `compound://` deep link. Main routes each link to exactly
-// one of these by its host, so auth and checkout never consume each other's.
-
 export type CloudAuthOperation = 'sendCode' | 'verifyCode' | 'session' | 'token' | 'signOut' | 'updateUser' | 'deleteUser' | 'requestEmailChange' | 'changeEmail';
 export type CloudAuthResult = { data: unknown; sessionToken: string | null; error?: string };
 export type CloudConfig = { stage: string; projectsFolderName: string; convexUrl: string; authUrl: string; serverUrl: string };
@@ -136,13 +139,21 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.CHAT_REQUEST]: { request: import("@compound/chat").ChatRequest; response: import("@compound/chat").ChatReply };
   [MAIN_CHANNELS.CLOUD_CONFIG]: { request: void; response: CloudConfig };
   [MAIN_CHANNELS.CLOUD_AUTH]: { request: { operation: CloudAuthOperation; body?: Record<string, unknown>; sessionToken: string | null }; response: CloudAuthResult };
+  // A JSON call to the Worker; `path` is the full route (`/media/…`, `/social/…`).
   [MAIN_CHANNELS.CLOUD_MEDIA]: { request: { path: string; body: Record<string, unknown>; token: string | null }; response: unknown };
-  [MAIN_CHANNELS.CLOUD_UPLOAD]: { request: { contentType: string; bytes: Uint8Array; token: string | null }; response: { uploadId: string } };
-  [MAIN_CHANNELS.CLOUD_CATALOG_UPLOAD]: { request: { title: string; kind: 'music' | 'sfx'; mimeType: string; bytes: Uint8Array; token: string | null }; response: { sourceId: string } };
+  // Multipart upload of a file on disk or of bytes; progress arrives on CLOUD_UPLOAD_PROGRESS.
+  [MAIN_CHANNELS.CLOUD_UPLOAD]: { request: import("./cloud-upload").CloudUploadRequest; response: import("./cloud-upload").CloudUploadResult };
+  [MAIN_CHANNELS.CLOUD_UPLOAD_CANCEL]: { request: { uploadId: string }; response: void };
+  // Hash of a project's render inputs, plus the existing export for that hash if it is still on disk.
+  [MAIN_CHANNELS.RENDER_CACHE_LOOKUP]: { request: import("./render-cache").RenderCacheLookup; response: import("./render-cache").RenderCacheResult };
+  [MAIN_CHANNELS.RENDER_CACHE_STORE]: { request: { dir: string; name: string; entry: import("./render-cache").RenderCacheEntry }; response: void };
   [MAIN_CHANNELS.CLOUD_CATALOG_FILE]: { request: { sourceId: string; token: string | null }; response: { media: import('@compound/backend/catalog').CatalogMedia; bytes: Uint8Array } };
   [MAIN_CHANNELS.CLOUD_CATALOG_ARTWORK]: { request: { sourceId: string; token: string | null }; response: Uint8Array | null };
 
   [MAIN_CHANNELS.APP_OPEN_EXTERNAL]: { request: { url: string }; response: void };
+  // A `compound://` link that arrived before the renderer was listening.
+  [MAIN_CHANNELS.APP_DEEP_LINK_TAKE]: { request: void; response: import("./deep-link").DeepLink | null };
+  [MAIN_CHANNELS.SOCIAL_PICK_VIDEO]: { request: void; response: { path: string; name: string } | null };
   [MAIN_CHANNELS.CLI_IS_INSTALLED]: { request: void; response: boolean };
   [MAIN_CHANNELS.CLI_INSTALL]: { request: void; response: CliInstallResult };
   [MAIN_CHANNELS.SKILLS_IS_INSTALLED]: { request: void; response: boolean };
@@ -229,6 +240,9 @@ export type FsStat = { size: number; mtime: number };
 export type MainRequestChannel = keyof MainRequestMap;
 
 export type MainEventMap = {
+  // A `compound://` link opened while the app was running.
+  [MAIN_CHANNELS.APP_DEEP_LINK]: import("./deep-link").DeepLink;
+  [MAIN_CHANNELS.CLOUD_UPLOAD_PROGRESS]: import("./cloud-upload").CloudUploadProgress;
   [MAIN_CHANNELS.CHAT_STATE]: import("@compound/chat").ChatState;
   [MAIN_CHANNELS.WINDOW_FULLSCREEN_CHANGE]: { fullscreen: boolean };
   [MAIN_CHANNELS.HEADLESS_MODE]: { active: boolean };

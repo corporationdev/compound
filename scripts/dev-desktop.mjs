@@ -75,7 +75,9 @@ function waitForServer(url, timeoutMs = 30000) {
   });
 }
 
-for (const signal of ["SIGINT", "SIGTERM"]) {
+// SIGHUP too: closing the terminal must tear the tree down, not orphan
+// Electron/Vite (which would then block the next run).
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => shutdown(0));
 }
 
@@ -133,6 +135,56 @@ async function reclaimPort(port) {
   }
 }
 
+// Main Electron binaries this repo's dev run launches (helpers live under
+// Contents/Frameworks and are not matched; they die with the main process).
+const ELECTRON_BINARIES = [
+  join(ROOT, "node_modules", "electron", "dist", "Electron.app", "Contents", "MacOS", "Electron"),
+  join(ROOT, "node_modules", "electron", "dist", "electron"),
+];
+
+/** PIDs of main Electron processes started from this repo's node_modules. */
+function staleElectrons() {
+  try {
+    const out = execFileSync("ps", ["-axo", "pid=,command="], { stdio: ["ignore", "pipe", "ignore"] }).toString();
+    return out.split("\n").flatMap((line) => {
+      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+      if (!match) return [];
+      const [, pid, command] = match;
+      const binary = ELECTRON_BINARIES.find((path) => command === path || command.startsWith(`${path} `));
+      return binary && Number(pid) !== process.pid ? [Number(pid)] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Quits an Electron left over from an earlier run (a terminal that closed
+ * without signalling its children, or a window closed on macOS where the app
+ * lives on). It holds the app's single-instance lock, so a new one would only
+ * print "Another instance is already running" and exit, taking the whole dev
+ * tree down with it.
+ */
+async function reclaimElectron() {
+  const pids = staleElectrons();
+  if (!pids.length) return;
+  for (const pid of pids) {
+    console.log(`[dev:desktop] a stale Electron from an earlier run is holding the app lock (pid ${pid}); stopping it…`);
+    try { process.kill(pid, "SIGTERM"); } catch { /* gone */ }
+  }
+  const deadline = Date.now() + 5000;
+  while (staleElectrons().length) {
+    if (Date.now() > deadline) {
+      for (const pid of staleElectrons()) {
+        try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 // 1. Build the CLI (blocking) so `compound` and the app agree on the latest code.
 console.log("[dev:desktop] building CLI…");
 execFileSync("bun", ["run", "--cwd", "apps/cli", "build"], { stdio: "inherit" });
@@ -154,5 +206,6 @@ try {
 }
 console.log("[dev:desktop] building desktop app…");
 execFileSync("bun", ["run", "--cwd", "apps/desktop", "build"], { stdio: "inherit" });
+await reclaimElectron();
 console.log("[dev:desktop] starting desktop app…");
 run("desktop", "electron-forge", ["start"], join(ROOT, "apps", "desktop"));

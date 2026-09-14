@@ -22,6 +22,8 @@ const config: ForgeConfig = {
     name: 'Compound',
     appBundleId: 'dev.corporation.compound',
     appCategoryType: 'public.app-category.video',
+    // `compound://` links (OAuth return trips) open the app on macOS.
+    protocols: [{ name: 'Compound', schemes: ['compound'] }],
     appVersion: version,
     icon: './assets/icon',
     prune: false,

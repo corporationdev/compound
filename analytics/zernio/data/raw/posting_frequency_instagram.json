@@ -1,0 +1,67 @@
+{
+  "frequency": [
+    {
+      "platform": "instagram",
+      "posts_per_week": 1,
+      "avg_engagement_rate": 4.90360435875943,
+      "avg_engagement": 117,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 2,
+      "avg_engagement_rate": 5.103880817149008,
+      "avg_engagement": 3204.25,
+      "weeks_count": 2
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 6,
+      "avg_engagement_rate": 5.296885231279753,
+      "avg_engagement": 530,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 7,
+      "avg_engagement_rate": 4.584504476845703,
+      "avg_engagement": 364.14285714285717,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 8,
+      "avg_engagement_rate": 3.9515889445253887,
+      "avg_engagement": 123.5,
+      "weeks_count": 2
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 9,
+      "avg_engagement_rate": 4.420984086238895,
+      "avg_engagement": 289.6666666666667,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 11,
+      "avg_engagement_rate": 3.9979885349814865,
+      "avg_engagement": 75,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 15,
+      "avg_engagement_rate": 6.029356971032149,
+      "avg_engagement": 324.53333333333336,
+      "weeks_count": 1
+    },
+    {
+      "platform": "instagram",
+      "posts_per_week": 21,
+      "avg_engagement_rate": 4.498462162762762,
+      "avg_engagement": 176.46031746031747,
+      "weeks_count": 3
+    }
+  ]
+}

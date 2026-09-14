@@ -1,4 +1,5 @@
 import { mediaRequest } from './media-api';
+import { uploadToCloud } from './upload';
 import { getToken } from './auth-client';
 import { mainBridge } from './ipc';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
@@ -85,15 +86,7 @@ export async function uploadCatalogFile(file: File, kind: CatalogKind): Promise<
   const mimeType = ({ mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav' } as Record<string, string>)[ext ?? ''];
   if (!mimeType || !file.size || file.size > MAX_CATALOG_UPLOAD_BYTES) throw new Error('Choose an MP3, M4A or WAV file up to 100 MiB');
   const title = file.name.replace(/\.[^.]+$/, '').slice(0, 160);
-  let sourceId: string;
-  if (window.desktop) {
-    ({ sourceId } = await mainBridge.call(MAIN_CHANNELS.CLOUD_CATALOG_UPLOAD, { title, kind, mimeType, bytes: new Uint8Array(await file.arrayBuffer()), token: await getToken() }));
-  } else {
-    const upload = await mediaRequest<{ sourceId: string; url: string }>('catalog-upload-url', { title, kind, mimeType, size: file.size });
-    sourceId = upload.sourceId;
-    const result = await fetch(upload.url, { method: 'PUT', headers: { 'Content-Type': mimeType }, body: file, signal: AbortSignal.timeout(240000) });
-    if (!result.ok) throw new Error('Library upload failed');
-    await mediaRequest('catalog-upload-finish', { sourceId });
-  }
+  // The Worker completes the upload and queues preparation in one step.
+  const sourceId = await uploadToCloud({ purpose: 'library', kind, title, mimeType }, { blob: file });
   return prepareCatalogItem(sourceId);
 }

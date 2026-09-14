@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "total": 2,
+    "healthy": 2,
+    "warning": 0,
+    "error": 0,
+    "needsReconnect": 0
+  },
+  "accounts": [
+    {
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "username": "isaacdyor",
+      "displayName": "Isaac Dyor",
+      "profileId": "6a9b9d75f4348b5122c72715",
+      "status": "healthy",
+      "canPost": true,
+      "canFetchAnalytics": true,
+      "analyticsSupported": true,
+      "tokenValid": true,
+      "tokenExpiresAt": "2026-11-03T06:51:18.806Z",
+      "needsReconnect": false,
+      "issues": [],
+      "messagingRestriction": null
+    },
+    {
+      "accountId": "6a9b9dc477555aae01de7895",
+      "platform": "tiktok",
+      "username": "isaacdyor",
+      "displayName": "Isaac Dyor",
+      "profileId": "6a9b9d75f4348b5122c72715",
+      "status": "healthy",
+      "canPost": true,
+      "canFetchAnalytics": true,
+      "analyticsSupported": true,
+      "tokenValid": true,
+      "tokenExpiresAt": "2026-09-12T07:23:24.744Z",
+      "needsReconnect": false,
+      "issues": [],
+      "messagingRestriction": null
+    }
+  ]
+}

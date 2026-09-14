@@ -11,7 +11,8 @@ function storage(version: string | null = '1.2.3') {
     },
     async get(key: string, options?: { range?: { offset: number; length: number } }) {
       reads.push(key);
-      if (key === 'latest.json') return version ? { json: async () => ({ version }) } : null;
+      if (key === 'latest.json')
+        return version ? { json: async () => ({ version }), uploaded: new Date('2026-09-09T00:00:00Z') } : null;
       if (key !== path.slice(1)) return null;
       const { offset = 0, length = 10 } = options?.range ?? {};
       return { body: new Response('0123456789'.slice(offset, offset + length)).body };
@@ -75,10 +76,29 @@ test('invalid ranges, write methods, and unrelated objects are not exposed', asy
   expect(reads).toEqual([]);
 });
 
+test('the update feed points the desktop app at the current zip without caching', async () => {
+  const response = await worker.fetch(new Request(`https://compound.mov/releases/${release.feed}`), storage('2.0.0').env);
+  expect(response.headers.get('Content-Type')).toBe('application/json');
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  const feed = await response.json();
+  expect(feed.currentRelease).toBe('2.0.0');
+  expect(feed.releases).toEqual([{
+    version: '2.0.0',
+    updateTo: expect.objectContaining({
+      version: '2.0.0',
+      url: `${release.releasesUrl}/v2.0.0/${release.zip}`,
+      pub_date: '2026-09-09T00:00:00.000Z',
+    }),
+  }]);
+  expect(release.feedUrl).toBe(`https://compound.mov/releases/${release.feed}`);
+  expect((await worker.fetch(new Request(`https://compound.mov/releases/${release.feed}`), storage(null).env)).status).toBe(503);
+});
+
 test('preview downloads use production and normal page requests use static assets', async () => {
   const { env } = storage();
   delete env.RELEASES;
   expect((await worker.fetch(new Request('https://preview-test.compound.mov/download'), env)).headers.get('Location')).toBe(release.downloadUrl);
+  expect((await worker.fetch(new Request(`https://preview-test.compound.mov/releases/${release.feed}`), env)).headers.get('Location')).toBe(release.feedUrl);
   expect(await (await worker.fetch(new Request('https://compound.mov/'), env)).text()).toBe('landing');
 });
 

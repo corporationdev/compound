@@ -2,10 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { cloudConfig, authRequest, mediaRequest, uploadMedia, uploadCatalogAudio, readCatalogAudio, readCatalogArtwork } from './cloud';
+import { cloudConfig, authRequest, serverRequest, readCatalogAudio, readCatalogArtwork } from './cloud';
+import { cancelCloudUpload, uploadToCloud } from './cloud-upload';
+import { lookupRenderCache, storeRenderCache } from './render-cache';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, nativeImage, session, shell } from "electron";
-import { dirname, join } from "node:path";
+import { app, BrowserWindow, dialog, nativeImage, net, session, shell } from "electron";
+import { basename, dirname, join, resolve } from "node:path";
 import { mkdir, open, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
@@ -13,8 +15,10 @@ import { startCliServer, stopCliServer, isHeadless } from "./cli-server";
 import { installCli, isCliInstalled } from "./cli-install";
 import { healSkillsLinks, installSkills, isSkillsInstalled } from "./skills-install";
 import { setupAppMenu } from "./menu";
+import { startAutoUpdates } from "./updater";
 import { prepareUserData } from "./brand-migration";
 import { ChatServer } from "./chat-server";
+import { DEEP_LINK_SCHEME, DeepLinkInbox, deepLinksIn, parseDeepLink } from "./deep-link";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import {
@@ -116,6 +120,39 @@ function isHiddenLaunch(argv: string[]): boolean {
   return argv.includes("--hidden");
 }
 
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// `compound://` links: the OAuth callback page and (later) other return
+// trips into the app. A link that arrives while the renderer is up is pushed
+// to it; one that launched the app waits for the renderer to ask.
+const deepLinks = new DeepLinkInbox((link) => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) return false;
+  mainBridge.emit(mainWindow, MAIN_CHANNELS.APP_DEEP_LINK, link);
+  return true;
+});
+function receiveDeepLink(url: string) {
+  const link = parseDeepLink(url);
+  if (!link) return;
+  deepLinks.push(link);
+  // macOS can deliver open-url before ready; whenReady creates the window
+  // and the renderer drains the inbox on boot.
+  if (!app.isReady()) return;
+  if (mainWindow && !mainWindow.isDestroyed()) focusMainWindow();
+  else createWindow();
+}
+function registerProtocol() {
+  // Unpackaged runs (`electron .`) must name the app path, or the OS would
+  // launch a bare Electron binary for the scheme.
+  if (process.defaultApp && process.argv.length >= 2)
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [resolve(process.argv[1]!)]);
+  else app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+}
+
 async function setFileInputFiles(selector: string, absolutePath: string) {
   if (!mainWindow) throw new Error("No main window");
   const wc = mainWindow.webContents;
@@ -189,14 +226,21 @@ function createWindow(show = true) {
 
 
 if (app.requestSingleInstanceLock()) {
+  registerProtocol();
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    receiveDeepLink(url);
+  });
   app.on("second-instance", (_event, argv) => {
-
+    const links = deepLinksIn(argv);
+    if (links.length) {
+      receiveDeepLink(links[links.length - 1]!.url);
+      return;
+    }
     const hidden = isHiddenLaunch(argv);
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (hidden) return;
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
+      focusMainWindow();
     } else {
       createWindow(!hidden);
     }
@@ -204,6 +248,7 @@ if (app.requestSingleInstanceLock()) {
 
 
   mainBridge.handle(MAIN_CHANNELS.APP_OPEN_EXTERNAL, ({ url }) => shell.openExternal(url));
+  mainBridge.handle(MAIN_CHANNELS.APP_DEEP_LINK_TAKE, () => deepLinks.take());
   mainBridge.handle(MAIN_CHANNELS.APP_SHOW_IN_FOLDER, ({ path }) => shell.showItemInFolder(path));
   mainBridge.handle(MAIN_CHANNELS.CLI_IS_INSTALLED, () => isCliInstalled());
   mainBridge.handle(MAIN_CHANNELS.CLI_INSTALL, () => installCli());
@@ -231,9 +276,25 @@ if (app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => chat.start());
   mainBridge.handle(MAIN_CHANNELS.CLOUD_CONFIG, (_data, event) => { trustedRenderer(event); return cloudConfig(); });
   mainBridge.handle(MAIN_CHANNELS.CLOUD_AUTH, (data, event) => { trustedRenderer(event); return authRequest(data.operation, data.body, data.sessionToken); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_MEDIA, (data, event) => { trustedRenderer(event); return mediaRequest(data.path, data.body, data.token); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD, (data, event) => { trustedRenderer(event); return uploadMedia(data.contentType, data.bytes, data.token); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_UPLOAD, (data, event) => { trustedRenderer(event); return uploadCatalogAudio(data); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_MEDIA, (data, event) => { trustedRenderer(event); return serverRequest(data.path, data.body, data.token); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD, (data, event) => {
+    trustedRenderer(event);
+    // Chromium's network stack, not Node's fetch: see uploadToCloud.
+    return uploadToCloud(data, (progress) => mainBridge.emit(mainWindow, MAIN_CHANNELS.CLOUD_UPLOAD_PROGRESS, progress), (url, init) => net.fetch(url as string, init));
+  });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_UPLOAD_CANCEL, (data, event) => { trustedRenderer(event); cancelCloudUpload(data.uploadId); });
+  mainBridge.handle(MAIN_CHANNELS.RENDER_CACHE_LOOKUP, (data, event) => { trustedRenderer(event); return lookupRenderCache(data); });
+  mainBridge.handle(MAIN_CHANNELS.RENDER_CACHE_STORE, async (data, event) => {
+    trustedRenderer(event);
+    markSelfWriteAbsolute(join(data.dir, "exports", `${data.name}.json`));
+    await storeRenderCache(data.dir, data.name, data.entry);
+  });
+  mainBridge.handle(MAIN_CHANNELS.SOCIAL_PICK_VIDEO, async () => {
+    const options = { title: "Choose a video to post", properties: ["openFile" as const], filters: [{ name: "MP4 video", extensions: ["mp4"] }] };
+    const result = mainWindow && !mainWindow.isDestroyed() ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    const path = result.filePaths[0];
+    return path ? { path, name: basename(path) } : null;
+  });
   mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_FILE, (data, event) => { trustedRenderer(event); return readCatalogAudio(data.sourceId, data.token); });
   mainBridge.handle(MAIN_CHANNELS.CLOUD_CATALOG_ARTWORK, (data, event) => { trustedRenderer(event); return readCatalogArtwork(data.sourceId, data.token); });
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
@@ -317,6 +378,8 @@ if (app.requestSingleInstanceLock()) {
       if (!devIcon.isEmpty()) app.dock?.setIcon(devIcon);
     }
 
+    // Before the menu so "Check for Updates…" knows whether checks are live.
+    startAutoUpdates(isHiddenLaunch(process.argv));
     setupAppMenu();
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true));
     session.defaultSession.setPermissionCheckHandler(() => true);
@@ -326,6 +389,8 @@ if (app.requestSingleInstanceLock()) {
     startCliServer();
     healSkillsLinks();
     createWindow(!isHiddenLaunch(process.argv));
+    // Windows/Linux hand a cold-start link over argv; macOS uses open-url.
+    for (const link of deepLinksIn(process.argv)) deepLinks.push(link);
   });
 
   let chatStopped = false;

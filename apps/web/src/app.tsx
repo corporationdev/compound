@@ -9,7 +9,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppContextMenu } from "@/components/app-context-menu";
 
 import { AuthProvider, useAuth } from '@/context/auth';
+import { SocialProvider } from '@/context/social';
 import { PersistRoute } from '@/lib/persist-route';
+import { DeepLinks } from '@/lib/deep-link';
 import { EditorApi } from '@/context/dapi';
 import { ScreenTooSmall } from '@/components/screen-too-small';
 import { UnsupportedBrowser } from '@/components/unsupported-browser';
@@ -60,14 +62,17 @@ function App() {
         <ColorModeProvider initialColorMode="dark">
           <AppContextMenu>
             <AuthProvider>
-              {props.children}
-              <BootSplash />
-              <EditorApi />
+              <SocialProvider>
+                {props.children}
+                <BootSplash />
+                <EditorApi />
+              </SocialProvider>
             </AuthProvider>
           </AppContextMenu>
           <Toaster />
           <EnvironmentOverlays />
           <PersistRoute />
+          <DeepLinks />
         </ColorModeProvider>
       )}
     >

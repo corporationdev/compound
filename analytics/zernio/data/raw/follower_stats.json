@@ -1,0 +1,244 @@
+{
+  "daily": {
+    "accounts": [
+      {
+        "_id": "6a9b9dc477555aae01de7895",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "tiktok",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+        "currentFollowers": 260,
+        "lastUpdated": "2026-09-11T05:28:07.034Z",
+        "growth": 36,
+        "growthPercentage": 16.07,
+        "dataPoints": 7,
+        "accountStats": {
+          "likesCount": 4504,
+          "videoCount": 120,
+          "followingCount": 7
+        }
+      },
+      {
+        "_id": "6a9b9da777555aae01de7869",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "instagram",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+        "currentFollowers": 2076,
+        "lastUpdated": "2026-09-11T05:28:06.707Z",
+        "growth": 246,
+        "growthPercentage": 13.44,
+        "dataPoints": 7,
+        "accountStats": {
+          "mediaCount": 142,
+          "accountType": "MEDIA_CREATOR",
+          "followsCount": 76,
+          "instagramScopedId": "17841461196408663"
+        }
+      }
+    ],
+    "stats": {
+      "6a9b9dc477555aae01de7895": [
+        {
+          "date": "2026-09-05",
+          "followers": 224
+        },
+        {
+          "date": "2026-09-06",
+          "followers": 227
+        },
+        {
+          "date": "2026-09-07",
+          "followers": 235
+        },
+        {
+          "date": "2026-09-08",
+          "followers": 241
+        },
+        {
+          "date": "2026-09-09",
+          "followers": 248
+        },
+        {
+          "date": "2026-09-10",
+          "followers": 251
+        },
+        {
+          "date": "2026-09-11",
+          "followers": 260
+        }
+      ],
+      "6a9b9da777555aae01de7869": [
+        {
+          "date": "2026-09-05",
+          "followers": 1830
+        },
+        {
+          "date": "2026-09-06",
+          "followers": 1855
+        },
+        {
+          "date": "2026-09-07",
+          "followers": 1871
+        },
+        {
+          "date": "2026-09-08",
+          "followers": 1923
+        },
+        {
+          "date": "2026-09-09",
+          "followers": 1973
+        },
+        {
+          "date": "2026-09-10",
+          "followers": 2021
+        },
+        {
+          "date": "2026-09-11",
+          "followers": 2076
+        }
+      ]
+    },
+    "dateRange": {
+      "from": "2025-09-11T00:00:00.000Z",
+      "to": "2026-09-11T23:59:59.999Z"
+    },
+    "granularity": "daily"
+  },
+  "weekly": {
+    "accounts": [
+      {
+        "_id": "6a9b9dc477555aae01de7895",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "tiktok",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+        "currentFollowers": 260,
+        "lastUpdated": "2026-09-11T05:28:07.034Z",
+        "growth": 21,
+        "growthPercentage": 9.29,
+        "dataPoints": 2,
+        "accountStats": {
+          "likesCount": 4504,
+          "videoCount": 120,
+          "followingCount": 7
+        }
+      },
+      {
+        "_id": "6a9b9da777555aae01de7869",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "instagram",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+        "currentFollowers": 2076,
+        "lastUpdated": "2026-09-11T05:28:06.707Z",
+        "growth": 130,
+        "growthPercentage": 7.05,
+        "dataPoints": 2,
+        "accountStats": {
+          "mediaCount": 142,
+          "accountType": "MEDIA_CREATOR",
+          "followsCount": 76,
+          "instagramScopedId": "17841461196408663"
+        }
+      }
+    ],
+    "stats": {
+      "6a9b9dc477555aae01de7895": [
+        {
+          "date": "2026-08-31",
+          "followers": 226
+        },
+        {
+          "date": "2026-09-07",
+          "followers": 247
+        }
+      ],
+      "6a9b9da777555aae01de7869": [
+        {
+          "date": "2026-08-31",
+          "followers": 1843
+        },
+        {
+          "date": "2026-09-07",
+          "followers": 1973
+        }
+      ]
+    },
+    "dateRange": {
+      "from": "2025-09-11T00:00:00.000Z",
+      "to": "2026-09-11T23:59:59.999Z"
+    },
+    "granularity": "weekly"
+  },
+  "monthly": {
+    "accounts": [
+      {
+        "_id": "6a9b9dc477555aae01de7895",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "tiktok",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+        "currentFollowers": 260,
+        "lastUpdated": "2026-09-11T05:28:07.034Z",
+        "growth": 0,
+        "growthPercentage": 0,
+        "dataPoints": 1,
+        "accountStats": {
+          "likesCount": 4504,
+          "videoCount": 120,
+          "followingCount": 7
+        }
+      },
+      {
+        "_id": "6a9b9da777555aae01de7869",
+        "profileId": "6a9b9d75f4348b5122c72715",
+        "isActive": true,
+        "platform": "instagram",
+        "username": "isaacdyor",
+        "displayName": "Isaac Dyor",
+        "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+        "currentFollowers": 2076,
+        "lastUpdated": "2026-09-11T05:28:06.707Z",
+        "growth": 0,
+        "growthPercentage": 0,
+        "dataPoints": 1,
+        "accountStats": {
+          "mediaCount": 142,
+          "accountType": "MEDIA_CREATOR",
+          "followsCount": 76,
+          "instagramScopedId": "17841461196408663"
+        }
+      }
+    ],
+    "stats": {
+      "6a9b9dc477555aae01de7895": [
+        {
+          "date": "2026-09-01",
+          "followers": 241
+        }
+      ],
+      "6a9b9da777555aae01de7869": [
+        {
+          "date": "2026-09-01",
+          "followers": 1936
+        }
+      ]
+    },
+    "dateRange": {
+      "from": "2025-09-11T00:00:00.000Z",
+      "to": "2026-09-11T23:59:59.999Z"
+    },
+    "granularity": "monthly"
+  }
+}

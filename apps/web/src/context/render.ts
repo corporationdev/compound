@@ -33,10 +33,15 @@ export type RenderOverlayState = {
 };
 
 const [overlay, setOverlay] = createSignal<RenderOverlayState | null>(null);
+const [rendering, setRendering] = createSignal(false);
 let cancelActive: (() => void) | undefined;
 
-/** Reactive overlay state; `null` when no render is in flight. Read by `<ExportProgress>`. */
+/** Overlay state for the "Exporting Composition" dialog; `null` when no export dialog should show. Read by `<ExportProgress>`. */
 export const renderOverlay = overlay;
+/** Whether any render is in flight, including silent ones that report progress elsewhere. */
+export const renderActive = rendering;
+
+export type RenderProgress = { percent: number; remaining: { minutes: number; seconds: number } };
 
 /** Cancel the render currently in flight, if any. Wired to the overlay's Cancel button. */
 export function cancelRender() {
@@ -52,12 +57,18 @@ export type RenderSceneOptions = {
   config?: Partial<EncoderConfig>;
   /** The project's folder, so the encode compiles the sources as they are now. */
   dir?: string;
+  /**
+   * Receive progress instead of showing the export dialog. The caller owns the
+   * progress UI (the post composer does this) and can still `cancelRender()`.
+   */
+  onProgress?: (progress: RenderProgress) => void;
 };
 
 export async function renderScene(
   engine: Engine,
-  { scene, target, config, dir }: RenderSceneOptions,
+  { scene, target, config, dir, onProgress }: RenderSceneOptions,
 ): Promise<ExportResult> {
+  if (rendering()) throw new Error("An export is already running.");
   const world = engine.world;
 
   const workarea = scene.get(Workarea);
@@ -76,7 +87,8 @@ export async function renderScene(
   );
 
   cancelActive = undefined;
-  setOverlay({ config, width, height, duration, progress: 0, remaining: undefined });
+  setRendering(true);
+  if (!onProgress) setOverlay({ config, width, height, duration, progress: 0, remaining: undefined });
 
   engine.stop();
 
@@ -94,18 +106,9 @@ export async function renderScene(
       comment: `Made with Compound v${version}`,
       onProgress(p) {
         const percent = Math.round((p.progress / p.total) * 100);
-        setOverlay((prev) =>
-          prev
-            ? {
-                ...prev,
-                progress: percent,
-                remaining: {
-                  minutes: p.remaining.getUTCMinutes(),
-                  seconds: p.remaining.getUTCSeconds(),
-                },
-              }
-            : prev,
-        );
+        const remaining = { minutes: p.remaining.getUTCMinutes(), seconds: p.remaining.getUTCSeconds() };
+        if (onProgress) onProgress({ percent, remaining });
+        else setOverlay((prev) => (prev ? { ...prev, progress: percent, remaining } : prev));
       },
     });
 
@@ -114,6 +117,7 @@ export async function renderScene(
   } finally {
     cancelActive = undefined;
     setOverlay(null);
+    setRendering(false);
     capture?.dispose();
     engine.start();
   }

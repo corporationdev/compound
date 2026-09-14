@@ -64,7 +64,7 @@ export function resolveRuntimeContext(
     landingHostname,
     landingUrl: landingHostname ? `https://${landingHostname}` : 'http://localhost:3002',
     bucket: `compound-media-${stage}`,
-    backendEnv: { SITE_URL: webUrl, RESEND_FROM_EMAIL: `Compound <no-reply@${rootDomain}>` },
+    backendEnv: { SITE_URL: webUrl, SERVER_URL: serverUrl, RESEND_FROM_EMAIL: `Compound <no-reply@${rootDomain}>` },
     serverBindings: { CONVEX_URL: convexUrl, CORS_ORIGIN: webUrl },
     webClientEnv: {
       VITE_CONVEX_URL: convexUrl,

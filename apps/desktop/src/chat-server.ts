@@ -69,7 +69,9 @@ export class ChatServer {
     this.publish({ status: 'starting', error: undefined });
     const archive = join(this.options.runtimeDir, 'app.asar');
     const entry = join(archive, 'node_modules/t3/dist/bin.mjs');
-    await access(archive).catch(() => {
+    // Probe the entry, not the archive: Electron's asar layer resolves paths
+    // inside app.asar but reports the archive path itself as ENOENT.
+    await access(entry).catch(() => {
       throw new Error('Chat runtime is missing. In development run `bun run --cwd apps/desktop stage:chat`, then Retry.');
     });
     const stateDir = join(this.options.dataDir, 'userdata');

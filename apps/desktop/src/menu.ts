@@ -6,6 +6,7 @@ import { app, dialog, Menu } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 
 import { CLI_LINK_PATH, installCli } from "./cli-install";
+import { checkForUpdates, updatesEnabled } from "./updater";
 
 async function installCliFromMenu() {
   const result = await installCli();
@@ -33,6 +34,11 @@ export function setupAppMenu() {
       label: app.name,
       submenu: [
         { role: "about" },
+        {
+          label: "Check for Updates…",
+          enabled: updatesEnabled(),
+          click: checkForUpdates,
+        },
         { type: "separator" },
         {
           label: "Install compound Command Line Tool…",

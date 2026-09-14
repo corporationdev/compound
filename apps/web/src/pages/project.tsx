@@ -8,6 +8,7 @@ import { EditorPage } from './editor';
 import { LayoutProvider } from "@/context/layout";
 import { EditorApiProvider } from '@/context/dapi';
 import { ExportProvider } from '@/context/export';
+import { AutoPostOnOpen } from '@/components/social/post-scene';
 import { ProjectProvider } from '@/context/project';
 import { projectRoute, useProjectRef } from '@/hooks/use-project-route';
 import { resolveProject } from '@/projects';
@@ -63,6 +64,7 @@ export function ProjectPage() {
                       <LayoutProvider>
                         <EditorPage />
                       </LayoutProvider>
+                      <AutoPostOnOpen />
                   </ExportProvider>
                 </TimelineProvider>
               </EditorApiProvider>

@@ -191,6 +191,12 @@ export const createUpload = mutation({ args: { title: v.string(), kind: catalogK
   await ctx.db.patch(sourceId, { uploadKey: key });
   return { sourceId, key };
 } });
+/** The staged object the Worker completes for a library upload; only the owner's own in-progress upload resolves. */
+export const uploadTarget = query({ args: { sourceId: v.id('catalogSources') }, handler: async (ctx, args) => {
+  const source = await sourceFor(ctx, args.sourceId, await owner(ctx));
+  if (source.provider !== 'upload' || !source.uploadKey || !source.size || !source.mimeType || source.status !== 'uploading') throw new ConvexError('Not an upload in progress');
+  return { key: source.uploadKey, size: source.size, contentType: source.mimeType };
+} });
 export const finishUpload = mutation({ args: { sourceId: v.id('catalogSources') }, handler: async (ctx, args) => {
   const source = await sourceFor(ctx, args.sourceId, await owner(ctx));
   if (source.provider !== 'upload') throw new ConvexError('Not an upload');

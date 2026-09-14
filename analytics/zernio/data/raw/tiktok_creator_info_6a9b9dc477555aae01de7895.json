@@ -1,0 +1,65 @@
+{
+  "creator": {
+    "nickname": "Isaac Dyor",
+    "avatarUrl": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.webp?dr=9638&refresh_token=af3a8cc6&x-expires=1789336800&x-signature=g7T4y3DIx9ka9De7mEcbcGzq%2Bhk%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=bbadf38d&idc=useast8",
+    "isVerified": false,
+    "canPostMore": true
+  },
+  "privacyLevels": [
+    {
+      "value": "PUBLIC_TO_EVERYONE",
+      "label": "Public To Everyone"
+    },
+    {
+      "value": "MUTUAL_FOLLOW_FRIENDS",
+      "label": "Mutual Follow Friends"
+    },
+    {
+      "value": "SELF_ONLY",
+      "label": "Self Only"
+    }
+  ],
+  "postingLimits": {
+    "maxVideoDurationSec": 3600,
+    "interactionSettings": {
+      "allow_comment": {
+        "enabled": true,
+        "required": true,
+        "default": false,
+        "label": "Allow Comment"
+      },
+      "allow_duet": {
+        "enabled": true,
+        "required": true,
+        "default": false,
+        "label": "Allow Duet"
+      },
+      "allow_stitch": {
+        "enabled": true,
+        "required": true,
+        "default": false,
+        "label": "Allow Stitch"
+      }
+    }
+  },
+  "commercialContentTypes": [
+    {
+      "value": "none",
+      "label": "No Commercial Content"
+    },
+    {
+      "value": "brand_organic",
+      "label": "Your Brand",
+      "requires": [
+        "is_brand_organic_post"
+      ]
+    },
+    {
+      "value": "brand_content",
+      "label": "Branded Content",
+      "requires": [
+        "brand_partner_promote"
+      ]
+    }
+  ]
+}

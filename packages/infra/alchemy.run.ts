@@ -44,6 +44,11 @@ export const mediaBucket = await R2Bucket('media', {
     id: 'temporary-library-staging', enabled: true,
     conditions: { prefix: 'library-staging/' },
     deleteObjectsTransition: { condition: { type: 'Age', maxAge: 86400 } },
+  }, {
+    // Post videos and covers: kept long enough for scheduling and retries.
+    id: 'social-media', enabled: true,
+    conditions: { prefix: 'social/' },
+    deleteObjectsTransition: { condition: { type: 'Age', maxAge: 30 * 86400 } },
   }],
 });
 

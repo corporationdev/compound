@@ -1,0 +1,134 @@
+{
+  "profiles": [
+    {
+      "_id": "6a375d52b327feb6a84bf99f",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Default",
+      "isDefault": true,
+      "color": "#ffeda0",
+      "createdAt": "2026-06-21T03:41:06.036Z",
+      "updatedAt": "2026-06-21T03:41:06.036Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a375ee26e5c8dd30c37185d",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k170grsf",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-06-21T03:47:46.510Z",
+      "updatedAt": "2026-06-21T03:47:46.510Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a39a15e96339c35e7a7b70a",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k179j4pz",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-06-22T20:55:58.662Z",
+      "updatedAt": "2026-06-22T20:55:58.662Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a3ad40a3ba1762edf996697",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k17dcamd",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-06-23T18:44:26.589Z",
+      "updatedAt": "2026-06-23T18:44:26.589Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a5afb8f910b7636f46a9d01",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k1736vet",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-07-18T04:05:35.780Z",
+      "updatedAt": "2026-07-18T04:05:35.780Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a6abc03bb065f6aae569b1b",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k17a32vx",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-07-30T02:50:43.031Z",
+      "updatedAt": "2026-07-30T02:50:43.031Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a6ff53af964c89501959102",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob r17cjreq",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-08-03T01:56:10.356Z",
+      "updatedAt": "2026-08-03T01:56:10.356Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a7221676e0a4ddf93544215",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob r976sjab",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-08-04T17:29:11.635Z",
+      "updatedAt": "2026-08-04T17:29:11.635Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a8278ddd4619af891b91ae7",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob r17cw163",
+      "description": "Accounts connected from Postbob.",
+      "isDefault": false,
+      "color": "#111111",
+      "createdAt": "2026-08-17T02:58:37.669Z",
+      "updatedAt": "2026-08-17T02:58:37.669Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a9b4b05b22175a172a7dcb6",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k178vs97yyg5s6nb8k1s9aqhy18dc0wa",
+      "isDefault": false,
+      "color": "#ffeda0",
+      "createdAt": "2026-09-04T22:49:41.016Z",
+      "updatedAt": "2026-09-04T22:49:41.016Z",
+      "accountUsernames": []
+    },
+    {
+      "_id": "6a9b9d75f4348b5122c72715",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Postbob k1776znwrxkvn9w1brfxj9jqk58dad7d",
+      "isDefault": false,
+      "color": "#ffeda0",
+      "createdAt": "2026-09-05T04:41:25.845Z",
+      "updatedAt": "2026-09-05T04:41:25.845Z",
+      "accountUsernames": [
+        "isaacdyor"
+      ]
+    },
+    {
+      "_id": "6aa321ddff339145bfb7789f",
+      "userId": "6a375d52b327feb6a84bf99c",
+      "name": "Compound k1704sa7xjerbnrkfsdpcz03498e378v",
+      "isDefault": false,
+      "color": "#ffeda0",
+      "createdAt": "2026-09-10T21:32:13.334Z",
+      "updatedAt": "2026-09-10T21:32:13.334Z",
+      "accountUsernames": []
+    }
+  ]
+}

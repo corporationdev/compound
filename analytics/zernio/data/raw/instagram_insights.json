@@ -1,0 +1,1039 @@
+{
+  "6a9b9da777555aae01de7869": {
+    "totals": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "total_value",
+      "metrics": {
+        "reach": {
+          "total": 273826
+        },
+        "views": {
+          "total": 677699
+        },
+        "accounts_engaged": {
+          "total": 24964
+        },
+        "total_interactions": {
+          "total": 52312
+        },
+        "comments": {
+          "total": 1259
+        },
+        "likes": {
+          "total": 14759
+        },
+        "saves": {
+          "total": 19661
+        },
+        "shares": {
+          "total": 8196
+        },
+        "replies": {
+          "total": 2
+        },
+        "reposts": {
+          "total": 239
+        },
+        "profile_links_taps": {
+          "total": 0
+        },
+        "follows_and_unfollows": {
+          "total": 0
+        }
+      },
+      "dataDelay": "Data may be delayed up to 48 hours"
+    },
+    "reachSeries": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "time_series",
+      "metrics": {
+        "reach": {
+          "total": 495657,
+          "values": [
+            {
+              "date": "2026-06-15",
+              "value": 1202
+            },
+            {
+              "date": "2026-06-16",
+              "value": 5479
+            },
+            {
+              "date": "2026-06-17",
+              "value": 4588
+            },
+            {
+              "date": "2026-06-18",
+              "value": 2839
+            },
+            {
+              "date": "2026-06-19",
+              "value": 1547
+            },
+            {
+              "date": "2026-06-20",
+              "value": 2144
+            },
+            {
+              "date": "2026-06-21",
+              "value": 2411
+            },
+            {
+              "date": "2026-06-22",
+              "value": 1254
+            },
+            {
+              "date": "2026-06-23",
+              "value": 1452
+            },
+            {
+              "date": "2026-06-24",
+              "value": 3690
+            },
+            {
+              "date": "2026-06-25",
+              "value": 1231
+            },
+            {
+              "date": "2026-06-26",
+              "value": 22351
+            },
+            {
+              "date": "2026-06-27",
+              "value": 7017
+            },
+            {
+              "date": "2026-06-28",
+              "value": 3482
+            },
+            {
+              "date": "2026-06-29",
+              "value": 2884
+            },
+            {
+              "date": "2026-06-30",
+              "value": 2107
+            },
+            {
+              "date": "2026-07-01",
+              "value": 2113
+            },
+            {
+              "date": "2026-07-02",
+              "value": 893
+            },
+            {
+              "date": "2026-07-03",
+              "value": 1034
+            },
+            {
+              "date": "2026-07-04",
+              "value": 855
+            },
+            {
+              "date": "2026-07-05",
+              "value": 798
+            },
+            {
+              "date": "2026-07-06",
+              "value": 13122
+            },
+            {
+              "date": "2026-07-07",
+              "value": 37845
+            },
+            {
+              "date": "2026-07-08",
+              "value": 26763
+            },
+            {
+              "date": "2026-07-09",
+              "value": 3455
+            },
+            {
+              "date": "2026-07-10",
+              "value": 2110
+            },
+            {
+              "date": "2026-07-11",
+              "value": 1408
+            },
+            {
+              "date": "2026-07-12",
+              "value": 1591
+            },
+            {
+              "date": "2026-07-13",
+              "value": 1535
+            },
+            {
+              "date": "2026-07-14",
+              "value": 1493
+            },
+            {
+              "date": "2026-07-15",
+              "value": 7637
+            },
+            {
+              "date": "2026-07-16",
+              "value": 8101
+            },
+            {
+              "date": "2026-07-17",
+              "value": 13173
+            },
+            {
+              "date": "2026-07-18",
+              "value": 7091
+            },
+            {
+              "date": "2026-07-19",
+              "value": 4588
+            },
+            {
+              "date": "2026-07-20",
+              "value": 2689
+            },
+            {
+              "date": "2026-07-21",
+              "value": 1925
+            },
+            {
+              "date": "2026-07-22",
+              "value": 3776
+            },
+            {
+              "date": "2026-07-23",
+              "value": 1842
+            },
+            {
+              "date": "2026-07-24",
+              "value": 2634
+            },
+            {
+              "date": "2026-07-25",
+              "value": 1347
+            },
+            {
+              "date": "2026-07-26",
+              "value": 1744
+            },
+            {
+              "date": "2026-07-27",
+              "value": 1900
+            },
+            {
+              "date": "2026-07-28",
+              "value": 2219
+            },
+            {
+              "date": "2026-07-29",
+              "value": 5782
+            },
+            {
+              "date": "2026-07-30",
+              "value": 7714
+            },
+            {
+              "date": "2026-07-31",
+              "value": 5200
+            },
+            {
+              "date": "2026-08-01",
+              "value": 2497
+            },
+            {
+              "date": "2026-08-02",
+              "value": 2079
+            },
+            {
+              "date": "2026-08-03",
+              "value": 2057
+            },
+            {
+              "date": "2026-08-04",
+              "value": 1666
+            },
+            {
+              "date": "2026-08-05",
+              "value": 2424
+            },
+            {
+              "date": "2026-08-06",
+              "value": 1682
+            },
+            {
+              "date": "2026-08-07",
+              "value": 1573
+            },
+            {
+              "date": "2026-08-08",
+              "value": 3471
+            },
+            {
+              "date": "2026-08-09",
+              "value": 2210
+            },
+            {
+              "date": "2026-08-10",
+              "value": 2392
+            },
+            {
+              "date": "2026-08-11",
+              "value": 1501
+            },
+            {
+              "date": "2026-08-12",
+              "value": 1448
+            },
+            {
+              "date": "2026-08-13",
+              "value": 1562
+            },
+            {
+              "date": "2026-08-14",
+              "value": 2414
+            },
+            {
+              "date": "2026-08-15",
+              "value": 4541
+            },
+            {
+              "date": "2026-08-16",
+              "value": 3402
+            },
+            {
+              "date": "2026-08-17",
+              "value": 12008
+            },
+            {
+              "date": "2026-08-18",
+              "value": 8598
+            },
+            {
+              "date": "2026-08-19",
+              "value": 3264
+            },
+            {
+              "date": "2026-08-20",
+              "value": 3450
+            },
+            {
+              "date": "2026-08-21",
+              "value": 17419
+            },
+            {
+              "date": "2026-08-22",
+              "value": 13635
+            },
+            {
+              "date": "2026-08-23",
+              "value": 7271
+            },
+            {
+              "date": "2026-08-24",
+              "value": 5713
+            },
+            {
+              "date": "2026-08-25",
+              "value": 5204
+            },
+            {
+              "date": "2026-08-26",
+              "value": 4425
+            },
+            {
+              "date": "2026-08-27",
+              "value": 10673
+            },
+            {
+              "date": "2026-08-28",
+              "value": 8107
+            },
+            {
+              "date": "2026-08-29",
+              "value": 7570
+            },
+            {
+              "date": "2026-08-30",
+              "value": 7692
+            },
+            {
+              "date": "2026-08-31",
+              "value": 7181
+            },
+            {
+              "date": "2026-09-01",
+              "value": 7813
+            },
+            {
+              "date": "2026-09-02",
+              "value": 4891
+            },
+            {
+              "date": "2026-09-03",
+              "value": 3001
+            },
+            {
+              "date": "2026-09-04",
+              "value": 8134
+            },
+            {
+              "date": "2026-09-05",
+              "value": 11233
+            },
+            {
+              "date": "2026-09-06",
+              "value": 4505
+            },
+            {
+              "date": "2026-09-07",
+              "value": 12878
+            },
+            {
+              "date": "2026-09-08",
+              "value": 15772
+            },
+            {
+              "date": "2026-09-09",
+              "value": 10808
+            },
+            {
+              "date": "2026-09-10",
+              "value": 8276
+            },
+            {
+              "date": "2026-09-11",
+              "value": 9162
+            }
+          ]
+        }
+      },
+      "dataDelay": "Data may be delayed up to 48 hours"
+    },
+    "byMediaType": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "total_value",
+      "metrics": {
+        "reach": {
+          "total": 273826,
+          "breakdowns": [
+            {
+              "dimension": "STORY",
+              "value": 173
+            },
+            {
+              "dimension": "REEL",
+              "value": 273826
+            }
+          ]
+        }
+      },
+      "dataDelay": "Data may be delayed up to 48 hours",
+      "breakdown": "media_product_type"
+    },
+    "byFollowType": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "total_value",
+      "metrics": {
+        "reach": {
+          "total": 273826,
+          "breakdowns": [
+            {
+              "dimension": "FOLLOWER",
+              "value": 1806
+            },
+            {
+              "dimension": "NON_FOLLOWER",
+              "value": 273826
+            }
+          ]
+        }
+      },
+      "dataDelay": "Data may be delayed up to 48 hours",
+      "breakdown": "follow_type"
+    },
+    "followerHistory": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "time_series",
+      "metrics": {
+        "follower_count": {
+          "total": 2076,
+          "values": [
+            {
+              "date": "2026-09-05",
+              "value": 1830
+            },
+            {
+              "date": "2026-09-06",
+              "value": 1855
+            },
+            {
+              "date": "2026-09-07",
+              "value": 1871
+            },
+            {
+              "date": "2026-09-08",
+              "value": 1923
+            },
+            {
+              "date": "2026-09-09",
+              "value": 1973
+            },
+            {
+              "date": "2026-09-10",
+              "value": 2021
+            },
+            {
+              "date": "2026-09-11",
+              "value": 2076
+            }
+          ]
+        },
+        "followers_gained": {
+          "total": 246,
+          "values": [
+            {
+              "date": "2026-09-06",
+              "value": 25
+            },
+            {
+              "date": "2026-09-07",
+              "value": 16
+            },
+            {
+              "date": "2026-09-08",
+              "value": 52
+            },
+            {
+              "date": "2026-09-09",
+              "value": 50
+            },
+            {
+              "date": "2026-09-10",
+              "value": 48
+            },
+            {
+              "date": "2026-09-11",
+              "value": 55
+            }
+          ]
+        },
+        "followers_lost": {
+          "total": 0,
+          "values": [
+            {
+              "date": "2026-09-06",
+              "value": 0
+            },
+            {
+              "date": "2026-09-07",
+              "value": 0
+            },
+            {
+              "date": "2026-09-08",
+              "value": 0
+            },
+            {
+              "date": "2026-09-09",
+              "value": 0
+            },
+            {
+              "date": "2026-09-10",
+              "value": 0
+            },
+            {
+              "date": "2026-09-11",
+              "value": 0
+            }
+          ]
+        }
+      },
+      "dataDelay": "Data is captured by Zernio's daily snapshotter. Up to 24 hours old."
+    },
+    "followerHistoryTotals": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "total_value",
+      "metrics": {
+        "follower_count": {
+          "total": 2076
+        },
+        "followers_gained": {
+          "total": 246
+        },
+        "followers_lost": {
+          "total": 0
+        }
+      },
+      "dataDelay": "Data is captured by Zernio's daily snapshotter. Up to 24 hours old."
+    },
+    "followerDemographics": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "metric": "follower_demographics",
+      "timeframe": "this_month",
+      "demographics": {
+        "age": [
+          {
+            "dimension": "13-17",
+            "value": 22
+          },
+          {
+            "dimension": "18-24",
+            "value": 640
+          },
+          {
+            "dimension": "25-34",
+            "value": 842
+          },
+          {
+            "dimension": "35-44",
+            "value": 341
+          },
+          {
+            "dimension": "45-54",
+            "value": 136
+          },
+          {
+            "dimension": "55-64",
+            "value": 24
+          },
+          {
+            "dimension": "65+",
+            "value": 22
+          }
+        ],
+        "city": [
+          {
+            "dimension": "Sydney, New South Wales",
+            "value": 16
+          },
+          {
+            "dimension": "London, England",
+            "value": 26
+          },
+          {
+            "dimension": "Dhaka, Dhaka Division",
+            "value": 13
+          },
+          {
+            "dimension": "São Paulo, São Paulo (state)",
+            "value": 13
+          },
+          {
+            "dimension": "Seattle, Washington",
+            "value": 8
+          },
+          {
+            "dimension": "Hong Kong, Hong Kong",
+            "value": 7
+          },
+          {
+            "dimension": "Berlin, Berlin",
+            "value": 12
+          },
+          {
+            "dimension": "Kolkata, West Bengal",
+            "value": 11
+          },
+          {
+            "dimension": "Phoenix, Arizona",
+            "value": 7
+          },
+          {
+            "dimension": "Austin, Texas",
+            "value": 10
+          },
+          {
+            "dimension": "Lagos, Lagos State",
+            "value": 15
+          },
+          {
+            "dimension": "Tel Aviv, Tel Aviv",
+            "value": 6
+          },
+          {
+            "dimension": "Dublin, Dublin",
+            "value": 8
+          },
+          {
+            "dimension": "San Jose, California",
+            "value": 11
+          },
+          {
+            "dimension": "Pune, Maharashtra",
+            "value": 15
+          },
+          {
+            "dimension": "Lucknow, Uttar Pradesh",
+            "value": 6
+          },
+          {
+            "dimension": "Rawalpindi, Punjab",
+            "value": 8
+          },
+          {
+            "dimension": "Ahmedabad, Gujarat",
+            "value": 8
+          },
+          {
+            "dimension": "Chicago, Illinois",
+            "value": 6
+          },
+          {
+            "dimension": "Karachi, Sindh",
+            "value": 16
+          },
+          {
+            "dimension": "Paris, Île-de-France",
+            "value": 14
+          },
+          {
+            "dimension": "Melbourne, Victoria",
+            "value": 9
+          },
+          {
+            "dimension": "Gurugram, Haryana",
+            "value": 10
+          },
+          {
+            "dimension": "Delhi, Delhi",
+            "value": 28
+          },
+          {
+            "dimension": "Los Angeles, California",
+            "value": 21
+          },
+          {
+            "dimension": "Lahore, Punjab",
+            "value": 16
+          },
+          {
+            "dimension": "Jaipur, Rajasthan",
+            "value": 6
+          },
+          {
+            "dimension": "Bellevue, Washington",
+            "value": 16
+          },
+          {
+            "dimension": "Istanbul, Istanbul Province",
+            "value": 9
+          },
+          {
+            "dimension": "Pimpri, Maharashtra",
+            "value": 6
+          },
+          {
+            "dimension": "Toronto, Ontario",
+            "value": 21
+          },
+          {
+            "dimension": "Chennai, Tamil Nadu",
+            "value": 22
+          },
+          {
+            "dimension": "Riyadh, Riyadh Region",
+            "value": 11
+          },
+          {
+            "dimension": "San Francisco, California",
+            "value": 56
+          },
+          {
+            "dimension": "Tehran, Tehran Province",
+            "value": 7
+          },
+          {
+            "dimension": "New York, New York",
+            "value": 25
+          },
+          {
+            "dimension": "Cairo, Cairo Governorate",
+            "value": 7
+          },
+          {
+            "dimension": "Santiago, Santiago Metropolitan Region",
+            "value": 9
+          },
+          {
+            "dimension": "Dubai, Dubai",
+            "value": 13
+          },
+          {
+            "dimension": "Mumbai, Maharashtra",
+            "value": 19
+          },
+          {
+            "dimension": "Bangalore, Karnataka",
+            "value": 75
+          },
+          {
+            "dimension": "Nairobi, Nairobi",
+            "value": 7
+          },
+          {
+            "dimension": "Singapore, Singapore",
+            "value": 7
+          },
+          {
+            "dimension": "Hyderabad, Telangana",
+            "value": 10
+          },
+          {
+            "dimension": "San Diego, California",
+            "value": 10
+          }
+        ],
+        "country": [
+          {
+            "dimension": "RS",
+            "value": 7
+          },
+          {
+            "dimension": "NO",
+            "value": 12
+          },
+          {
+            "dimension": "DE",
+            "value": 53
+          },
+          {
+            "dimension": "BD",
+            "value": 18
+          },
+          {
+            "dimension": "BE",
+            "value": 7
+          },
+          {
+            "dimension": "HK",
+            "value": 7
+          },
+          {
+            "dimension": "PT",
+            "value": 12
+          },
+          {
+            "dimension": "JO",
+            "value": 9
+          },
+          {
+            "dimension": "FR",
+            "value": 38
+          },
+          {
+            "dimension": "SA",
+            "value": 20
+          },
+          {
+            "dimension": "BR",
+            "value": 33
+          },
+          {
+            "dimension": "SG",
+            "value": 7
+          },
+          {
+            "dimension": "MA",
+            "value": 26
+          },
+          {
+            "dimension": "DZ",
+            "value": 11
+          },
+          {
+            "dimension": "KE",
+            "value": 14
+          },
+          {
+            "dimension": "ID",
+            "value": 20
+          },
+          {
+            "dimension": "GB",
+            "value": 74
+          },
+          {
+            "dimension": "IE",
+            "value": 12
+          },
+          {
+            "dimension": "CA",
+            "value": 78
+          },
+          {
+            "dimension": "US",
+            "value": 551
+          },
+          {
+            "dimension": "EG",
+            "value": 21
+          },
+          {
+            "dimension": "IL",
+            "value": 15
+          },
+          {
+            "dimension": "AE",
+            "value": 18
+          },
+          {
+            "dimension": "CH",
+            "value": 12
+          },
+          {
+            "dimension": "IN",
+            "value": 409
+          },
+          {
+            "dimension": "KR",
+            "value": 8
+          },
+          {
+            "dimension": "ZA",
+            "value": 17
+          },
+          {
+            "dimension": "CL",
+            "value": 10
+          },
+          {
+            "dimension": "IR",
+            "value": 17
+          },
+          {
+            "dimension": "IT",
+            "value": 14
+          },
+          {
+            "dimension": "MX",
+            "value": 17
+          },
+          {
+            "dimension": "CO",
+            "value": 11
+          },
+          {
+            "dimension": "MY",
+            "value": 14
+          },
+          {
+            "dimension": "ES",
+            "value": 20
+          },
+          {
+            "dimension": "TH",
+            "value": 11
+          },
+          {
+            "dimension": "AU",
+            "value": 41
+          },
+          {
+            "dimension": "LB",
+            "value": 8
+          },
+          {
+            "dimension": "PH",
+            "value": 8
+          },
+          {
+            "dimension": "NG",
+            "value": 37
+          },
+          {
+            "dimension": "TN",
+            "value": 8
+          },
+          {
+            "dimension": "PK",
+            "value": 69
+          },
+          {
+            "dimension": "PL",
+            "value": 18
+          },
+          {
+            "dimension": "RO",
+            "value": 10
+          },
+          {
+            "dimension": "TR",
+            "value": 16
+          },
+          {
+            "dimension": "NL",
+            "value": 27
+          }
+        ],
+        "gender": [
+          {
+            "dimension": "F",
+            "value": 94
+          },
+          {
+            "dimension": "M",
+            "value": 1509
+          },
+          {
+            "dimension": "U",
+            "value": 424
+          }
+        ]
+      },
+      "note": "Demographics show top 45 entries per dimension. Requires 100+ followers."
+    },
+    "engagedDemographics": {
+      "success": true,
+      "accountId": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "metric": "engaged_audience_demographics",
+      "timeframe": "this_month",
+      "demographics": {
+        "age": [],
+        "city": [],
+        "country": [],
+        "gender": []
+      },
+      "note": "Demographics show top 45 entries per dimension. Requires 100+ followers."
+    }
+  }
+}

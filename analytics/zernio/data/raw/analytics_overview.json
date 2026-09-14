@@ -1,0 +1,41 @@
+{
+  "overview": {
+    "totalPosts": 267,
+    "publishedPosts": 267,
+    "scheduledPosts": 0,
+    "lastSync": "2026-09-11T21:51:07.310Z",
+    "dataStaleness": {
+      "staleAccountCount": 0,
+      "syncTriggered": false
+    }
+  },
+  "pagination": {
+    "page": 1,
+    "limit": 100,
+    "total": 267,
+    "pages": 3
+  },
+  "accounts": [
+    {
+      "_id": "6a9b9dc477555aae01de7895",
+      "platform": "tiktok",
+      "username": "isaacdyor",
+      "displayName": "Isaac Dyor",
+      "profilePicture": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-avt-0068-tx2/466bd2f459742285efdb6b2d76aab995~tplv-tiktokx-cropcenter:168:168.jpeg?dr=9638&refresh_token=37d55290&x-expires=1789275600&x-signature=Fj1LwRWtO6sfh7AQXQyJUnRJuu0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=8aecc5ac&idc=useast8",
+      "profileId": "6a9b9d75f4348b5122c72715",
+      "followersCount": 260,
+      "followersLastUpdated": "2026-09-11T05:28:07.034Z"
+    },
+    {
+      "_id": "6a9b9da777555aae01de7869",
+      "platform": "instagram",
+      "username": "isaacdyor",
+      "displayName": "Isaac Dyor",
+      "profilePicture": "https://scontent-lhr11-1.cdninstagram.com/v/t51.82787-19/658772614_17970597288039881_1160498382973230114_n.jpg?stp=dst-jpg_s206x206_tt6&_nc_cat=100&ccb=7-5&_nc_sid=bf7eb4&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=uu4BC-To1GMQ7kNvwFJLCFx&_nc_oc=Adpb6PMPupGtxaD04f6OGSK6LqTnDxcO6KEN8njvLlTT-GOMl7wBBSYfdm1m7-w10E8&_nc_zt=24&_nc_ht=scontent-lhr11-1.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=V_Mr52HZt1tbIwQtomnokA&_nc_tpa=Q5bMBQJGx6Aa_UbrHAh0QPME3z7GLR7GdgBT2vXvo7mLbNWIVyVi0prCtaNp4CW3UTciILI4EwoAAZyMnQ&oh=00_AQITEQ-HtZAxb0Nn8VdCpiHxSFxrGFGi8COEO7l7TGBFHA&oe=6AA9645F",
+      "profileId": "6a9b9d75f4348b5122c72715",
+      "followersCount": 2076,
+      "followersLastUpdated": "2026-09-11T05:28:06.707Z"
+    }
+  ],
+  "hasAnalyticsAccess": true
+}

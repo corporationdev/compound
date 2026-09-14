@@ -9,7 +9,8 @@
     "./deployment": "./src/deployment.ts",
     "./models": "./src/models.ts",
     "./release": "./src/release.ts",
-    "./transcription": "./src/transcription.ts"
+    "./transcription": "./src/transcription.ts",
+    "./upload": "./src/upload.ts"
   },
   "scripts": {
     "check": "tsc --noEmit"

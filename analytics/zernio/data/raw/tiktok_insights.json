@@ -1,0 +1,202 @@
+{
+  "6a9b9dc477555aae01de7895": {
+    "totals": {
+      "success": true,
+      "accountId": "6a9b9dc477555aae01de7895",
+      "platform": "tiktok",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "total_value",
+      "metrics": {
+        "follower_count": {
+          "total": 268
+        },
+        "likes_count": {
+          "total": 4583
+        },
+        "video_count": {
+          "total": 123
+        },
+        "followers_gained": {
+          "total": 36
+        },
+        "followers_lost": {
+          "total": 0
+        }
+      },
+      "dataDelay": "TikTok exposes lifetime cumulative counters only; time-series values come from Zernio daily snapshots. Watch time, impression sources, profile views, and account-level reach/impressions are not available on any TikTok public API."
+    },
+    "series": {
+      "success": true,
+      "accountId": "6a9b9dc477555aae01de7895",
+      "platform": "tiktok",
+      "dateRange": {
+        "since": "2026-06-15",
+        "until": "2026-09-11"
+      },
+      "metricType": "time_series",
+      "metrics": {
+        "follower_count": {
+          "total": 260,
+          "values": [
+            {
+              "date": "2026-09-05",
+              "value": 224
+            },
+            {
+              "date": "2026-09-06",
+              "value": 227
+            },
+            {
+              "date": "2026-09-07",
+              "value": 235
+            },
+            {
+              "date": "2026-09-08",
+              "value": 241
+            },
+            {
+              "date": "2026-09-09",
+              "value": 248
+            },
+            {
+              "date": "2026-09-10",
+              "value": 251
+            },
+            {
+              "date": "2026-09-11",
+              "value": 260
+            }
+          ]
+        },
+        "likes_count": {
+          "total": 4504,
+          "values": [
+            {
+              "date": "2026-09-05",
+              "value": 3984
+            },
+            {
+              "date": "2026-09-06",
+              "value": 4090
+            },
+            {
+              "date": "2026-09-07",
+              "value": 4156
+            },
+            {
+              "date": "2026-09-08",
+              "value": 4258
+            },
+            {
+              "date": "2026-09-09",
+              "value": 4376
+            },
+            {
+              "date": "2026-09-10",
+              "value": 4420
+            },
+            {
+              "date": "2026-09-11",
+              "value": 4504
+            }
+          ]
+        },
+        "video_count": {
+          "total": 120,
+          "values": [
+            {
+              "date": "2026-09-05",
+              "value": 103
+            },
+            {
+              "date": "2026-09-06",
+              "value": 108
+            },
+            {
+              "date": "2026-09-07",
+              "value": 108
+            },
+            {
+              "date": "2026-09-08",
+              "value": 114
+            },
+            {
+              "date": "2026-09-09",
+              "value": 117
+            },
+            {
+              "date": "2026-09-10",
+              "value": 117
+            },
+            {
+              "date": "2026-09-11",
+              "value": 120
+            }
+          ]
+        },
+        "followers_gained": {
+          "total": 36,
+          "values": [
+            {
+              "date": "2026-09-06",
+              "value": 3
+            },
+            {
+              "date": "2026-09-07",
+              "value": 8
+            },
+            {
+              "date": "2026-09-08",
+              "value": 6
+            },
+            {
+              "date": "2026-09-09",
+              "value": 7
+            },
+            {
+              "date": "2026-09-10",
+              "value": 3
+            },
+            {
+              "date": "2026-09-11",
+              "value": 9
+            }
+          ]
+        },
+        "followers_lost": {
+          "total": 0,
+          "values": [
+            {
+              "date": "2026-09-06",
+              "value": 0
+            },
+            {
+              "date": "2026-09-07",
+              "value": 0
+            },
+            {
+              "date": "2026-09-08",
+              "value": 0
+            },
+            {
+              "date": "2026-09-09",
+              "value": 0
+            },
+            {
+              "date": "2026-09-10",
+              "value": 0
+            },
+            {
+              "date": "2026-09-11",
+              "value": 0
+            }
+          ]
+        }
+      },
+      "dataDelay": "TikTok exposes lifetime cumulative counters only; time-series values come from Zernio daily snapshots. Watch time, impression sources, profile views, and account-level reach/impressions are not available on any TikTok public API."
+    }
+  }
+}
