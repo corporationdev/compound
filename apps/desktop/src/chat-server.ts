@@ -54,6 +54,7 @@ export class ChatServer {
   constructor(options: ChatServerOptions) { this.options = options; }
 
   private publish(patch: Partial<ChatState> = {}) {
+    if (patch.status === 'error' || (patch.error && patch.status !== 'reconnecting')) console.error(`[chat-server] ${patch.error ?? patch.status}`);
     this.state = { ...this.state, ...patch };
     if (this.emitTimer) return;
     this.emitTimer = setTimeout(() => { this.emitTimer = undefined; this.options.changed(this.state); }, 40);
@@ -73,8 +74,10 @@ export class ChatServer {
     this.publish({ status: 'starting', error: undefined });
     const archive = join(this.options.runtimeDir, 'app.asar');
     const entry = join(archive, 'node_modules/t3/dist/bin.mjs');
-    await access(archive).catch(() => {
-      throw new Error('Chat runtime is missing. In development run `bun run --cwd apps/desktop stage:chat`, then Retry.');
+    // Checked through the entry, not the archive: Electron's asar-aware fs
+    // answers ENOENT for the archive path itself while paths inside resolve.
+    await access(entry).catch(() => {
+      throw new Error(`Chat runtime is missing at ${archive}. In development run \`bun run --cwd apps/desktop stage:chat\`, then Retry.`);
     });
     const stateDir = join(this.options.dataDir, 'userdata');
     await mkdir(stateDir, { recursive: true });

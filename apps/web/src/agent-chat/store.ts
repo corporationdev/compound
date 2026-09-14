@@ -382,7 +382,9 @@ export const isRunning = (projectId: string, chatId: string | null): boolean => 
 /** The chat's own error, when it is not a sign-in problem with its own notice. */
 export function chatError(chatId: string | null): string {
   const session = detailOf(chatId)?.session?.lastError ?? "";
-  const failure = state.error || (ready() ? state.chat.error ?? "" : "");
+  // A server that is down says why, even though nothing else is ready.
+  const down = state.chat.status === "error" || state.chat.status === "stopped";
+  const failure = state.error || (ready() || down ? state.chat.error ?? "" : "");
   const message = failure || session;
   return message && !classifyAuthFailure(message) ? message : "";
 }
