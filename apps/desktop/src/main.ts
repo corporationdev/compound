@@ -384,7 +384,16 @@ if (app.requestSingleInstanceLock()) {
   app.on("before-quit", (event) => {
     if (!chatStopped) {
       event.preventDefault();
-      void chat.stop().finally(() => { chatStopped = true; app.quit(); });
+      void chat.stop().finally(() => {
+        chatStopped = true;
+        // The renderer is not consulted again: the chat is down and the
+        // watchers are gone, so nothing it could say would change the outcome,
+        // and a close it declines would leave a headless app behind (which is
+        // what a Ctrl-C'd dev session used to do).
+        for (const window of BrowserWindow.getAllWindows()) window.destroy();
+        app.quit();
+        setTimeout(() => app.exit(0), 2000).unref();
+      });
     }
     unwatchAll();
     dapi.stop();
