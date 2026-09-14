@@ -13,7 +13,7 @@ import type { FileHandle } from "node:fs/promises";
 import { tempPathFor } from "./atomic";
 import { DapiServer } from "./dapi/server";
 import { cliStatus, installCli, uninstallCli } from "./cli-install";
-import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
+import { mcpStatus, registerMcp } from "./mcp-install";
 import { enableHeadless, isHeadless } from "./headless";
 import { setupAppMenu } from "./menu";
 import { prepareUserData } from "./brand-migration";
@@ -237,6 +237,9 @@ if (app.requestSingleInstanceLock()) {
     runtimeDir: app.isPackaged ? join(process.resourcesPath, 'chat-runtime') : join(app.getAppPath(), 'chat-runtime'),
     dataDir: join(app.getPath('userData'), 'chat'),
     mcpUrl: dapi.url,
+    // Codex reads only its user config, so the server is registered there the
+    // first time a chat runs it. Claude Code reads the project's `.mcp.json`.
+    registerProvider: async (provider) => { if (provider === 'codex') registerMcp('codex'); },
     validateProject: async (input) => {
       const project = await getProject(input.dir);
       if (!project || project.id !== input.id) throw new Error('Project directory no longer matches this chat. Reopen the project.');
@@ -265,7 +268,6 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.LOGS_GET, () => logBuffer);
   mainBridge.handle(MAIN_CHANNELS.HEADLESS_GET_MODE, () => isHeadless());
   mainBridge.handle(MAIN_CHANNELS.MCP_STATUS, () => mcpStatus());
-  mainBridge.handle(MAIN_CHANNELS.MCP_APPLY, (request) => applyMcp(request));
   mainBridge.handle(MAIN_CHANNELS.CLI_STATUS, () => cliStatus());
   mainBridge.handle(MAIN_CHANNELS.CLI_INSTALL, () => installCli());
   mainBridge.handle(MAIN_CHANNELS.CLI_UNINSTALL, () => uninstallCli());
@@ -375,7 +377,6 @@ if (app.requestSingleInstanceLock()) {
 
 
     dapi.start();
-    healMcpRegistrations();
     createWindow(!isHiddenLaunch(process.argv));
   });
 

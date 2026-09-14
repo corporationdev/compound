@@ -2,27 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { For, Match, Show, Switch, createResource, createSignal, onCleanup } from "solid-js";
+import { Match, Show, Switch, createResource, createSignal, onCleanup } from "solid-js";
 import { toast } from "somoto";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Switch as Toggle, SwitchControl, SwitchInput, SwitchThumb } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  AGENT_ICONS,
-  applyMcp,
-  fetchCliStatus,
-  fetchMcpStatus,
-  installCli,
-  uninstallCli,
-  type AgentId,
-  type McpAgentStatus,
-} from "@/lib/mcp";
+import { fetchCliStatus, fetchMcpStatus, installCli, uninstallCli } from "@/lib/mcp";
 import { isDesktop } from "@/projects";
 
 import {
-  DashboardDividedStack,
   DashboardInfoActionRow,
   DashboardScrollView,
   DashboardSurfaceCard,
@@ -31,120 +20,6 @@ import {
 } from "./shared";
 
 const MCP_DOCS_URL = "https://modelcontextprotocol.io/docs/2026-07-28/develop/connect-local-servers";
-
-// --- Agents ------------------------------------------------------------------
-
-type AgentRowProps = {
-  agent: McpAgentStatus;
-  /** The state the switch is moving to while a write is in flight. */
-  pending: boolean | undefined;
-  onChange: (connected: boolean) => void;
-};
-
-function AgentRow(props: AgentRowProps) {
-  const checked = () => props.pending ?? props.agent.connected;
-
-  return (
-    <DashboardInfoActionRow
-      layout="inline"
-      leadingSize="sm"
-      title={props.agent.label}
-      leading={<Icon name={AGENT_ICONS[props.agent.id]} class="text-foreground" />}
-      action={
-        <Toggle
-          checked={checked()}
-          disabled={props.pending !== undefined}
-          onChange={props.onChange}
-          class="flex shrink-0 items-center"
-        >
-          <SwitchInput aria-label={`Connect ${props.agent.label}`} />
-          <SwitchControl variant="compact">
-            <SwitchThumb variant="compact" />
-          </SwitchControl>
-        </Toggle>
-      }
-    />
-  );
-}
-
-function DashboardAgentsSection() {
-  const [status, { refetch }] = createResource(fetchMcpStatus);
-  const [pending, setPending] = createSignal<Partial<Record<AgentId, boolean>>>({});
-
-  const labelOf = (id: AgentId) => status()?.agents.find((agent) => agent.id === id)?.label ?? id;
-
-  /** Every agent not yet connected. */
-  const connectable = () => (status()?.agents ?? []).filter((agent) => !agent.connected);
-
-  /**
-   * Writes the change straight into the agents' configs — a switch is not a
-   * draft. Whatever fails snaps back, with the reason in a toast.
-   */
-  const apply = async (add: AgentId[], remove: AgentId[]) => {
-    if (add.length + remove.length === 0) return;
-    setPending((current) => ({
-      ...current,
-      ...Object.fromEntries(add.map((id) => [id, true])),
-      ...Object.fromEntries(remove.map((id) => [id, false])),
-    }));
-    try {
-      const result = await applyMcp({ add, remove });
-      const changed = result.added.length + result.removed.length;
-      if (result.failures.length > 0) {
-        toast.error(changed > 0 ? "Some agents could not be updated" : "Agents could not be updated", {
-          description: result.failures.map((failure) => `${labelOf(failure.id)}: ${failure.error}`).join("\n"),
-        });
-      }
-    } catch (e) {
-      toast.error("Could not update the agents", { description: (e as Error).message });
-    } finally {
-      await refetch();
-      setPending((current) => {
-        const next = { ...current };
-        for (const id of [...add, ...remove]) delete next[id];
-        return next;
-      });
-    }
-  };
-
-  const setConnected = (agent: McpAgentStatus, connected: boolean) =>
-    apply(connected ? [agent.id] : [], connected ? [] : [agent.id]);
-
-  const enableAll = () => apply(connectable().map((agent) => agent.id), []);
-
-  return (
-    <DashboardTitledSection
-      title="Agents"
-      description="Connect to Compound’s MCP server to create and edit videos with your agents."
-      action={
-        <Button variant="link" class="h-4" disabled={connectable().length === 0} onClick={enableAll}>
-          Enable all
-        </Button>
-      }
-    >
-      <DashboardSurfaceCard class="flex flex-col gap-3">
-        <Show
-          when={status()}
-          fallback={<p class="text-xs text-muted-foreground">Checking agents...</p>}
-        >
-          {(current) => (
-            <DashboardDividedStack>
-              <For each={current().agents}>
-                {(agent) => (
-                  <AgentRow
-                    agent={agent}
-                    pending={pending()[agent.id]}
-                    onChange={(connected) => void setConnected(agent, connected)}
-                  />
-                )}
-              </For>
-            </DashboardDividedStack>
-          )}
-        </Show>
-      </DashboardSurfaceCard>
-    </DashboardTitledSection>
-  );
-}
 
 // --- MCP server --------------------------------------------------------------
 
@@ -289,12 +164,11 @@ export function DashboardMcpView() {
         fallback={
           <DashboardSurfaceSection title="MCP & CLI">
             <p class="text-xs text-muted-foreground">
-              Connecting coding agents and installing the command line tool is available in the desktop app.
+              The MCP server and the command line tool are available in the desktop app.
             </p>
           </DashboardSurfaceSection>
         }
       >
-        <DashboardAgentsSection />
         <DashboardMcpServerSection />
         <DashboardCliSection />
       </Show>

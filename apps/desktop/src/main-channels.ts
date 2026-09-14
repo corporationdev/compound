@@ -72,7 +72,6 @@ export const MAIN_CHANNELS = {
   PROJECTS_FS_REAL_PATH: "projects:fs-real-path",
   HEADLESS_GET_MODE: "headless:get-mode",
   MCP_STATUS: "mcp:status",
-  MCP_APPLY: "mcp:apply",
   CLI_STATUS: "cli:status",
   CLI_INSTALL: "cli:install",
   CLI_UNINSTALL: "cli:uninstall",
@@ -114,31 +113,8 @@ export type CompileResult =
 export type { SourceEdit, WriteResult };
 export type { AgentId };
 
-// One agent the settings page lists: whether it is set up on this machine,
-// whether its config already carries the app's MCP entry, and — for the
-// agents that need the bundled `dapi` binary — why this build cannot
-// connect it (null when it can).
-export type McpAgentStatus = {
-  id: AgentId;
-  label: string;
-  detected: boolean;
-  connected: boolean;
-  /** Absolute path of the config file the entry goes into. */
-  config: string;
-  unavailable: string | null;
-};
-
-/** `url` is the HTTP endpoint any other agent can be pointed at by hand. */
-export type McpStatus = { url: string; agents: McpAgentStatus[] };
-
-export type McpApplyRequest = { add: AgentId[]; remove: AgentId[] };
-
-// Per agent: written, taken out, or left as it was with the reason.
-export type McpApplyResult = {
-  added: AgentId[];
-  removed: AgentId[];
-  failures: { id: AgentId; error: string }[];
-};
+/** `url` is the HTTP endpoint any agent can be pointed at. */
+export type McpStatus = { url: string };
 
 // Where the `dapi` command stands. `managed` means what is there is a
 // symlink (the app's own, or the dev workflow's Homebrew link), which
@@ -307,7 +283,6 @@ export type MainRequestMap = {
   // the `compound` command on PATH (see cli-install.ts). The install/uninstall
   // calls put the macOS admin prompt on screen.
   [MAIN_CHANNELS.MCP_STATUS]: { request: void; response: McpStatus };
-  [MAIN_CHANNELS.MCP_APPLY]: { request: McpApplyRequest; response: McpApplyResult };
   [MAIN_CHANNELS.CLI_STATUS]: { request: void; response: CliStatus };
   [MAIN_CHANNELS.CLI_INSTALL]: { request: void; response: CliInstallResult };
   [MAIN_CHANNELS.CLI_UNINSTALL]: { request: void; response: CliUninstallResult };

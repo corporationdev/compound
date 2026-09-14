@@ -14,7 +14,6 @@ import { DashboardMcpView } from "@/components/dashboard/mcp-view";
 import { DashboardProjectsView } from "@/components/dashboard/projects-view";
 import { DashboardSettingsView } from "@/components/dashboard/settings-view";
 import {
-  DashboardSidebarConnectCard,
   DashboardSidebarHeader,
   DashboardSidebarItem,
   DashboardSidebarNav,
@@ -24,7 +23,6 @@ import {
 } from "@/components/dashboard/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { useFullscreenState } from "@/hooks/use-fullscreen-state";
-import { connectedAgents, fetchMcpStatus } from "@/lib/mcp";
 import { isDesktop, openProjectFolder, pickProjectFolder } from "@/projects";
 import { isInputTarget } from "@/utils";
 
@@ -103,15 +101,6 @@ export function DashboardPage() {
     setSettingsNavOpen(true);
     setView("account");
   };
-  const openAgentSetup = () => {
-    setSettingsNavOpen(true);
-    setView("mcp");
-  };
-
-  onMount(() => fetchMcpStatus().catch(() => { }));
-
-  const showConnectCard = () => isDesktop() && connectedAgents() === 0;
-
   const backToDashboard = () => {
     setSettingsNavOpen(false);
     if (isSettingsView(view())) setView("home");
@@ -126,13 +115,7 @@ export function DashboardPage() {
         <Show when={!settingsNavOpen()} fallback={<DashboardSidebarTopSpacer />}>
           <DashboardSidebarHeader />
         </Show>
-        <DashboardSidebarNav
-          footer={
-            <Show when={!settingsNavOpen() && showConnectCard()}>
-              <DashboardSidebarConnectCard onInstall={openAgentSetup} />
-            </Show>
-          }
-        >
+        <DashboardSidebarNav>
           <Show
             when={settingsNavOpen()}
             fallback={

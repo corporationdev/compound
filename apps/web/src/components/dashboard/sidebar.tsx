@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Show, type JSX } from "solid-js";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/context/auth";
 import { useAvatar } from "@/hooks/use-avatar";
@@ -91,30 +90,6 @@ export function DashboardSidebarNav(props: DashboardSidebarNavProps) {
   );
 }
 
-type DashboardSidebarConnectCardProps = {
-  onInstall: () => void;
-};
-
-/** The nudge towards the agent setup, shown until an agent is connected. */
-export function DashboardSidebarConnectCard(props: DashboardSidebarConnectCardProps) {
-  return (
-    <div class="flex w-full shrink-0 flex-col items-center gap-1 rounded-md bg-accent py-3">
-      <div class="flex w-full flex-col gap-3 px-3">
-        <div class="flex w-full flex-col gap-1">
-          <div class="flex w-full items-center pb-0.5">
-            <p class="min-w-0 flex-1 truncate text-xs font-450 text-foreground">Connect your agent</p>
-          </div>
-          <p class="w-full text-xs text-muted-foreground">
-            Edit your videos with coding agents like Claude Code, Codex, or Cursor.
-          </p>
-        </div>
-        <Button variant="secondary" class="w-full" onClick={props.onInstall}>
-          Install agent tools
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 type DashboardSidebarSectionProps = {
   title?: string;

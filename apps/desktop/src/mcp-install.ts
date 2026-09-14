@@ -13,10 +13,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { MCP_URL } from "@compound/dapi";
-import { AGENT_TARGETS, agentTarget, needsBinary, readServer, removeServer, upsertServer } from "./mcp-config";
+import { agentTarget, needsBinary, readServer, upsertServer } from "./mcp-config";
 
-import type { AgentTarget, McpServerSpec } from "./mcp-config";
-import type { McpAgentStatus, McpApplyRequest, McpApplyResult, McpStatus } from "./main-channels";
+import type { AgentId, AgentTarget, McpServerSpec } from "./mcp-config";
+import type { McpStatus } from "./main-channels";
 
 // The dev workflow links the workspace build into Homebrew's bin
 // (`symlink:create` in apps/cli); that is the binary a dev build registers.
@@ -63,85 +63,26 @@ function unavailableReason(target: AgentTarget, current: McpServerSpec): string 
   return null;
 }
 
-function agentStatus(target: AgentTarget, current: McpServerSpec): McpAgentStatus {
-  const registered = readServer(readConfig(target), target.format);
-  return {
-    id: target.id,
-    label: target.label,
-    detected: existsSync(join(homedir(), target.marker)),
-    connected: registered !== null,
-    config: configPath(target),
-    unavailable: unavailableReason(target, current),
-  };
-}
-
-/** Every agent we know, with whether it is on this machine and whether its config carries our entry. */
+/** Where the app's MCP server is, for the settings page. */
 export function mcpStatus(): McpStatus {
-  const current = spec();
-  return { url: current.url, agents: AGENT_TARGETS.map((target) => agentStatus(target, current)) };
+  return { url: spec().url };
 }
 
 /**
- * Writes our entry into the configs of `add` and takes it out of the configs
- * of `remove`, one file at a time, so one unreadable config does not stop
- * the rest. Other servers in the same file are left alone either way.
+ * Writes the app's MCP entry into one agent's config, when the in-app chat
+ * is about to run that agent. Claude Code reads the project's `.mcp.json`
+ * instead (see chat-server.ts); Codex has no project scope, so its user
+ * config is the only place the server can be registered. Other servers in
+ * the file are left alone. Throws with the file and reason on failure.
  */
-export function applyMcp(request: McpApplyRequest): McpApplyResult {
+export function registerMcp(id: AgentId): void {
+  const target = agentTarget(id);
   const current = spec();
-  const result: McpApplyResult = { added: [], removed: [], failures: [] };
-
-  for (const id of request.add) {
-    const target = agentTarget(id);
-    const reason = unavailableReason(target, current);
-    if (reason) {
-      result.failures.push({ id, error: reason });
-      continue;
-    }
-    try {
-      writeConfig(target, upsertServer(readConfig(target), target.format, target.entry(current)));
-      result.added.push(id);
-    } catch (e) {
-      result.failures.push({ id, error: `${target.config}: ${(e as Error).message}` });
-    }
-  }
-
-  for (const id of request.remove) {
-    const target = agentTarget(id);
-    try {
-      const next = removeServer(readConfig(target), target.format);
-      if (next !== null) writeConfig(target, next);
-      result.removed.push(id);
-    } catch (e) {
-      result.failures.push({ id, error: `${target.config}: ${(e as Error).message}` });
-    }
-  }
-
-  return result;
-}
-
-/**
- * Launch-time self-heal for the stdio agents: an entry that still runs the
- * proxy from a bundle that moved (or was translocated when it was written)
- * is rewritten to the binary this build has. Entries the user wrote by hand
- * for something else are left alone.
- */
-export function healMcpRegistrations(): void {
-  if (!app.isPackaged) return;
-  const current = spec();
-  if (current.command === "" || current.command.includes("/AppTranslocation/")) return;
-
-  for (const target of AGENT_TARGETS) {
-    const text = readConfig(target);
-    const registered = readServer(text, target.format);
-    if (!registered?.command) continue;
-    const ours = registered.command.includes("Compound") || registered.command.includes("/AppTranslocation/");
-    if (!ours) continue;
-    const entry = target.entry(current);
-    if (registered.command === entry.command) continue;
-    try {
-      writeConfig(target, upsertServer(text, target.format, entry));
-    } catch {
-      // best effort — the settings page remains as a manual fix
-    }
-  }
+  const reason = unavailableReason(target, current);
+  if (reason) throw new Error(reason);
+  const text = readConfig(target);
+  const entry = target.entry(current);
+  const registered = readServer(text, target.format);
+  if (registered && (registered.url === entry.url || registered.command === entry.command)) return;
+  writeConfig(target, upsertServer(text, target.format, entry));
 }

@@ -20,6 +20,8 @@ export type ChatServerOptions = {
   dataDir: string;
   /** The app's MCP server, e.g. `http://127.0.0.1:3284/mcp`. Attached per project. */
   mcpUrl: string;
+  /** Makes sure the provider about to run can reach the MCP server; failures are shown, never fatal. */
+  registerProvider?: (provider: string) => Promise<void>;
   validateProject: (project: ChatProject) => Promise<ChatProject>;
   changed: (state: ChatState) => void;
 };
@@ -45,6 +47,7 @@ export class ChatServer {
   private sending = new Set<string>();
   private projectWrites = new Map<string, Promise<string>>();
   private mcpProjects = new Set<string>();
+  private mcpProviders = new Set<string>();
   private stderr = '';
   private options: ChatServerOptions;
 
@@ -300,7 +303,7 @@ export class ChatServer {
       case 'create': {
         if (!supported.has(request.provider)) throw new Error('Unsupported chat provider');
         const projectId = await this.ensureProject(request.project);
-        await this.attachMcp(request.project.dir);
+        await this.attachMcp(request.project.dir, request.provider);
         threadId = randomUUID();
         await this.dispatch({ type: 'thread.create', threadId, projectId, title: 'New chat', modelSelection: { instanceId: request.provider, model: request.model, options: request.modelOptions }, runtimeMode: request.runtimeMode ?? 'approval-required', interactionMode: 'default', branch: null, worktreePath: null });
         break;
@@ -324,7 +327,7 @@ export class ChatServer {
           if (thread.projectId !== projectId) throw new Error('This chat belongs to a different project');
           if (isWorking(thread)) throw new Error('Wait for this turn to finish, or stop it before sending another message');
           if (!supported.has(thread.modelSelection.instanceId)) throw new Error('Unsupported chat provider');
-          await this.attachMcp(request.project.dir);
+          await this.attachMcp(request.project.dir, thread.modelSelection.instanceId);
           const context = request.context + MCP_INSTRUCTIONS;
           await this.dispatch({ type: 'thread.turn.start', commandId: request.messageId, threadId: request.threadId, message: { messageId: request.messageId, role: 'user', text: request.text + CONTEXT_START + context + CONTEXT_END, attachments: request.attachments }, modelSelection: { ...thread.modelSelection, model: request.model, options: request.modelOptions ?? thread.modelSelection.options }, runtimeMode: thread.runtimeMode, interactionMode: 'default', titleSeed: request.text.slice(0, 160) || 'Image attachment' });
         } finally { this.sending.delete(request.threadId); }
@@ -369,15 +372,26 @@ export class ChatServer {
     return { state: this.state, ...(threadId ? { threadId } : {}), ...(url ? { url } : {}), ...(filePath ? { filePath } : {}) };
   }
 
-  /** Writes the project's MCP config once per session; a failure never blocks a turn. */
-  private async attachMcp(dir: string) {
-    if (!this.options.mcpUrl || this.mcpProjects.has(dir)) return;
-    this.mcpProjects.add(dir);
-    try {
-      await writeProjectMcpConfig(dir, this.options.mcpUrl);
-    } catch (error) {
-      this.mcpProjects.delete(dir);
-      this.publish({ error: `Could not attach the Compound tools to this project: ${rpcError(error).message}` });
+  /** Writes the project's MCP config once per session and registers the provider once; a failure never blocks a turn. */
+  private async attachMcp(dir: string, provider: string) {
+    if (!this.options.mcpUrl) return;
+    if (!this.mcpProjects.has(dir)) {
+      this.mcpProjects.add(dir);
+      try {
+        await writeProjectMcpConfig(dir, this.options.mcpUrl);
+      } catch (error) {
+        this.mcpProjects.delete(dir);
+        this.publish({ error: `Could not attach the Compound tools to this project: ${rpcError(error).message}` });
+      }
+    }
+    if (this.options.registerProvider && !this.mcpProviders.has(provider)) {
+      this.mcpProviders.add(provider);
+      try {
+        await this.options.registerProvider(provider);
+      } catch (error) {
+        this.mcpProviders.delete(provider);
+        this.publish({ error: `Could not register the Compound tools with ${provider}: ${rpcError(error).message}` });
+      }
     }
   }
 

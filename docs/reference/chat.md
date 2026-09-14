@@ -113,9 +113,11 @@ their own entry.
   preserve anything already in those files.
 - **Codex.** There is no project scope. T3 passes its own server as
   `-c mcp_servers.t3-code.*` and everything else comes from
-  `~/.codex/config.toml`. Codex therefore needs the user-level registration the
-  dashboard's MCP page performs (`apps/desktop/src/mcp-install.ts`). Until that
-  is done, a Codex chat has the editor context in its prompt but no tools.
+  `~/.codex/config.toml`. The first time a chat runs Codex, main writes the
+  `compound` server into that file (`registerMcp` in
+  `apps/desktop/src/mcp-install.ts`), leaving other servers alone. A failure
+  is shown in the panel and the turn still runs, with the editor context in
+  its prompt but no tools.
 
 ## Development
 
