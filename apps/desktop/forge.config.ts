@@ -36,8 +36,9 @@ const config: ForgeConfig = {
     // Staged by scripts/stage-{cli,runtime,docs,chat}.mjs; end up at
     // Contents/Resources/{cli,runtime,docs,chat-runtime}.
     extraResource: ['./cli', './runtime', './docs', './chat-runtime'],
-    // Native dependencies select their CPU variant; Electron supplies Node.
-    osxUniversal: { x64ArchFiles: 'Contents/Resources/chat-runtime/**' },
+    // Native dependencies in these folders select their CPU variant at run
+    // time (or are already universal), so the same files sit in both builds.
+    osxUniversal: { x64ArchFiles: 'Contents/Resources/{chat-runtime,runtime}/**' },
     osxSign: process.env.SKIP_SIGN ? undefined : {
       ...(process.env.APPLE_SIGNING_IDENTITY ? { identity: process.env.APPLE_SIGNING_IDENTITY } : {}),
     },

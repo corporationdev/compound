@@ -16,7 +16,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, closeSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, closeSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,6 +48,23 @@ execFileSync("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-p
   cwd: stageDir,
   stdio: "inherit",
 });
+
+// Ship one esbuild executable that runs on both Mac architectures: npm only
+// installs the host's, and the app is packaged universal from one machine.
+// Keeping every copy universal also lets Electron merge the two app bundles
+// without exceptions beyond the resource folders listed in forge.config.ts.
+if (process.platform === "darwin") {
+  const esbuildVersion = JSON.parse(readFileSync(join(stageDir, "node_modules/esbuild/package.json"), "utf8")).version;
+  execFileSync("npm", ["install", "--force", "--ignore-scripts", "--no-save", "--no-audit", "--no-fund", "--no-package-lock",
+    `@esbuild/darwin-arm64@${esbuildVersion}`, `@esbuild/darwin-x64@${esbuildVersion}`], {
+    cwd: stageDir, stdio: "inherit",
+  });
+  const arches = ["darwin-arm64", "darwin-x64"].map((arch) => join(stageDir, "node_modules/@esbuild", arch, "bin/esbuild"));
+  const universal = join(stageDir, "esbuild-universal");
+  execFileSync("lipo", ["-create", ...arches, "-output", universal]);
+  for (const binary of [...arches, join(stageDir, "node_modules/esbuild/bin/esbuild")]) cpSync(universal, binary);
+  rmSync(universal);
+}
 
 // Mach-O files inside Resources are not reached by the app-bundle signing
 // pass, and notarization rejects unsigned executables; sign them here.

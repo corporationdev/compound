@@ -10,8 +10,8 @@ const version = releaseVersion(JSON.parse(readFileSync(join(root, 'package.json'
 const app = join(root, 'apps/desktop/out/Compound-darwin-universal/Compound.app');
 const binary = join(app, 'Contents/MacOS/Compound');
 for (const path of [binary, join(app, 'Contents/Resources/app/dist/corner_radius.node'),
-  join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-arm64/bin/esbuild'),
-  join(app, 'Contents/Resources/cli/node_modules/@esbuild/darwin-x64/bin/esbuild')])
+  join(app, 'Contents/Resources/runtime/node_modules/@esbuild/darwin-arm64/bin/esbuild'),
+  join(app, 'Contents/Resources/runtime/node_modules/@esbuild/darwin-x64/bin/esbuild')])
   execFileSync('lipo', [path, '-verify_arch', 'arm64', 'x86_64']);
 const chatArchive = join(app, 'Contents/Resources/chat-runtime/app.asar');
 if (JSON.parse(extractFile(chatArchive, 'node_modules/t3/package.json').toString()).version !== '0.0.40')
