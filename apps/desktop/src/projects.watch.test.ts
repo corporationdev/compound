@@ -153,6 +153,9 @@ describe("watchProject", () => {
   it("reports an asset someone else renames into place", async () => {
     await mkdir(join(dir, "assets"), { recursive: true });
     await waitFor("assets");
+    // Linux: Node's recursive watcher attaches to a new directory a moment
+    // after reporting it; a rename landing before that is never seen.
+    await settle();
 
     changed = [];
     const temp = tempPathFor(join(dir, "assets", "clip.bin"));
