@@ -42,8 +42,11 @@ const window = {
 /** Long enough for an event to have arrived, for the cases where none may. */
 const settle = (ms = 400): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** How long a watcher event may take: hosted macOS runners deliver fs events slowly. */
+const WATCH_TIMEOUT_MS = process.env.CI ? 15000 : 4000;
+
 /** Waits for `path` to be reported, and fails the test when it never is. */
-async function waitFor(path: string, timeout = 4000): Promise<void> {
+async function waitFor(path: string, timeout = WATCH_TIMEOUT_MS): Promise<void> {
   const until = Date.now() + timeout;
   while (Date.now() < until) {
     if (changed.includes(path)) return;
