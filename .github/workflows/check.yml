@@ -18,7 +18,7 @@ jobs:
       - run: bun run test:cloud
       - run: bun test scripts/preview.test.ts
       - run: bun test scripts/release.test.ts
-      - run: bun test apps/web/test/project-roots.test.ts
+      - run: bun test packages/chat/test packages/dapi apps/web/test apps/desktop/src
       - run: bun run test:branding
       - run: bun run build
       - run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload

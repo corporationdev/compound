@@ -19,7 +19,7 @@
     "stage:docs": "node scripts/stage-docs.mjs",
     "stage:chat": "node scripts/stage-chat.mjs",
     "check": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "bun test src",
     "dev": "bun run stage:chat && bun run build && electron-forge start",
     "package": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:runtime && bun run stage:docs && electron-forge package",
     "make": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:runtime && bun run stage:docs && electron-forge make",
