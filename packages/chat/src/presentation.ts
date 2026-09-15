@@ -55,6 +55,7 @@ function outputText(value: unknown): string {
   if (row.content !== undefined) return outputText(row.content);
   // Non-text tool content is displayed by the attachment renderer, never as base64.
   if (row.type === 'image' || row.type === 'image_url' || row.type === 'resource') return '';
+  if (typeof row.type === 'string' && Object.keys(row).length <= 3) return `[${row.type}${typeof row.tool_name === 'string' ? ` ${row.tool_name}` : ''}]`;
   return value == null ? '' : JSON.stringify(value, null, 2);
 }
 
@@ -77,48 +78,63 @@ function toolImages(value: unknown, into: ToolImage[]) {
   else if (!/^[a-z][a-z0-9+.-]*:/i.test(data)) into.push({ mediaType: text(source.mediaType, source.mimeType, 'image/png'), data });
 }
 
+/** `mcp__compound__capture` → "capture"; anything else stays, as upstream shows it. */
+export function toolTitle(name: string): string {
+  const mcp = /^mcp__[^_]+(?:_[^_]+)*__(.+)$/.exec(name);
+  return mcp ? mcp[1]! : name;
+}
+
+const SUMMARY_KEYS = ['command', 'cmd', 'file_path', 'path', 'pattern', 'query', 'url', 'prompt', 'description'];
+
+/** A one-line summary of a tool's input, for the row: the first meaningful field, else the JSON. */
+export function summarizeInput(input: unknown): string {
+  if (input === null || input === undefined) return '';
+  if (typeof input === 'string') return firstLine(input);
+  if (typeof input !== 'object') return String(input);
+  const row = input as Record<string, unknown>;
+  for (const key of SUMMARY_KEYS) {
+    const value = row[key];
+    if (typeof value === 'string' && value.trim()) return firstLine(value);
+  }
+  if (Object.keys(row).length === 0) return '';
+  try { return firstLine(JSON.stringify(input)); } catch { return ''; }
+}
+
 /** One merged tool-lifecycle activity as the row the panel shows. */
 function presentTool(activity: OrchestrationThreadActivity, id: string, createdAt: string, running: boolean): Item {
   const p = record(activity.payload), data = record(p.data), item = record(data.item);
-  const input = inputRecord(data.input ?? item.arguments ?? p.input);
-  const name = text(data.toolName, item.tool, p.toolName, p.title, activity.summary).replace(/\s+(started|completed|updated)$/i, '');
   const type = text(p.itemType);
+  const rawName = text(data.toolName, item.tool, p.toolName).replace(/\s+(started|completed|updated)$/i, '');
+  const name = rawName || (type === 'command_execution' ? 'Bash' : type === 'file_change' ? 'Edit' : type === 'web_search' ? 'WebSearch' : text(p.title, activity.summary).replace(/\s+(started|completed|updated)$/i, '') || 'Tool');
+  const input = inputRecord(data.input ?? item.arguments ?? p.input);
   const command = text(input.command, input.cmd, item.command, data.command, p.command);
   const files = Array.isArray(item.changes) ? item.changes : Array.isArray(data.files) ? data.files : [];
   const paths = files.map(file => typeof file === 'string' ? file : text(record(file).path)).filter(Boolean);
   const path = text(input.file_path, input.path, data.path, paths.join(', '));
-  const normalized = name.toLowerCase().replace(/[\s_-]/g, '');
-  const action = /^(bash|shell|terminal|execcommand|executecommand|runcommand)$/.test(normalized) || type === 'command_execution' ? 'command'
-    : /^(read|readfile)$/.test(normalized) ? 'read'
-    : /^(edit|write|editfile|writefile|applypatch|multiedit)$/.test(normalized) || type === 'file_change' ? 'edit'
-    : /^(grep|glob|search|searchfiles|websearch)$/.test(normalized) || type === 'web_search' ? 'search' : 'other';
   const failed = activity.tone === 'error' || /failed|error|denied/.test(text(p.status, item.status)) || data.isError === true || data.is_error === true || (typeof item.exitCode === 'number' && item.exitCode !== 0);
   const complete = activity.kind === 'tool.completed' || /completed|success/.test(text(p.status, item.status));
   const status: ToolStatus = failed ? 'failed' : complete ? 'done' : running ? 'running' : 'stopped';
-  const titles = { command: 'Run command', read: 'Read file', edit: 'Edit file', search: 'Search', other: name.replace(/_/g, ' ') || 'Tool' };
 
-  const sections: { label: string; text: string }[] = [];
-  const add = (label: string, value: string) => { if (value.trim() && !sections.some(s => s.text === value)) sections.push({ label, text: value }); };
+  // The line under the title: what this call is about. T3's own `detail`
+  // is "<tool>: <json>", so it is only a fallback, with the name stripped.
+  const trailing = text(p.detail, data.detail).replace(new RegExp(`^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*`), '');
+  const detail = firstLine(text(command, path, summarizeInput(input), trailing === '{}' ? '' : trailing));
+
+  // The box under it: what the call produced. Edits lead with their change.
+  const parts: string[] = [];
   const oldText = text(input.old_string), newText = text(input.new_string);
   const diff = text(p.diff, data.diff, item.diff, ...files.map(f => record(f).diff));
-  if (diff) add('Changes', diff);
-  else if (oldText || newText) add('Changes', [...oldText.split('\n').filter(() => !!oldText).map(line => `- ${line}`), ...newText.split('\n').filter(() => !!newText).map(line => `+ ${line}`)].join('\n'));
-  else if (action === 'edit') add('Content', text(input.content));
-  const raw = data.input ?? item.arguments ?? p.input;
-  if (action === 'other') add('Input', outputText(raw));
+  if (diff) parts.push(diff);
+  else if (oldText || newText) parts.push([...oldText.split('\n').filter(() => !!oldText).map(line => `- ${line}`), ...newText.split('\n').filter(() => !!newText).map(line => `+ ${line}`)].join('\n'));
   const result = item.aggregatedOutput ?? item.output ?? data.output ?? p.output ?? data.result ?? item.result ?? p.result;
-  add('Output', outputText(result));
-  const trailing = text(p.detail, data.detail);
-  if (trailing && trailing !== command && trailing !== path) add(failed ? 'Error' : 'Details', trailing);
-
-  const query = text(input.pattern, input.query, p.query);
-  // One line under the title: what this call is actually about.
-  const detail = firstLine(text(command, path, query, action === 'other' ? trailing : '', outputText(raw)));
+  const produced = outputText(result);
+  if (produced.trim()) parts.push(produced);
+  if (failed && trailing && trailing !== detail && !parts.includes(trailing)) parts.push(trailing);
   const images: ToolImage[] = [];
   toolImages(result, images);
-  const output = sections.map(section => sections.length > 1 ? `${section.label}\n${section.text}` : section.text).join('\n\n');
+  const output = parts.join('\n\n');
   return {
-    id, kind: 'tool', createdAt, name: name || action, title: titles[action], status,
+    id, kind: 'tool', createdAt, name, title: toolTitle(name), status,
     ...(detail ? { detail } : {}),
     ...(output.trim() ? { output } : {}),
     ...(images.length ? { images } : {}),

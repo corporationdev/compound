@@ -13,7 +13,7 @@ test('hides context telemetry, keeping actual work between messages', () => {
   ], [{ id: 'u', role: 'user', text: 'Hi', createdAt: '2026-09-09T12:00:01.000Z' }, { id: 'a', role: 'assistant', text: 'Done', createdAt: '2026-09-09T12:00:03.000Z' }]));
   expect(items.map(i => i.kind)).toEqual(['user', 'tool', 'assistant']);
   const tool = items[1] as Tool;
-  expect(tool.title).toBe('Read file');
+  expect(tool.title).toBe('Read');
   expect(tool.detail).toBe('/project/main.tsx');
   expect(tool.output).toBe('file content');
 });
@@ -27,7 +27,7 @@ test('merges Claude lifecycle updates without losing input or moving the row', (
   const row = items[0] as Tool;
   expect(row.createdAt).toContain('00:01.');
   expect(row.id).toBe('tool:turn-1::bash1');
-  expect(row.title).toBe('Run command');
+  expect(row.title).toBe('Bash');
   expect(row.status).toBe('done');
   expect(row.detail).toBe('pwd');
   expect(row.output).toContain('/project');
@@ -53,6 +53,18 @@ test('edits show a diff; unknown tools expose only their input/output', () => {
   expect(items[0]?.output).toContain('- old\n+ new');
   expect(JSON.stringify(items)).not.toContain('internalTokenCount');
   expect(items[1]?.output).toContain('42');
+});
+test('MCP calls show the bare tool name, a summary of the input, and only the result in the output', () => {
+  const items = buildItems(thread([
+    activity('s', 'tool.completed', 1, { itemType: 'dynamic_tool_call', toolCallId: 't1', title: 'Tool call', detail: 'ToolSearch: {"query":"select:mcp__compound__context","max_results":1}', data: { toolName: 'ToolSearch', input: { query: 'select:mcp__compound__context', max_results: 1 }, result: { type: 'tool_result', tool_use_id: 't1', content: [{ type: 'tool_reference', tool_name: 'mcp__compound__context' }] } } }),
+    activity('m', 'tool.completed', 2, { itemType: 'mcp_tool_call', toolCallId: 't2', title: 'MCP tool call', detail: 'mcp__compound__context: {}', data: { toolName: 'mcp__compound__context', input: {}, result: { tool_use_id: 't2', type: 'tool_result', content: '{"projectDir":"/p"}' } } }),
+  ])) as Tool[];
+  expect(items[0]?.title).toBe('ToolSearch');
+  expect(items[0]?.detail).toBe('select:mcp__compound__context');
+  expect(items[0]?.output).toBe('[tool_reference mcp__compound__context]');
+  expect(items[1]?.title).toBe('context');
+  expect(items[1]?.detail).toBeUndefined();
+  expect(items[1]?.output).toBe('{"projectDir":"/p"}');
 });
 test('answered questions become a compact record, and context never reaches the user item', () => {
   const items = buildItems(thread([
