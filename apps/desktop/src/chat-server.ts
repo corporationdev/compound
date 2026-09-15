@@ -74,9 +74,9 @@ export class ChatServer {
     this.publish({ status: 'starting', error: undefined });
     const archive = join(this.options.runtimeDir, 'app.asar');
     const entry = join(archive, 'node_modules/t3/dist/bin.mjs');
-    // Checked through the entry, not the archive: Electron's asar-aware fs
-    // answers ENOENT for the archive path itself while paths inside resolve.
-    await access(entry).catch(() => {
+    // Electron's asar-aware fs answers ENOENT for the archive path itself while
+    // paths inside resolve; plain Node sees only the archive. Either will do.
+    await access(entry).catch(() => access(archive)).catch(() => {
       throw new Error(`Chat runtime is missing at ${archive}. In development run \`bun run --cwd apps/desktop stage:chat\`, then Retry.`);
     });
     const stateDir = join(this.options.dataDir, 'userdata');

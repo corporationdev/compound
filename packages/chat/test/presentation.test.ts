@@ -54,6 +54,20 @@ test('edits show a diff; unknown tools expose only their input/output', () => {
   expect(JSON.stringify(items)).not.toContain('internalTokenCount');
   expect(items[1]?.output).toContain('42');
 });
+test('snapshot payloads that fold the input into the detail string still get a summary', () => {
+  const items = buildItems(thread([
+    activity('s', 'tool.started', 1, { itemType: 'dynamic_tool_call', toolCallId: 't1', title: 'Tool call', detail: 'ToolSearch: {}', data: { toolName: 'ToolSearch' } }),
+    activity('c', 'tool.completed', 2, { itemType: 'dynamic_tool_call', toolCallId: 't1', title: 'Tool call', detail: 'ToolSearch: {"query":"select:mcp__compound__context","max_results":1}', data: { toolName: 'ToolSearch' } }),
+    activity('b', 'tool.completed', 3, { itemType: 'dynamic_tool_call', toolCallId: 't2', title: 'Tool call', detail: 'Bash: {"command":"ls -la\\n","description":"List"}', data: { toolName: 'Bash' } }),
+    activity('l', 'tool.completed', 4, { itemType: 'dynamic_tool_call', toolCallId: 't3', title: 'Tool call', detail: 'Write: {"file_path":"/p/a.tsx","content":"<stage>…', data: { toolName: 'Write' } }),
+  ])) as Tool[];
+  expect(items[0]?.detail).toBe('select:mcp__compound__context');
+  expect(items[0]?.output).toBeUndefined();
+  expect(items[1]?.title).toBe('Bash');
+  expect(items[1]?.detail).toBe('ls -la');
+  // A truncated detail cannot be parsed; the string itself is the summary.
+  expect(items[2]?.detail).toBe('{"file_path":"/p/a.tsx","content":"<stage>…');
+});
 test('MCP calls show the bare tool name, a summary of the input, and only the result in the output', () => {
   const items = buildItems(thread([
     activity('s', 'tool.completed', 1, { itemType: 'dynamic_tool_call', toolCallId: 't1', title: 'Tool call', detail: 'ToolSearch: {"query":"select:mcp__compound__context","max_results":1}', data: { toolName: 'ToolSearch', input: { query: 'select:mcp__compound__context', max_results: 1 }, result: { type: 'tool_result', tool_use_id: 't1', content: [{ type: 'tool_reference', tool_name: 'mcp__compound__context' }] } } }),

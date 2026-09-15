@@ -106,7 +106,12 @@ function presentTool(activity: OrchestrationThreadActivity, id: string, createdA
   const type = text(p.itemType);
   const rawName = text(data.toolName, item.tool, p.toolName).replace(/\s+(started|completed|updated)$/i, '');
   const name = rawName || (type === 'command_execution' ? 'Bash' : type === 'file_change' ? 'Edit' : type === 'web_search' ? 'WebSearch' : text(p.title, activity.summary).replace(/\s+(started|completed|updated)$/i, '') || 'Tool');
-  const input = inputRecord(data.input ?? item.arguments ?? p.input);
+  // T3's thread snapshot keeps only `toolName` under `data` and folds the input
+  // into `detail` as "<tool>: <json>"; the structured input survives only on
+  // the live stream. Recover it from the string when that is all there is.
+  const trailingRaw = text(p.detail, data.detail);
+  const trailing = rawName && trailingRaw.startsWith(`${rawName}: `) ? trailingRaw.slice(rawName.length + 2) : trailingRaw;
+  const input = inputRecord(data.input ?? item.arguments ?? p.input ?? (trailing.startsWith('{') ? trailing : undefined));
   const command = text(input.command, input.cmd, item.command, data.command, p.command);
   const files = Array.isArray(item.changes) ? item.changes : Array.isArray(data.files) ? data.files : [];
   const paths = files.map(file => typeof file === 'string' ? file : text(record(file).path)).filter(Boolean);
@@ -115,10 +120,9 @@ function presentTool(activity: OrchestrationThreadActivity, id: string, createdA
   const complete = activity.kind === 'tool.completed' || /completed|success/.test(text(p.status, item.status));
   const status: ToolStatus = failed ? 'failed' : complete ? 'done' : running ? 'running' : 'stopped';
 
-  // The line under the title: what this call is about. T3's own `detail`
-  // is "<tool>: <json>", so it is only a fallback, with the name stripped.
-  const trailing = text(p.detail, data.detail).replace(new RegExp(`^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*`), '');
-  const detail = firstLine(text(command, path, summarizeInput(input), trailing === '{}' ? '' : trailing));
+  // The line under the title: what this call is about. The detail string is
+  // only a fallback, for inputs too long for T3 to keep intact.
+  const detail = firstLine(text(command, path, summarizeInput(input), Object.keys(input).length ? '' : trailing === '{}' ? '' : trailing));
 
   // The box under it: what the call produced. Edits lead with their change.
   const parts: string[] = [];
