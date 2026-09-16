@@ -201,7 +201,7 @@ test('multipart: start creates or resumes an upload, part URLs are signed per pa
   let calls = backend({ 'assets:describe': asset, 'assets:setMultipart': null }, ({ method, url }) =>
     method === 'POST' && url.searchParams.has('uploads') ? { body: '<InitiateMultipartUploadResult><UploadId>up-1</UploadId></InitiateMultipartUploadResult>' } : { status: 500 });
   let response = await worker.fetch(request('asset-multipart-start', { assetId: 'asset-1' }), env);
-  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 64 * 1024 * 1024, parts: [] });
+  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 16 * 1024 * 1024, parts: [] });
   expect(s3Calls[0]?.url.pathname).toBe(KEY_URL);
   expect(calls.find((call) => call.path === 'assets:setMultipart')?.args).toEqual({ assetId: 'asset-1', uploadId: 'up-1' });
 
@@ -212,7 +212,7 @@ test('multipart: start creates or resumes an upload, part URLs are signed per pa
       ? { body: '<ListPartsResult><Part><PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag><Size>1000</Size></Part></ListPartsResult>' }
       : { status: 500 });
   response = await worker.fetch(request('asset-multipart-start', { assetId: 'asset-1' }), env);
-  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 64 * 1024 * 1024, parts: [{ partNumber: 1, etag: '"e1"', size: 1000 }] });
+  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 16 * 1024 * 1024, parts: [{ partNumber: 1, etag: '"e1"', size: 1000 }] });
 
   // A recorded upload R2 no longer knows is replaced.
   calls = backend({ 'assets:describe': inFlight, 'assets:setMultipart': null }, ({ method, url }) =>

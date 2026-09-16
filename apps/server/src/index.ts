@@ -26,7 +26,7 @@ const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-down
 // Parts of a large original; R2 wants every part but the last at least 5 MiB,
 // and at most 10,000 of them. Not exported: the Workers runtime reads every
 // export of this module as a handler.
-const MULTIPART_PART_BYTES = 64 * 1024 * 1024;
+const MULTIPART_PART_BYTES = 16 * 1024 * 1024;
 const MAX_PARTS = 10_000;
 const organizationId = z.string().min(1).max(100);
 const sampleId = z.string().regex(/^[0-9a-f]{16}$/);

@@ -34,8 +34,8 @@ export const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
  * connections and has to start over.
  */
 export const MULTIPART_THRESHOLD = 32 * 1024 * 1024;
-/** Attempts per part before the whole upload counts as failed. */
-const PART_ATTEMPTS = 4;
+/** Attempts per part before the whole upload counts as failed; a connection that drops a part now and then is the normal case. */
+const PART_ATTEMPTS = 8;
 
 /** Where fetched originals live inside a project, relative to its folder. */
 export const ORIGINALS_DIR = join("cache", "originals");
@@ -181,6 +181,7 @@ async function uploadMultipart(assetId: string, source: string, size: number, to
       } catch (error) {
         if (signal?.aborted || attempt >= PART_ATTEMPTS) throw error;
         console.warn(`[assets] part ${partNumber}/${count} of ${source} failed (attempt ${attempt}): ${error instanceof Error ? error.message : String(error)}`);
+        await new Promise((resolve) => setTimeout(resolve, Math.min(30_000, 1_000 * 2 ** (attempt - 1))));
       }
     }
     etags.set(partNumber, etag);
