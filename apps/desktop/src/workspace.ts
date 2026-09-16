@@ -11,7 +11,6 @@
 // document editor read and write through, and how the folder is found or
 // made in the first place.
 
-import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
@@ -23,6 +22,7 @@ import { mainBridge } from "./main-manager";
 import { getProject, noteContent } from "./projects";
 import { withProjectLock } from "./sync/locks";
 import { mergeText } from "./sync/merge";
+import { watchTree, type TreeWatcher } from "./tree-watch";
 import { IGNORED_NAMES, MAX_SYNC_BYTES, isSyncableContent } from "./sync/rules";
 
 /** Where a workspace records which organization it belongs to. */
@@ -337,7 +337,7 @@ export async function removeWorkspaceEntry(dir: string, path: string): Promise<v
 // ---------------------------------------------------------------------------
 // Watch
 
-const watchers = new Map<string, FSWatcher>();
+const watchers = new Map<string, TreeWatcher>();
 
 /**
  * Reports every change under the workspace to the renderer, path by path.
@@ -347,18 +347,18 @@ const watchers = new Map<string, FSWatcher>();
 export function watchWorkspace(window: BrowserWindow | null, dir: string): void {
   assertOpened(dir);
   if (watchers.has(dir)) return;
-  const watcher = watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename) return;
-    const path = filename.split(sep).join("/");
-    if (!isVisiblePath(path)) return;
-    mainBridge.emit(window, MAIN_CHANNELS.WORKSPACE_CHANGED, { dir, path });
+  const watcher = watchTree(dir, {
+    onChange: (path) => {
+      if (!isVisiblePath(path)) return;
+      mainBridge.emit(window, MAIN_CHANNELS.WORKSPACE_CHANGED, { dir, path });
+    },
+    onError: () => unwatchWorkspace(dir),
   });
-  watcher.on("error", () => unwatchWorkspace(dir));
   watchers.set(dir, watcher);
 }
 
 export function unwatchWorkspace(dir: string): void {
-  watchers.get(dir)?.close();
+  void watchers.get(dir)?.close();
   watchers.delete(dir);
 }
 

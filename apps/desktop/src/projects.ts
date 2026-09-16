@@ -5,7 +5,6 @@
 import { app, dialog, shell, type BrowserWindow } from "electron";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { watch, type FSWatcher } from "node:fs";
 import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -16,9 +15,10 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
-import { isTempPath, TEMP_PREFIX, writeFileAtomic } from "./atomic";
+import { TEMP_PREFIX, writeFileAtomic } from "./atomic";
 import { withProjectLock } from "./sync/locks";
 import { SYNC_DIR } from "./sync/state";
+import { watchTree, type TreeWatcher } from "./tree-watch";
 import { cloudConfig } from "./cloud";
 import { isHeadless } from "./headless";
 import { mainBridge } from "./main-manager";
@@ -1175,7 +1175,7 @@ export async function removeEntry(dir: string, path: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Watch
 
-const watchers = new Map<string, FSWatcher>();
+const watchers = new Map<string, TreeWatcher>();
 
 /**
  * What the app believes is on disk, by absolute path: a digest of the content
@@ -1258,32 +1258,27 @@ export function watchProject(window: BrowserWindow | null, dir: string): void {
   // never be reported.
   let queue: Promise<void> = Promise.resolve();
 
-  const watcher = watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename) return;
-    // Project-relative and `/`-separated; installs churn node_modules constantly.
-    const path = filename.split(sep).join("/");
-    if (path.startsWith("node_modules/") || path === "node_modules") return;
-    // The app's folder: a docs refresh writes the whole tree in one burst.
-    if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
-    // Half a file by definition, and renamed away the moment it is whole.
-    if (isTempPath(path)) return;
-
-    const file = join(dir, filename);
-    queue = queue
-      .then(async () => {
-        const current = await digestOf(file);
-        if (known.get(file) === current) return;
-        known.set(file, current);
-        mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
-      })
-      .catch(() => { });
+  const watcher = watchTree(dir, {
+    onChange: (path) => {
+      // The app's folder: a docs refresh writes the whole tree in one burst.
+      if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
+      const file = join(dir, ...path.split("/"));
+      queue = queue
+        .then(async () => {
+          const current = await digestOf(file);
+          if (known.get(file) === current) return;
+          known.set(file, current);
+          mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
+        })
+        .catch(() => { });
+    },
+    onError: () => unwatchProject(dir),
   });
-  watcher.on("error", () => unwatchProject(dir));
   watchers.set(dir, watcher);
 }
 
 export function unwatchProject(dir: string): void {
-  watchers.get(dir)?.close();
+  void watchers.get(dir)?.close();
   watchers.delete(dir);
   // What the folder holds while nobody is watching is not the app's to
   // remember: the next watch starts from a fresh load of the project anyway.

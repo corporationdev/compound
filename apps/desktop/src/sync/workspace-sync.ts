@@ -25,11 +25,11 @@
 // them as changes and recompile. They come back through the watcher here too,
 // where the text equals its base and nothing happens.
 
-import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readdir, readFile, rm } from "node:fs/promises";
-import { dirname, join, sep } from "node:path";
+import { dirname, join } from "node:path";
 
 import { writeFileAtomic } from "../atomic";
+import { watchTree, type TreeWatcher } from "../tree-watch";
 import { hashText } from "./hash";
 import { withProjectLock } from "./locks";
 import { mergeText } from "./merge";
@@ -140,7 +140,7 @@ export class WorkspaceSync {
   private lastStatus = "";
 
   private unsubscribe: (() => void) | undefined;
-  private watcher: FSWatcher | undefined;
+  private watcher: TreeWatcher | undefined;
   private stopped = false;
 
   constructor(options: WorkspaceSyncOptions) {
@@ -178,11 +178,7 @@ export class WorkspaceSync {
       (error) => this.fail(error),
     );
     if (this.options.watch !== false) {
-      this.watcher = watch(this.dir, { recursive: true }, (_event, filename) => {
-        if (!filename) return;
-        this.noteChange(filename.split(sep).join("/"));
-      });
-      this.watcher.on("error", () => { });
+      this.watcher = watchTree(this.dir, { onChange: (path) => this.noteChange(path) });
     }
     await this.started;
   }
@@ -217,7 +213,7 @@ export class WorkspaceSync {
     // A start still waiting on its first snapshot must not wait forever.
     this.rejectStarted?.(new Error("Sync stopped before it started"));
     this.unsubscribe?.();
-    this.watcher?.close();
+    void this.watcher?.close();
     for (const timer of this.coalesce.values()) clearTimeout(timer);
     this.coalesce.clear();
     if (this.retryTimer) clearTimeout(this.retryTimer);

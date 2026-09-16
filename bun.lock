@@ -49,6 +49,7 @@
         "@compound/jsx": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.30.0",
         "babel-preset-solid": "^1.9.12",
+        "chokidar": "^4.0.3",
         "convex": "^1.33.1",
         "esbuild": "^0.28.1",
         "nanoid": "^6.0.1",
