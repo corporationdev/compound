@@ -113,6 +113,23 @@ describe("folders that appear with files already in them", () => {
   });
 });
 
+describe("removals", () => {
+  it("take the folders a removed file leaves empty with them, and no more", async () => {
+    const backend = new FakeBackend();
+    const a = await checkout("a", backend);
+    const b = await checkout("b", backend);
+    await edit(a, "projects/gone/deep/only.md", "x\n");
+    await edit(a, "projects/kept/note.md", "y\n");
+    await settle(a, b);
+    expect(await exists(b, "projects/gone/deep/only.md")).toBe(true);
+    await remove(a, "projects/gone/deep/only.md");
+    await settle(a, b);
+    expect(await exists(b, "projects/gone")).toBe(false);
+    expect(await exists(b, "projects/kept/note.md")).toBe(true);
+    expect(await exists(b, "projects")).toBe(true);
+  });
+});
+
 describe("project roots", () => {
   it("names every folder the cloud holds a package.json in, from the first snapshot", async () => {
     const backend = new FakeBackend();

@@ -652,6 +652,23 @@ export class WorkspaceSync {
     });
   }
 
+  /**
+   * Takes away the folders a removed file leaves empty, up to the workspace
+   * itself: a project deleted on another machine should not linger here as
+   * an empty folder the tree then shows. A folder with anything else in it
+   * stops the climb.
+   */
+  private async pruneEmptyParents(path: string): Promise<void> {
+    const segments = path.split("/");
+    for (let depth = segments.length - 1; depth >= 1; depth--) {
+      const folder = segments.slice(0, depth).join("/");
+      const entries = await readdir(this.absolute(folder)).catch(() => null);
+      if (entries === null || entries.length > 0) return;
+      await rm(this.absolute(folder), { recursive: true, force: true }).catch(() => {});
+      this.options.onWrite?.(folder);
+    }
+  }
+
   /** Removes `path` if it still holds the text with hash `expected`. */
   private removeLocal(path: string, expected: string): Promise<boolean> {
     return withProjectLock(this.dir, async () => {
@@ -659,6 +676,7 @@ export class WorkspaceSync {
       const now = await this.readLocal(path);
       if (!now || now.hash !== expected) return false;
       await rm(this.absolute(path), { force: true });
+      await this.pruneEmptyParents(path);
       this.options.onWrite?.(path);
       return true;
     });
