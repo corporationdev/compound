@@ -10,6 +10,8 @@
   ],
   "scripts": {
     "dev": "bun scripts/dev.ts",
+    "dev:client": "bun scripts/dev-client.ts",
+    "dev:thinkpad": "bun scripts/dev-client.ts --stage dev-isaacdyor-107806b0",
     "dev:web_v1": "bun run --cwd apps/web dev",
     "dev:landing": "bun run --cwd apps/landing dev",
     "build:landing": "bun run --cwd apps/landing build",
