@@ -24,7 +24,7 @@ const examples = targets.map((target) => ({ target, values: readEnv(`${target}/.
 // Apify titles without requiring the CI service account to edit vault contents.
 const apifyItemIds = {
   dev: 'objiujwnpqllihha7gju73tpiu',
-  preview: 'zge7irfcyb7n5hujyzke5aaxce',
+  preview: 'xehcupwopwh2ikbj4svfnem27e',
   prod: 'l4emdm3q6xsrcz7nhwe474kura',
 } as const;
 const template = parse(
