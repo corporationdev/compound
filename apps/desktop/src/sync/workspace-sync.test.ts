@@ -98,10 +98,20 @@ describe("folders that appear with files already in them", () => {
     await mkdir(join(a.dir, "projects", "fresh"), { recursive: true });
     await writeFile(join(a.dir, "projects", "fresh", "package.json"), "{}\n");
     await writeFile(join(a.dir, "projects", "fresh", "index.tsx"), "x\n");
+    const writesBefore = backend.writes;
     a.noteChange("projects/fresh");
     await settle(a);
     expect(backend.text(PROJECT, "projects/fresh/package.json")).toBe("{}\n");
     expect(backend.text(PROJECT, "projects/fresh/index.tsx")).toBe("x\n");
+    // One write for the whole folder, not one per file, so another machine sees the project whole.
+    expect(backend.writes - writesBefore).toBe(0);
+    expect(backend.batchWrites).toBe(1);
+    // The rows' versions came back through the subscription: a later edit goes up as an update, not a conflicting create.
+    expect(backend.version(PROJECT, "projects/fresh/index.tsx")).toBe(1);
+    await edit(a, "projects/fresh/index.tsx", "y\n");
+    await settle(a);
+    expect(backend.text(PROJECT, "projects/fresh/index.tsx")).toBe("y\n");
+    expect(backend.version(PROJECT, "projects/fresh/index.tsx")).toBe(2);
 
     const staging = join(a.dir, ".dstmp-moved.1-1");
     await mkdir(join(staging, "deep"), { recursive: true });
@@ -122,6 +132,9 @@ describe("removals", () => {
     await edit(a, "projects/kept/note.md", "y\n");
     await settle(a, b);
     expect(await exists(b, "projects/gone/deep/only.md")).toBe(true);
+    // Derived data the app made beside the files does not keep the folder alive.
+    await mkdir(join(b.dir, "projects", "gone", "cache", "thumbnails"), { recursive: true });
+    await writeFile(join(b.dir, "projects", "gone", "cache", "thumbnails", "x.webp"), "");
     await remove(a, "projects/gone/deep/only.md");
     await settle(a, b);
     expect(await exists(b, "projects/gone")).toBe(false);

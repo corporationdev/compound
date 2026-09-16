@@ -64,6 +64,11 @@ const PREFETCH_BATCH = 64;
 const SWEEP_DELAY_MS = 250;
 /** How long the engine stays quiet before the status says synced. */
 const STATUS_SETTLE_MS = 700;
+/** What the app makes beside a project's files and never syncs; a folder left with only these is as good as empty. */
+const DERIVED_NAMES: ReadonlySet<string> = new Set(["cache", ".DS_Store"]);
+/** Files per batch when a folder's new files go up together; the backend's cap. */
+const PUSH_BATCH_FILES = 64;
+const PUSH_BATCH_BYTES = 8 * 1024 * 1024;
 const CONFLICT_SUFFIX = ".conflict";
 
 export type WorkspaceSyncOptions = {
@@ -221,16 +226,54 @@ export class WorkspaceSync {
     if (!info?.isDirectory()) return;
     await new Promise((resolve) => setTimeout(resolve, this.options.sweepDelayMs ?? SWEEP_DELAY_MS));
     if (this.stopped) return;
+    const fresh: string[] = [];
     const walk = async (parent: string): Promise<void> => {
       const entries = await readdir(this.absolute(parent), { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
         if (!shouldDescend(entry.name)) continue;
         const child = `${parent}/${entry.name}`;
         if (entry.isDirectory()) await walk(child);
-        else if (entry.isFile() && isSyncablePath(child)) this.noteChange(child);
+        else if (entry.isFile() && isSyncablePath(child)) {
+          if (this.store.get(child) || this.latestMeta.has(child)) this.noteChange(child);
+          else fresh.push(child);
+        }
       }
     };
     await walk(path);
+    // Files the cloud has never seen go up together, in one write: another
+    // machine then learns of the whole folder at once — its package.json
+    // with the rest — rather than file by file, and can tell a project from
+    // a folder from the first snapshot it sees.
+    if (fresh.length) void this.enqueue(() => this.pushFresh(fresh));
+  }
+
+  private async pushFresh(paths: string[]): Promise<void> {
+    if (this.stopped) return;
+    const files: { path: string; text: string; hash: string }[] = [];
+    for (const path of paths) {
+      if (this.store.get(path) || this.latestMeta.has(path)) { this.noteChange(path); continue; }
+      const local = await this.readLocal(path);
+      if (local) files.push({ path, text: local.text, hash: local.hash });
+    }
+    while (files.length) {
+      const batch: typeof files = [];
+      let bytes = 0;
+      while (files.length && batch.length < PUSH_BATCH_FILES) {
+        const size = Buffer.byteLength(files[0]!.text);
+        if (batch.length && bytes + size > PUSH_BATCH_BYTES) break;
+        batch.push(files.shift()!);
+        bytes += size;
+      }
+      try {
+        await this.backend.writeMany(this.organizationId, batch);
+        this.online(batch[0]!.path);
+      } catch (error) {
+        // Back to one at a time, with the usual retries.
+        for (const file of batch) this.defer(file.path, error);
+        return;
+      }
+      // The rows come back through the subscription, which records their versions here.
+    }
   }
 
   /** Resolves once nothing is queued or collecting. Failed pushes waiting to retry do not count. */
@@ -687,7 +730,8 @@ export class WorkspaceSync {
     for (let depth = segments.length - 1; depth >= 1; depth--) {
       const folder = segments.slice(0, depth).join("/");
       const entries = await readdir(this.absolute(folder)).catch(() => null);
-      if (entries === null || entries.length > 0) return;
+      // Derived data the app made for the folder (thumbnails, proxies) is not a reason to keep it.
+      if (entries === null || entries.some((name) => !DERIVED_NAMES.has(name))) return;
       await rm(this.absolute(folder), { recursive: true, force: true }).catch(() => {});
       this.options.onWrite?.(folder);
     }

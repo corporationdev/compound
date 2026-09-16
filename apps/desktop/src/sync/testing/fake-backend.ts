@@ -25,6 +25,7 @@ export class FakeBackend implements SyncBackend {
   removes = 0;
   fetches = 0;
   batchFetches = 0;
+  batchWrites = 0;
 
   private table(organizationId: string): Map<string, RemoteFile> {
     let table = this.rows.get(organizationId);
@@ -127,6 +128,7 @@ export class FakeBackend implements SyncBackend {
   }
 
   async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
+    this.batchWrites++;
     await this.check();
     const table = this.table(organizationId);
     for (const file of files) {
