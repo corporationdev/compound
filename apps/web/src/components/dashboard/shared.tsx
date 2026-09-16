@@ -12,8 +12,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "somoto";
 import { track } from "@/lib/analytics";
 import { forgetProjectBundle, generateProjectName } from "@/lib/db";
-import { cloudReady } from "@/lib/organizations";
-import { publishProject } from "@/projects/sync";
 import {
   checkProject,
   createProject,
@@ -474,25 +472,15 @@ export async function createNewProject(): Promise<ProjectInfo | null> {
     toast.error("Projects on disk are only available in the desktop app");
     return null;
   }
-  // Waits for the roots to come back from the database, and asks for one
-  // when there is none to wait for.
-  if (!(await ensureProjectsRoot())) return null;
+  // Waits for the workspace to open, and gives up when it does not.
+  if (!(await ensureProjectsRoot())) {
+    toast.error("Your workspace is not open yet", { description: "Sign in and choose a folder for it first." });
+    return null;
+  }
 
   const project = await createProject(generateProjectName());
   track("project_created");
-
-  // Signed in with an organization: the new project is a cloud one from the
-  // start. Best effort — a failure leaves it local, which the card offers to
-  // publish later.
-  if (!cloudReady()) return project;
-  try {
-    return await publishProject(project);
-  } catch (e) {
-    toast.error("Project kept local: could not publish it to the cloud", {
-      description: (e as Error).message,
-    });
-    return project;
-  }
+  return project;
 }
 
 /**

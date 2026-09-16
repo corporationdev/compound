@@ -1,11 +1,9 @@
 import { ConvexError } from 'convex/values';
 import { components } from '../_generated/api';
-import type { Doc, Id } from '../_generated/dataModel';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../_generated/server';
 import { authComponent } from '../auth';
 
 type Ctx = QueryCtx | MutationCtx | ActionCtx;
-type DbCtx = QueryCtx | MutationCtx;
 
 export type Member = {
   _id: string;
@@ -60,17 +58,4 @@ export async function requireMember(
   const member = await findMember(ctx, organizationId, user._id);
   if (!member) throw new ConvexError('Not a member of this organization');
   return { user, member };
-}
-
-/** Authenticated user who is a member of the project's organization, else throws. */
-export async function requireProjectMember(
-  ctx: DbCtx,
-  projectId: Id<'projects'>,
-): Promise<{ user: AuthUser; project: Doc<'projects'> }> {
-  const user = await authComponent.getAuthUser(ctx);
-  const project = await ctx.db.get(projectId);
-  if (!project) throw new ConvexError('Project not found');
-  const member = await findMember(ctx, project.organizationId, user._id);
-  if (!member) throw new ConvexError('Not a member of this organization');
-  return { user, project };
 }

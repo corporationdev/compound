@@ -32,11 +32,9 @@ import {
   pickRoot,
   renameProject,
   resolveProject,
-  scanProjects,
   unwatchAll,
   listEntries,
   realPathEntry,
-  recordCloudProjectId,
   noteContent,
   noteRenamed,
   readConfig,
@@ -50,6 +48,19 @@ import {
   writeProject,
 } from "./projects";
 import { syncManager } from "./sync/manager";
+import {
+  createWorkspaceEntry,
+  findProjects,
+  listWorkspace,
+  openWorkspace,
+  readWorkspaceFile,
+  removeWorkspaceEntry,
+  renameWorkspaceEntry,
+  unwatchAllWorkspaces,
+  unwatchWorkspace,
+  watchWorkspace,
+  writeWorkspaceFile,
+} from "./workspace";
 import { fetchAssetOriginal, uploadAssetOriginal } from "./assets-cloud";
 import type { LogEntry } from "@compound/dapi";
 
@@ -278,7 +289,6 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_SCAN, ({ root }) => scanProjects(root));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_GET, ({ dir }) => getProject(dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_INIT, ({ dir }) => initProject(mainWindow, dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_RESOLVE, ({ dir }) => resolveProject(dir));
@@ -308,22 +318,21 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.SYNC_STOP, ({ dir }) => syncManager.stop(dir));
   mainBridge.handle(MAIN_CHANNELS.SYNC_STATUS_GET, ({ dir }) => syncManager.status(dir));
   mainBridge.handle(MAIN_CHANNELS.SYNC_SESSION, ({ sessionToken }, event) => { trustedRenderer(event); return syncManager.setSession(sessionToken); });
-  mainBridge.handle(MAIN_CHANNELS.SYNC_PUBLISH, async (data, event) => {
+  // The workspace channels act on the disk under a folder the renderer names;
+  // only the app's own page may, and only for a folder `openWorkspace` gave out.
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_OPEN, (data, event) => { trustedRenderer(event); return openWorkspace(data); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_LIST, ({ dir }, event) => { trustedRenderer(event); return listWorkspace(dir); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_PROJECTS, ({ dir }, event) => { trustedRenderer(event); return findProjects(dir); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_READ, ({ dir, path }, event) => { trustedRenderer(event); return readWorkspaceFile(dir, path); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_WRITE, ({ dir, path, text, base }, event) => { trustedRenderer(event); return writeWorkspaceFile(dir, path, text, base); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_CREATE, ({ dir, path, kind }, event) => { trustedRenderer(event); return createWorkspaceEntry(dir, path, kind); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_RENAME, ({ dir, from, to }, event) => { trustedRenderer(event); return renameWorkspaceEntry(dir, from, to); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_REMOVE, ({ dir, path }, event) => { trustedRenderer(event); return removeWorkspaceEntry(dir, path); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_WATCH, ({ dir }, event) => {
     trustedRenderer(event);
-    // The record first: a checkout that knows its cloud id syncs it up with everything else.
-    await recordCloudProjectId(data.dir, data.projectId);
-    return syncManager.publish(data);
+    watchWorkspace(BrowserWindow.fromWebContents(event.sender), dir);
   });
-  mainBridge.handle(MAIN_CHANNELS.SYNC_MATERIALIZE, async (data, event) => {
-    trustedRenderer(event);
-    const dir = await syncManager.materialize(data);
-    // A project published from another machine carries its record in the
-    // synced package.json; one created empty in the cloud gets one here,
-    // which then syncs up like any other file.
-    const project = (await getProject(dir)) ?? (await initProject(mainWindow, dir));
-    await recordCloudProjectId(dir, data.projectId);
-    return (await getProject(dir)) ?? project;
-  });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_UNWATCH, ({ dir }, event) => { trustedRenderer(event); unwatchWorkspace(dir); });
   mainBridge.handle(MAIN_CHANNELS.FILE_TRANSFER, ({ selector, absolutePath }) =>
     setFileInputFiles(selector, absolutePath),
   );
@@ -412,6 +421,7 @@ if (app.requestSingleInstanceLock()) {
       event.preventDefault();
       // Pending pushes land before the app goes; a checkout closed mid-write
       // would only catch up on the next launch.
+      unwatchAllWorkspaces();
       void Promise.allSettled([chat.stop(), syncManager.stopAll()]).finally(() => {
         chatStopped = true;
         // The renderer is not consulted again: the chat is down and the

@@ -10,12 +10,9 @@
 import { ConvexClient } from "convex/browser";
 import { api } from "@compound/backend/convex/_generated/api";
 
-import type { Id } from "@compound/backend/convex/_generated/dataModel";
 import type { RemoteFile, RemoteFileMeta, SyncBackend, WriteOutcome } from "./backend";
 
 export type TokenFetcher = (args: { forceRefreshToken: boolean }) => Promise<string | null>;
-
-const project = (id: string): Id<"projects"> => id as Id<"projects">;
 
 export class ConvexSyncBackend implements SyncBackend {
   readonly client: ConvexClient;
@@ -25,30 +22,30 @@ export class ConvexSyncBackend implements SyncBackend {
     this.client.setAuth(fetchToken);
   }
 
-  subscribe(projectId: string, onSnapshot: (files: RemoteFileMeta[]) => void, onError: (error: Error) => void): () => void {
+  subscribe(organizationId: string, onSnapshot: (files: RemoteFileMeta[]) => void, onError: (error: Error) => void): () => void {
     const unsubscribe = this.client.onUpdate(
       api.files.list,
-      { projectId: project(projectId) },
+      { organizationId },
       (files) => onSnapshot(files as RemoteFileMeta[]),
       onError,
     );
     return () => unsubscribe();
   }
 
-  fetch(projectId: string, path: string): Promise<RemoteFile | null> {
-    return this.client.query(api.files.get, { projectId: project(projectId), path }) as Promise<RemoteFile | null>;
+  fetch(organizationId: string, path: string): Promise<RemoteFile | null> {
+    return this.client.query(api.files.get, { organizationId, path }) as Promise<RemoteFile | null>;
   }
 
-  write(projectId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
-    return this.client.mutation(api.files.write, { projectId: project(projectId), path, text, hash, expectedVersion }) as Promise<WriteOutcome>;
+  write(organizationId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
+    return this.client.mutation(api.files.write, { organizationId, path, text, hash, expectedVersion }) as Promise<WriteOutcome>;
   }
 
-  remove(projectId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
-    return this.client.mutation(api.files.remove, { projectId: project(projectId), path, expectedVersion }) as Promise<WriteOutcome>;
+  remove(organizationId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
+    return this.client.mutation(api.files.remove, { organizationId, path, expectedVersion }) as Promise<WriteOutcome>;
   }
 
-  async writeMany(projectId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
-    await this.client.mutation(api.files.writeMany, { projectId: project(projectId), files });
+  async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
+    await this.client.mutation(api.files.writeMany, { organizationId, files });
   }
 
   close(): Promise<void> {

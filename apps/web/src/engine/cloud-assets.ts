@@ -24,8 +24,8 @@ import type { Asset, AssetFileHandle, AssetLibrary, AssetRecord } from '@compoun
 export interface CloudAssetsOptions {
 	/** The project folder on this machine. */
 	dir: string;
-	/** The cloud project (a `projects` row id). */
-	projectId: string;
+	/** The organization whose workspace the project sits in. */
+	organizationId: string;
 	/** A Convex JWT for the signed-in user, or null when signed out. */
 	getToken: () => Promise<string | null>;
 }
@@ -40,7 +40,7 @@ const UPLOAD_CONCURRENCY = 2;
  * time, each once per session. Returns a disposer.
  */
 export function attachCloudAssets(library: AssetLibrary, options: CloudAssetsOptions): () => void {
-	const { dir, projectId, getToken } = options;
+	const { dir, organizationId, getToken } = options;
 	let stopped = false;
 
 	// Down. The handle is lazy so a load with many remote assets does not wait
@@ -52,7 +52,7 @@ export function attachCloudAssets(library: AssetLibrary, options: CloudAssetsOpt
 		if (!promise) {
 			promise = (async () => {
 				const token = await getToken();
-				const result = await mainBridge.call(MAIN_CHANNELS.CLOUD_ASSET_FETCH, { dir, projectId, sampleId: record.id, token });
+				const result = await mainBridge.call(MAIN_CHANNELS.CLOUD_ASSET_FETCH, { dir, organizationId, sampleId: record.id, token });
 				if (!result) throw new Error(`${record.path} is not in the cloud yet`);
 				return new ElectronFileHandle(result.path, result.name).getFile();
 			})();
@@ -78,7 +78,7 @@ export function attachCloudAssets(library: AssetLibrary, options: CloudAssetsOpt
 			if (!token) return;
 			const absolute = library.fs.absolute?.(asset.source) ?? asset.source;
 			await mainBridge.call(MAIN_CHANNELS.CLOUD_ASSET_UPLOAD, {
-				dir, projectId, sampleId: asset.id, source: absolute, mimeType: asset.mimeType, name: assetName(asset), token,
+				dir, organizationId, sampleId: asset.id, source: absolute, mimeType: asset.mimeType, name: assetName(asset), token,
 			});
 			uploaded.add(asset.id);
 		} catch (error) {

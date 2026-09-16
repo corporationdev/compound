@@ -1,9 +1,12 @@
 # Cloud projects: organizations, Convex as source of truth, multi-client sync
 
-Status: implemented on branch `cloud-sync` (2026-09-16). This is the plan
-for making Convex the source of truth for project text while the desktop app
-keeps a plain folder on disk for agents and the compiler. See
-`docs/convex-migration-plan.md` for the backend that already existed.
+Status: implemented on branch `cloud-sync` (2026-09-16), then generalized
+from one folder per project to one folder per organization by
+`docs/workspace-plan.md`, which supersedes the per-project parts below
+(`projects`/`projectFiles`, publish, materialize, `cloudProjectId`). The
+sync engine, merge rules, asset pipeline and view-state decisions still
+stand. See `docs/convex-migration-plan.md` for the backend that already
+existed.
 
 Where things live: Convex functions in `packages/backend/convex/{organizations,
 projects,files,assets}.ts` with the Better Auth component installed locally

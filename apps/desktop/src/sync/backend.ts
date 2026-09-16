@@ -7,7 +7,7 @@
 // memory. Keeping the engine behind this seam is what lets the whole
 // reconcile / merge / retry logic run in a unit test without a network.
 
-/** One row of `projectFiles`, with its text. Tombstones have `deleted` and empty text. */
+/** One row of `files`, with its text. Tombstones have `deleted` and empty text. */
 export type RemoteFile = {
   path: string;
   text: string;
@@ -21,7 +21,7 @@ export type RemoteFile = {
 /**
  * A row without its text: what a subscription delivers. A change then costs
  * every subscriber one small list, and only the rows whose version moved are
- * fetched — rather than the whole project's text on every keystroke.
+ * fetched — rather than the whole workspace's text on every keystroke.
  */
 export type RemoteFileMeta = Omit<RemoteFile, "text">;
 
@@ -36,25 +36,25 @@ export type WriteOutcome =
 
 export interface SyncBackend {
   /**
-   * Delivers the full list of a project's files (tombstones included, no
+   * Delivers the full list of an organization's files (tombstones included, no
    * text) now and on every change, until the returned function is called.
    * Errors that end the subscription (signed out, no access) go to `onError`.
    */
   subscribe(
-    projectId: string,
+    organizationId: string,
     onSnapshot: (files: RemoteFileMeta[]) => void,
     onError: (error: Error) => void,
   ): () => void;
 
   /** One row with its text, or null when the path has never existed. */
-  fetch(projectId: string, path: string): Promise<RemoteFile | null>;
+  fetch(organizationId: string, path: string): Promise<RemoteFile | null>;
 
   /**
    * Writes `text` at `path` if the server's version is `expectedVersion`.
    * `null` means create: only succeeds when the path is absent or a tombstone.
    */
   write(
-    projectId: string,
+    organizationId: string,
     path: string,
     text: string,
     hash: string,
@@ -62,8 +62,8 @@ export interface SyncBackend {
   ): Promise<WriteOutcome>;
 
   /** Turns the row at `path` into a tombstone if its version is `expectedVersion`. */
-  remove(projectId: string, path: string, expectedVersion: number): Promise<WriteOutcome>;
+  remove(organizationId: string, path: string, expectedVersion: number): Promise<WriteOutcome>;
 
   /** Force-writes many files at once, no version check. Used to publish a local folder. */
-  writeMany(projectId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void>;
+  writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void>;
 }

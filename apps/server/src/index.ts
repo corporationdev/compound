@@ -23,11 +23,11 @@ const MAX_BYTES = 100 * 1024 * 1024;
 // Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
 const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
 const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url'] as const;
-const projectId = z.string().min(1).max(100).transform((id) => id as Id<'projects'>);
+const organizationId = z.string().min(1).max(100);
 const sampleId = z.string().regex(/^[0-9a-f]{16}$/);
 const assetRegisterSchema = z
   .object({
-    projectId,
+    organizationId,
     sampleId,
     size: z.number().int().min(1).max(MAX_ASSET_BYTES),
     mimeType: z.string().regex(/^[\w.+-]+\/[\w.+-]+$/),
@@ -37,7 +37,7 @@ const assetRegisterSchema = z
 const assetFinishSchema = z
   .object({ assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>) })
   .strict();
-const assetLookupSchema = z.object({ projectId, sampleId }).strict();
+const assetLookupSchema = z.object({ organizationId, sampleId }).strict();
 const uploadSchema = z
   .object({
     size: z.number().int().min(1).max(MAX_BYTES),

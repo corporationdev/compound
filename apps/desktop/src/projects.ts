@@ -74,7 +74,6 @@ async function exists(path: string): Promise<boolean> {
 type PackageJson = {
   name?: string;
   projectId?: string;
-  cloudProjectId?: string;
   displayName?: string;
   main?: string;
 } & Record<string, unknown>;
@@ -155,27 +154,13 @@ async function describe(dir: string): Promise<ProjectInfo | null> {
     entry,
     modifiedAt: file.mtime.toISOString(),
     createdAt: folder.birthtime.toISOString(),
-    ...(typeof pkg?.cloudProjectId === "string" && pkg.cloudProjectId ? { cloudProjectId: pkg.cloudProjectId } : {}),
   };
 }
 
 export const getProject = (dir: string): Promise<ProjectInfo | null> => describe(dir);
 
 /**
- * Records which cloud project a folder is a checkout of. In package.json
- * because that file syncs: every checkout of the project learns its cloud
- * id from the same record, and a folder copied by hand keeps it.
- */
-export function recordCloudProjectId(dir: string, cloudProjectId: string): Promise<void> {
-  return withProjectLock(dir, async () => {
-    const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
-    if (pkg.cloudProjectId === cloudProjectId) return;
-    await writePackage(dir, { ...pkg, cloudProjectId });
-  });
-}
-
-/**
- * The folder projects go in when the user has not picked one. `~/Movies` on
+ * The folder workspaces go in when the user has not picked one. `~/Movies` on
  * macOS, `Videos` elsewhere — chosen because it is the one media folder the
  * sync services leave alone: iCloud's "Desktop & Documents Folders" covers
  * only those two, and OneDrive's Known Folder Move only Desktop, Documents,
@@ -406,26 +391,6 @@ async function confirmCloudLocation(
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options);
   return response === 1;
-}
-
-/** Direct child folders of `root` that could hold a project, in a stable order. */
-async function childDirs(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules")
-    .map((entry) => entry.name)
-    .sort()
-    .map((name) => join(root, name));
-}
-
-/**
- * Every direct child folder of `root` that holds an entry file. The one
- * search of the disk for projects there is: the app runs it when a projects
- * root is chosen, to put the projects already in it on its list. Reads only.
- */
-export async function scanProjects(root: string): Promise<ProjectInfo[]> {
-  const projects = await Promise.all((await childDirs(root)).map(describe));
-  return projects.filter((project): project is ProjectInfo => project !== null);
 }
 
 /**
@@ -898,15 +863,15 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
   // answering to one id is the thing the id exists to prevent. The folder is
   // already named for the copy, so the record is written here rather than
   // through `renameProject` (which would move it again).
-  const { cloudProjectId: _cloud, ...pkg } = (await readPackage(target)) ?? packageJson(basename(target), source.displayName);
+  const pkg = (await readPackage(target)) ?? packageJson(basename(target), source.displayName);
   await writePackage(target, {
     ...pkg,
     projectId: nanoid(),
     displayName: `${source.displayName} (Copy)`,
   });
-  // A copy is a new project, not another checkout of the original: it must
-  // not carry the cloud binding, or edits in the copy would land in the
-  // original's rows, nor the sync state that goes with it.
+  // A copy made from a checkout of the old per-project sync must not carry
+  // that sync state along, or its edits would be merged against a base that
+  // was never its own.
   await rm(join(target, ...SYNC_DIR.split("/")), { recursive: true, force: true });
   const project = await describe(target);
   if (!project) throw new Error("Failed to duplicate the project.");

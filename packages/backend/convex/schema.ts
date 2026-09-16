@@ -83,6 +83,22 @@ export default defineSchema({
   })
     .index('by_owner', ['ownerId', 'expiresAt'])
     .index('by_expiry', ['expiresAt']),
+  // One text file of an organization's workspace. The truth for the text;
+  // every desktop folder is a checkout of these rows (see docs/workspace-plan.md).
+  files: defineTable({
+    organizationId: v.string(),
+    path: v.string(),
+    text: v.string(),
+    hash: v.string(),
+    version: v.number(),
+    deleted: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index('by_org_path', ['organizationId', 'path'])
+    .index('by_org', ['organizationId']),
+  // Legacy: per-project rows from before the workspace. Kept until
+  // `migrations.projectsToWorkspace` has run on every deployment.
   projects: defineTable({
     organizationId: v.string(),
     name: v.string(),

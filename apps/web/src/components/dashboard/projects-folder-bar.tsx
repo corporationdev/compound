@@ -8,33 +8,37 @@ import { toast } from "somoto";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { revealPath } from "@/lib/shell";
-import { isDesktop, pickProjectsRoot, projectsRoot } from "@/projects";
+import { isDesktop, workspaceDir, workspaceError, workspaceSyncStatus } from "@/lib/workspace";
 
 /**
- * Footer bar of the projects view: shows the projects root and the actions on
- * it. Desktop only — projects live on disk, so there is no root to show in the
- * browser build (see @/projects).
+ * Footer bar of the projects view: the workspace folder projects live in,
+ * and a way to it. Desktop only — the workspace is a folder on disk, so
+ * there is nothing to show in the browser build.
  */
 export function DashboardProjectsFolderBar() {
-  const rootLabel = () => projectsRoot() ?? "No folder selected";
-  const hasRoot = () => !!projectsRoot();
-
-  const handleChange = async () => {
-    try {
-      await pickProjectsRoot();
-    } catch (e) {
-      toast.error("Failed to choose projects folder", { description: (e as Error).message });
+  const label = () => workspaceDir() ?? workspaceError() ?? "Opening your workspace…";
+  const detail = () => {
+    const status = workspaceSyncStatus();
+    if (!status) return "Projects in this folder sync with your organization once you are signed in.";
+    switch (status.state) {
+      case "synced":
+        return "In sync with your organization.";
+      case "offline":
+        return `Offline: ${status.pending} change${status.pending === 1 ? "" : "s"} waiting.`;
+      case "error":
+        return status.error ?? "Sync error.";
+      default:
+        return "Syncing…";
     }
   };
 
   const handleReveal = async () => {
-    const root = projectsRoot();
-    if (!root) return;
-
+    const dir = workspaceDir();
+    if (!dir) return;
     try {
-      await revealPath(root);
+      await revealPath(dir);
     } catch (e) {
-      toast.error("Failed to reveal projects folder", { description: (e as Error).message });
+      toast.error("Failed to reveal workspace", { description: (e as Error).message });
     }
   };
 
@@ -50,20 +54,16 @@ export function DashboardProjectsFolderBar() {
               />
             </span>
             <div class="flex min-w-0 flex-1 flex-col justify-center gap-1">
-              <p class="h-4 text-xs text-foreground">Projects folder</p>
-              <p class="min-w-0 truncate text-xs text-muted-foreground">
-                {rootLabel()}
+              <p class="h-4 text-xs text-foreground">Workspace</p>
+              <p class="min-w-0 truncate text-xs text-muted-foreground" title={label()}>
+                {label()}
               </p>
+              <p class="min-w-0 truncate text-xxs text-muted-foreground opacity-70">{detail()}</p>
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <Show when={hasRoot()}>
-              <Button variant="ghost" class="text-muted-foreground" onClick={handleReveal}>
-                Reveal in finder
-              </Button>
-            </Show>
-            <Button variant="secondary" onClick={handleChange}>
-              {hasRoot() ? "Change..." : "Choose folder..."}
+            <Button variant="secondary" onClick={handleReveal} disabled={!workspaceDir()}>
+              Reveal in Finder
             </Button>
           </div>
         </div>

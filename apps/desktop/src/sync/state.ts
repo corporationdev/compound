@@ -5,8 +5,8 @@
 // What a checkout remembers between runs: for every synced path, the version
 // it last agreed with the cloud on and the hash of that text; and the text
 // itself, so a later local edit can be merged three ways against the cloud's
-// next version. All of it lives under the app's folder in the project, which
-// git and the project watcher already ignore.
+// next version. All of it lives under the app's folder in the workspace, which
+// git and the watchers already ignore.
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -18,20 +18,20 @@ export type FileState = { version: number; hash: string };
 
 export const TOMBSTONE_HASH = "";
 
-type Persisted = { projectId: string; files: Record<string, FileState> };
+type Persisted = { organizationId: string; files: Record<string, FileState> };
 
 export const SYNC_DIR = ".compound/sync";
 
 export class SyncStore {
   readonly dir: string;
-  readonly projectId: string;
+  readonly organizationId: string;
   private files = new Map<string, FileState>();
   private saving: Promise<void> = Promise.resolve();
   private dirty = false;
 
-  constructor(dir: string, projectId: string) {
+  constructor(dir: string, organizationId: string) {
     this.dir = dir;
-    this.projectId = projectId;
+    this.organizationId = organizationId;
   }
 
   private get root(): string {
@@ -55,12 +55,11 @@ export class SyncStore {
       // No state yet: a fresh checkout, or a publish that has not synced.
       return;
     }
-    // A checkout of one project must not be pointed at another: its files
-    // would go up as that project's, over whatever was there. The binding in
-    // package.json is text anyone can edit; this record is not.
-    if (parsed.projectId !== this.projectId) {
+    // A checkout of one organization must not be pointed at another: its
+    // files would go up as that organization's, over whatever was there.
+    if (parsed.organizationId !== this.organizationId) {
       throw new Error(
-        `This folder is a checkout of a different cloud project. Remove ${SYNC_DIR} to start over.`,
+        `This folder is a checkout of a different organization's workspace. Remove ${SYNC_DIR} to start over.`,
       );
     }
     for (const [path, state] of Object.entries(parsed.files ?? {})) {
@@ -110,7 +109,7 @@ export class SyncStore {
     this.saving = this.saving.then(async () => {
       if (!this.dirty) return;
       this.dirty = false;
-      const persisted: Persisted = { projectId: this.projectId, files: Object.fromEntries(this.files) };
+      const persisted: Persisted = { organizationId: this.organizationId, files: Object.fromEntries(this.files) };
       await mkdir(this.root, { recursive: true });
       await writeFileAtomic(this.statePath, JSON.stringify(persisted, null, 2) + "\n");
     }).catch(() => { });

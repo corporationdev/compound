@@ -77,14 +77,18 @@ export function DashboardSidebarTopSpacer() {
 type DashboardSidebarNavProps = {
   children: JSX.Element;
   footer?: JSX.Element;
+  /** The last child takes the remaining height (a tree that scrolls) instead of empty space. */
+  fill?: boolean;
 };
 
-/** The scrolling middle of the sidebar: stacked sections, then empty space. */
+/** The middle of the sidebar: stacked sections, then empty space — or a section that fills it. */
 export function DashboardSidebarNav(props: DashboardSidebarNavProps) {
   return (
     <div class="flex min-h-0 flex-1 flex-col gap-2 px-3">
       {props.children}
-      <div class="min-h-0 flex-1" />
+      <Show when={!props.fill}>
+        <div class="min-h-0 flex-1" />
+      </Show>
       {props.footer}
     </div>
   );

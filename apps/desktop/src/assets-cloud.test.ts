@@ -44,9 +44,9 @@ describe("originals cache paths", () => {
 describe("refusals before any request", () => {
   const token = "jwt";
   it("refuses a malformed id, a relative source, and a source that is not there", async () => {
-    await expect(uploadAssetOriginal({ dir: "/p", projectId: "x", sampleId: "nope", source: "/p/a.mp4", mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("Invalid asset id");
-    await expect(uploadAssetOriginal({ dir: "/p", projectId: "x", sampleId: "0123456789abcdef", source: "assets/a.mp4", mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("absolute");
-    await expect(uploadAssetOriginal({ dir: "/p", projectId: "x", sampleId: "0123456789abcdef", source: join(tmpdir(), "does-not-exist-" + Date.now()), mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("No such file");
-    await expect(fetchAssetOriginal({ dir: "/p", projectId: "x", sampleId: "0123456789abcdeg", token })).rejects.toThrow("Invalid asset id");
+    await expect(uploadAssetOriginal({ dir: "/p", organizationId: "x", sampleId: "nope", source: "/p/a.mp4", mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("Invalid asset id");
+    await expect(uploadAssetOriginal({ dir: "/p", organizationId: "x", sampleId: "0123456789abcdef", source: "assets/a.mp4", mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("absolute");
+    await expect(uploadAssetOriginal({ dir: "/p", organizationId: "x", sampleId: "0123456789abcdef", source: join(tmpdir(), "does-not-exist-" + Date.now()), mimeType: "video/mp4", name: "a.mp4", token })).rejects.toThrow("No such file");
+    await expect(fetchAssetOriginal({ dir: "/p", organizationId: "x", sampleId: "0123456789abcdeg", token })).rejects.toThrow("Invalid asset id");
   });
 });

@@ -50,7 +50,6 @@ export const MAIN_CHANNELS = {
   PROJECTS_PICK_ROOT: "projects:pick-root",
   PROJECTS_PICK_FOLDER: "projects:pick-folder",
   PROJECTS_DEFAULT_ROOT: "projects:default-root",
-  PROJECTS_SCAN: "projects:scan",
   PROJECTS_GET: "projects:get",
   PROJECTS_INIT: "projects:init",
   PROJECTS_RESOLVE: "projects:resolve",
@@ -73,9 +72,17 @@ export const MAIN_CHANNELS = {
   SYNC_START: "sync:start",
   SYNC_STOP: "sync:stop",
   SYNC_STATUS_GET: "sync:status-get",
-  SYNC_PUBLISH: "sync:publish",
-  SYNC_MATERIALIZE: "sync:materialize",
   SYNC_SESSION: "sync:session",
+  WORKSPACE_OPEN: "workspace:open",
+  WORKSPACE_LIST: "workspace:list",
+  WORKSPACE_PROJECTS: "workspace:projects",
+  WORKSPACE_READ: "workspace:read",
+  WORKSPACE_WRITE: "workspace:write",
+  WORKSPACE_CREATE: "workspace:create",
+  WORKSPACE_RENAME: "workspace:rename",
+  WORKSPACE_REMOVE: "workspace:remove",
+  WORKSPACE_WATCH: "workspace:watch",
+  WORKSPACE_UNWATCH: "workspace:unwatch",
   CLOUD_ASSET_UPLOAD: "cloud:asset-upload",
   CLOUD_ASSET_FETCH: "cloud:asset-fetch",
   HEADLESS_GET_MODE: "headless:get-mode",
@@ -87,6 +94,7 @@ export const MAIN_CHANNELS = {
   // Main→Renderer events
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
   PROJECTS_CHANGED: "projects:changed",
+  WORKSPACE_CHANGED: "workspace:changed",
   SYNC_STATUS: "sync:status",
   SYNC_CONFLICT: "sync:conflict",
 } as const;
@@ -115,15 +123,41 @@ export type ProjectInfo = {
   modifiedAt: string;
   /** birthtime of the folder, ISO string. */
   createdAt: string;
-  /**
-   * package.json `cloudProjectId`: the Convex project this folder is a
-   * checkout of, once it has been published or materialized. Undefined for a
-   * local-only folder.
-   */
-  cloudProjectId?: string;
 };
 
-export type { SyncStatus } from "./sync/project-sync";
+export type { SyncStatus } from "./sync/workspace-sync";
+
+/**
+ * An organization's workspace folder on this machine (see workspace.ts).
+ * `created` says the folder was just made, `moved` which legacy project
+ * folders moved into it on the way (absolute paths, from and to).
+ */
+export type WorkspaceInfo = { dir: string; organizationId: string; created: boolean; moved: Array<{ from: string; to: string }> };
+
+/** One entry of a workspace listing, workspace-relative. Folders say whether they are a project. */
+export type WorkspaceEntry = {
+  path: string;
+  name: string;
+  kind: "file" | "directory";
+  size: number;
+  mtime: number;
+  project?: boolean;
+};
+
+/**
+ * What a write came to. `merged`: the file had changed since the text the
+ * caller last agreed on (`base`), so what landed is the three-way merge,
+ * returned here for the caller to show; `conflicted` says some lines were
+ * changed on both sides and the caller's were kept.
+ */
+export type WorkspaceWriteResult =
+  | { status: "ok" }
+  | { status: "merged"; text: string; conflicted: boolean };
+
+/** What a workspace file holds: text the app can edit, or bytes it can only name. */
+export type WorkspaceFile =
+  | { kind: "text"; text: string; mtime: number }
+  | { kind: "binary"; size: number; mtime: number };
 
 export type CompileResult =
   { ok: true; code: string } | { ok: false; error: string };
@@ -217,12 +251,6 @@ export type MainRequestMap = {
     request: void;
     response: string | null;
   };
-  // Every project folder directly under `root`: what the app puts on its
-  // list when `root` is chosen as the projects root.
-  [MAIN_CHANNELS.PROJECTS_SCAN]: {
-    request: { root: string };
-    response: ProjectInfo[];
-  };
   [MAIN_CHANNELS.PROJECTS_GET]: {
     request: { dir: string };
     response: ProjectInfo | null;
@@ -291,31 +319,41 @@ export type MainRequestMap = {
     request: { dir: string; path: string };
     response: void;
   };
+  // Keeps the workspace folder `dir` in step with the organization's rows.
   [MAIN_CHANNELS.SYNC_START]: {
-    request: { dir: string; projectId: string; sessionToken: string };
-    response: import("./sync/project-sync").SyncStatus;
+    request: { dir: string; organizationId: string; sessionToken: string };
+    response: import("./sync/workspace-sync").SyncStatus;
   };
   [MAIN_CHANNELS.SYNC_STOP]: { request: { dir: string }; response: void };
-  [MAIN_CHANNELS.SYNC_STATUS_GET]: { request: { dir: string }; response: import("./sync/project-sync").SyncStatus | null };
-  [MAIN_CHANNELS.SYNC_PUBLISH]: {
-    request: { dir: string; projectId: string; sessionToken: string };
-    response: { files: number; status: import("./sync/project-sync").SyncStatus };
+  [MAIN_CHANNELS.SYNC_STATUS_GET]: { request: { dir: string }; response: import("./sync/workspace-sync").SyncStatus | null };
+  // The organization's workspace folder under `root`, made when missing.
+  [MAIN_CHANNELS.WORKSPACE_OPEN]: {
+    request: { root: string; organizationId: string; name: string };
+    response: WorkspaceInfo;
   };
-  [MAIN_CHANNELS.SYNC_MATERIALIZE]: {
-    request: { root: string; projectId: string; name: string; sessionToken: string };
-    response: ProjectInfo;
-  };
+  [MAIN_CHANNELS.WORKSPACE_LIST]: { request: { dir: string }; response: WorkspaceEntry[] };
+  // Every project folder under the workspace, however deep.
+  [MAIN_CHANNELS.WORKSPACE_PROJECTS]: { request: { dir: string }; response: ProjectInfo[] };
+  [MAIN_CHANNELS.WORKSPACE_READ]: { request: { dir: string; path: string }; response: WorkspaceFile | null };
+  // `base`: the text the caller last read or wrote, merged against when the file moved on (see workspace.ts).
+  [MAIN_CHANNELS.WORKSPACE_WRITE]: { request: { dir: string; path: string; text: string; base?: string | null }; response: WorkspaceWriteResult };
+  // Answers the path the entry ended up at (numbered when the name was taken).
+  [MAIN_CHANNELS.WORKSPACE_CREATE]: { request: { dir: string; path: string; kind: "file" | "directory" }; response: string };
+  [MAIN_CHANNELS.WORKSPACE_RENAME]: { request: { dir: string; from: string; to: string }; response: void };
+  [MAIN_CHANNELS.WORKSPACE_REMOVE]: { request: { dir: string; path: string }; response: void };
+  [MAIN_CHANNELS.WORKSPACE_WATCH]: { request: { dir: string }; response: void };
+  [MAIN_CHANNELS.WORKSPACE_UNWATCH]: { request: { dir: string }; response: void };
   // The renderer's signed native session changed; null on sign-out stops every sync.
   [MAIN_CHANNELS.SYNC_SESSION]: { request: { sessionToken: string | null }; response: void };
-  // Registers a library asset's original with the project's organization and streams
+  // Registers a library asset's original with the organization and streams
   // the file at `source` (absolute path) to R2 unless the cloud already has it.
   [MAIN_CHANNELS.CLOUD_ASSET_UPLOAD]: {
-    request: { dir: string; projectId: string; sampleId: string; source: string; mimeType: string; name: string; token: string | null };
+    request: { dir: string; organizationId: string; sampleId: string; source: string; mimeType: string; name: string; token: string | null };
     response: { assetId: string; state: "uploading" | "ready" };
   };
   // Brings an original this machine lacks into `<dir>/cache/originals/`; null when the cloud has none.
   [MAIN_CHANNELS.CLOUD_ASSET_FETCH]: {
-    request: { dir: string; projectId: string; sampleId: string; token: string | null };
+    request: { dir: string; organizationId: string; sampleId: string; token: string | null };
     response: { path: string; name: string; mimeType: string } | null;
   };
   [MAIN_CHANNELS.PROJECTS_FS_REAL_PATH]: {
@@ -349,7 +387,9 @@ export type MainEventMap = {
   [MAIN_CHANNELS.WINDOW_FULLSCREEN_CHANGE]: { fullscreen: boolean };
   // A file inside a watched project folder changed (path relative to `dir`).
   [MAIN_CHANNELS.PROJECTS_CHANGED]: { dir: string; path: string };
-  [MAIN_CHANNELS.SYNC_STATUS]: { dir: string; status: import("./sync/project-sync").SyncStatus };
+  // A file inside a watched workspace changed (path relative to `dir`).
+  [MAIN_CHANNELS.WORKSPACE_CHANGED]: { dir: string; path: string };
+  [MAIN_CHANNELS.SYNC_STATUS]: { dir: string; status: import("./sync/workspace-sync").SyncStatus };
   // A merge had to choose between two edits to the same lines; the cloud's text was kept at `keptCopy`.
   [MAIN_CHANNELS.SYNC_CONFLICT]: { dir: string; path: string; keptCopy: string };
 };

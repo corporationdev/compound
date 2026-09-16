@@ -1,4 +1,4 @@
-// Two checkouts of one cloud project, against a real Convex deployment.
+// Two checkouts of one organization's workspace, against a real Convex deployment.
 //
 // A manual check of the whole path the app uses — signed native session →
 // JWT from the auth server → WebSocket subscription → versioned writes —
@@ -8,19 +8,19 @@
 //
 //   COMPOUND_SESSION_TOKEN=<token.signature> bun apps/desktop/scripts/sync-live-smoke.ts
 //
-// Reads the deployment from apps/desktop/runtime-config.json. Creates a
-// project named sync-smoke-<time> in the caller's first organization,
+// Reads the deployment from apps/desktop/runtime-config.json. Writes under a
+// folder named smoke-<time> in the caller's first organization's workspace,
 // drives two engines through concurrent edits and a delete, prints the
-// outcome, and archives the project.
+// outcome, and removes the folder.
 
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConvexClient } from "convex/browser";
 import { api } from "@compound/backend/convex/_generated/api";
 
 import { ConvexSyncBackend } from "../src/sync/convex-backend";
-import { ProjectSync } from "../src/sync/project-sync";
+import { WorkspaceSync } from "../src/sync/workspace-sync";
 
 const sessionToken = process.env.COMPOUND_SESSION_TOKEN;
 if (!sessionToken) throw new Error("Set COMPOUND_SESSION_TOKEN to a signed native session token");
@@ -38,7 +38,7 @@ async function fetchToken(): Promise<string | null> {
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const read = (dir: string, path: string): Promise<string> => readFile(join(dir, path), "utf8");
 
-async function settle(...all: ProjectSync[]): Promise<void> {
+async function settle(...all: WorkspaceSync[]): Promise<void> {
   for (let round = 0; round < 200; round++) {
     await Promise.all(all.map((sync) => sync.idle()));
     await sleep(50);
@@ -58,43 +58,44 @@ if (organizations.length === 0) {
 }
 console.log("organizations", organizations.map((organization) => `${organization.name} (${organization.role})`));
 const organizationId = organizations[0]!.id;
-const name = `sync-smoke-${new Date().toISOString().slice(11, 19)}`;
-const { projectId } = await control.mutation(api.projects.create, { organizationId, name });
-console.log("project", name, projectId);
+// Everything the run writes sits under one folder of the workspace, cleared at the end.
+const folder = `smoke-${new Date().toISOString().slice(11, 19).replace(/:/g, "-")}`;
+console.log("workspace folder", folder);
 
 const backendA = new ConvexSyncBackend(config.convexUrl, fetchToken);
 const backendB = new ConvexSyncBackend(config.convexUrl, fetchToken);
 const dirA = await mkdtemp(join(tmpdir(), "smoke-a-"));
 const dirB = await mkdtemp(join(tmpdir(), "smoke-b-"));
-const a = new ProjectSync({ dir: dirA, projectId, backend: backendA, coalesceMs: 50, onStatus: (status) => console.log("  A", status.state, status.pending) });
-const b = new ProjectSync({ dir: dirB, projectId, backend: backendB, coalesceMs: 50, onStatus: (status) => console.log("  B", status.state, status.pending) });
+const a = new WorkspaceSync({ dir: dirA, organizationId, backend: backendA, coalesceMs: 50, onStatus: (status) => console.log("  A", status.state, status.pending) });
+const b = new WorkspaceSync({ dir: dirB, organizationId, backend: backendB, coalesceMs: 50, onStatus: (status) => console.log("  B", status.state, status.pending) });
 
 try {
   await a.start();
   const base = "line1\nline2\nline3\nline4\nline5\n";
-  await writeFile(join(dirA, "index.tsx"), base);
-  await writeFile(join(dirA, "package.json"), JSON.stringify({ name, projectId: "smoke", main: "index.tsx" }, null, 2) + "\n");
+  await mkdir(join(dirA, folder), { recursive: true });
+  await writeFile(join(dirA, folder, "index.tsx"), base);
+  await writeFile(join(dirA, folder, "package.json"), JSON.stringify({ name: folder, projectId: "smoke", main: "index.tsx" }, null, 2) + "\n");
   await settle(a);
-  console.log("A published", (await backendA.client.query(api.files.list, { projectId })).map((file) => `${file.path}@${file.version}`));
+  console.log("A published", (await backendA.client.query(api.files.list, { organizationId })).filter((file) => file.path.startsWith(folder)).map((file) => `${file.path}@${file.version}`));
 
   await b.start();
   await settle(b);
-  console.log("B materialized index.tsx ==", (await read(dirB, "index.tsx")) === base);
+  console.log("B materialized index.tsx ==", (await read(dirB, `${folder}/index.tsx`)) === base);
 
   // Concurrent edits to different lines, from two machines.
   await Promise.all([
-    writeFile(join(dirA, "index.tsx"), base.replace("line1", "A1")),
-    writeFile(join(dirB, "index.tsx"), base.replace("line5", "B5")),
+    writeFile(join(dirA, folder, "index.tsx"), base.replace("line1", "A1")),
+    writeFile(join(dirB, folder, "index.tsx"), base.replace("line5", "B5")),
   ]);
   await settle(a, b);
-  const merged = await read(dirA, "index.tsx");
-  console.log("merged equal on both:", merged === (await read(dirB, "index.tsx")), JSON.stringify(merged));
+  const merged = await read(dirA, `${folder}/index.tsx`);
+  console.log("merged equal on both:", merged === (await read(dirB, `${folder}/index.tsx`)), JSON.stringify(merged));
   if (merged !== "A1\nline2\nline3\nline4\nB5\n") throw new Error("merge lost an edit");
 
   // A delete from B reaches A.
-  await rm(join(dirB, "package.json"));
+  await rm(join(dirB, folder, "package.json"));
   await settle(a, b);
-  const gone = await read(dirA, "package.json").then(() => false, () => true);
+  const gone = await read(dirA, `${folder}/package.json`).then(() => false, () => true);
   console.log("delete propagated:", gone);
   if (!gone) throw new Error("delete did not propagate");
   console.log("PASS");
@@ -103,7 +104,8 @@ try {
   await b.stop();
   await backendA.close();
   await backendB.close();
-  await control.mutation(api.projects.archive, { projectId });
+  // Leave the workspace as it was: the folder's rows become tombstones.
+  await rm(join(dirA, folder), { recursive: true, force: true }).catch(() => { });
   await control.close();
   await rm(dirA, { recursive: true, force: true });
   await rm(dirB, { recursive: true, force: true });

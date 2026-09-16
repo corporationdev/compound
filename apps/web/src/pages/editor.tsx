@@ -27,9 +27,9 @@ import { isCacheFile } from '@compound/assets';
 import { createEditWriter } from '@/projects/edits';
 import { compileProject, refreshProject, watchProject } from '@/projects/host';
 import { captureProjectCover } from '@/projects/cover';
-import { startProjectSync, stopProjectSync } from '@/projects/sync';
 import { attachCloudAssets } from '@/engine/cloud-assets';
 import { cloudUserId } from '@/lib/organizations';
+import { isInWorkspace, workspace } from '@/lib/workspace';
 import { getToken } from '@/lib/auth-client';
 import { Library } from '@compound/runtime';
 import { useProject } from "@/context/project";
@@ -220,28 +220,17 @@ export function EditorPage() {
     });
   });
 
-  // Cloud sync for a checkout, keyed on the folder like the mount above: it
-  // runs while a signed-in user has the project open, and stops when the
-  // project closes, moves, or the user signs out (main stops it on sign-out
-  // too; stopping twice is harmless).
+  // Cloud originals for a project inside the workspace, keyed on the folder
+  // like the mount above. Text sync is the workspace's (see lib/workspace);
+  // this attaches the library the mount effect above set up so this
+  // machine's bytes go up and a teammate's come down on first use.
   createEffect(() => {
     const dir = project.dir();
-    const cloudProjectId = project.cloudProjectId();
-    if (!dir || !cloudProjectId || !cloudUserId()) return;
-
-    startProjectSync(dir, cloudProjectId).catch((error) => {
-      console.error('[sync] could not start:', error);
-      toast.error('Cloud sync failed to start', { description: (error as Error).message });
-    });
-    // The originals alongside the text: the library the mount effect above
-    // attached (it runs first) sends this machine's bytes up and fetches a
-    // teammate's on first use.
+    const current = workspace();
+    if (!dir || !current || !cloudUserId() || !isInWorkspace(dir)) return;
     const library = untrack(() => world.get(Library));
-    const detachAssets = library ? attachCloudAssets(library, { dir, projectId: cloudProjectId, getToken }) : undefined;
-    onCleanup(() => {
-      detachAssets?.();
-      stopProjectSync(dir).catch((error) => console.warn('[sync] could not stop:', error));
-    });
+    const detachAssets = library ? attachCloudAssets(library, { dir, organizationId: current.organizationId, getToken }) : undefined;
+    onCleanup(() => detachAssets?.());
   });
 
   const timelineStyles = createMemo(() => {

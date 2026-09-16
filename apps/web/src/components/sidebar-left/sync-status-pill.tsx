@@ -6,9 +6,9 @@ import { Show } from "solid-js";
 
 import { useProject } from "@/context/project";
 import { cx } from "@/lib/cva";
-import { syncStatus } from "@/projects/sync";
+import { isInWorkspace, workspaceSyncStatus } from "@/lib/workspace";
 
-import type { SyncStatus } from "@/projects/sync";
+import type { SyncStatus } from "@/lib/workspace";
 
 const LABELS: Record<SyncStatus["state"], string> = {
   starting: "Syncing…",
@@ -27,12 +27,13 @@ const DOT: Record<SyncStatus["state"], string> = {
 };
 
 /**
- * What cloud sync is doing for the open project: nothing for a local one,
- * else a dot and a word. The pending count and any error go in the title.
+ * What cloud sync is doing for the open project: nothing for a folder
+ * outside the workspace, else the workspace's status as a dot and a word.
+ * The pending count and any error go in the title.
  */
 export function SyncStatusPill() {
   const project = useProject();
-  const status = () => (project.cloudProjectId() ? syncStatus(project.dir()) : null);
+  const status = () => (isInWorkspace(project.dir()) ? workspaceSyncStatus() : null);
 
   const title = () => {
     const current = status();
@@ -45,7 +46,7 @@ export function SyncStatusPill() {
     if (current.state === "error") return (current.error ?? "Sync error") + skipped;
     if (current.state === "offline") return `Offline: ${current.pending} change${current.pending === 1 ? "" : "s"} waiting` + skipped;
     if (current.pending > 0) return `${current.pending} change${current.pending === 1 ? "" : "s"} to send` + skipped;
-    return "Cloud project in sync" + skipped;
+    return "Workspace in sync" + skipped;
   };
 
   return (

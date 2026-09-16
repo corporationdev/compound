@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Keeps one project folder and its cloud rows the same. The rows are the
+// Keeps one workspace folder and its organization's cloud rows the same. The rows are the
 // truth; the folder is a checkout of them that the compiler, the watcher,
 // the inspector's write-back and any agent's own file tools keep using as a
 // plain folder. This is what turns their writes into versioned mutations and
@@ -56,19 +56,19 @@ export type SyncStatus = {
  */
 export type ConflictNotice = { path: string; keptCopy: string };
 
-/** Where the losing side of a merge is kept: inside the project, so it reaches every checkout. */
+/** Where the losing side of a merge is kept: inside the workspace, so it reaches every checkout. */
 export const CONFLICTS_DIR = "conflicts";
 const CONFLICT_SUFFIX = ".conflict";
 
-export type ProjectSyncOptions = {
+export type WorkspaceSyncOptions = {
   dir: string;
-  projectId: string;
+  organizationId: string;
   backend: SyncBackend;
   /** Watch the folder for changes; off in tests that drive `noteChange` themselves. */
   watch?: boolean;
   onStatus?: (status: SyncStatus) => void;
   onConflict?: (notice: ConflictNotice) => void;
-  /** A file sync wrote or removed on disk, project-relative. */
+  /** A file sync wrote or removed on disk, workspace-relative. */
   onWrite?: (path: string) => void;
   /** First retry delay after a failed push; doubles up to 30 s. */
   retryBaseMs?: number;
@@ -99,11 +99,11 @@ function conflictSource(path: string): string | null {
   return stampAt > 0 ? inner.slice(0, stampAt) : null;
 }
 
-export class ProjectSync {
+export class WorkspaceSync {
   readonly dir: string;
-  readonly projectId: string;
+  readonly organizationId: string;
   private readonly backend: SyncBackend;
-  private readonly options: ProjectSyncOptions;
+  private readonly options: WorkspaceSyncOptions;
   private readonly store: SyncStore;
 
   private queue: Promise<void> = Promise.resolve();
@@ -131,12 +131,12 @@ export class ProjectSync {
   private watcher: FSWatcher | undefined;
   private stopped = false;
 
-  constructor(options: ProjectSyncOptions) {
+  constructor(options: WorkspaceSyncOptions) {
     this.options = options;
     this.dir = options.dir;
-    this.projectId = options.projectId;
+    this.organizationId = options.organizationId;
     this.backend = options.backend;
-    this.store = new SyncStore(options.dir, options.projectId);
+    this.store = new SyncStore(options.dir, options.organizationId);
     this.retryDelay = options.retryBaseMs ?? 1000;
     this.started = new Promise<void>((resolve, reject) => {
       this.resolveStarted = resolve;
@@ -161,7 +161,7 @@ export class ProjectSync {
     }
     this.emitStatus();
     this.unsubscribe = this.backend.subscribe(
-      this.projectId,
+      this.organizationId,
       (files) => this.onSnapshot(files),
       (error) => this.fail(error),
     );
@@ -202,6 +202,8 @@ export class ProjectSync {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    // A start still waiting on its first snapshot must not wait forever.
+    this.rejectStarted?.(new Error("Sync stopped before it started"));
     this.unsubscribe?.();
     this.watcher?.close();
     for (const timer of this.coalesce.values()) clearTimeout(timer);
@@ -229,7 +231,7 @@ export class ProjectSync {
     this.busy++;
     this.emitStatus();
     const run = this.queue.then(task).catch((error: unknown) => {
-      console.warn(`[sync] ${this.projectId}: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[sync] ${this.organizationId}: ${error instanceof Error ? error.message : String(error)}`);
     }).finally(() => {
       this.busy--;
       this.emitStatus();
@@ -291,7 +293,7 @@ export class ProjectSync {
 
     let remote: RemoteFile | null;
     try {
-      remote = await this.backend.fetch(this.projectId, path);
+      remote = await this.backend.fetch(this.organizationId, path);
     } catch (error) {
       this.defer(path, error);
       return;
@@ -342,7 +344,7 @@ export class ProjectSync {
 
     if (known === undefined && base === null) {
       // No history here at all — a folder copied by hand, or pointed at this
-      // project after the fact. Nothing says which text is newer, and the
+      // organization after the fact. Nothing says which text is newer, and the
       // cloud's is everyone's: it wins, and the local text is kept beside it.
       const kept = await this.keepCopy(path, local.text);
       if (!(await this.writeLocal(path, remote.text, local.hash))) return this.retryRemote(meta);
@@ -357,7 +359,7 @@ export class ProjectSync {
     await this.advance(remote);
     if (merged.conflicted) {
       // The cloud's text lost the overlap. It is kept where the checkout
-      // that wrote it will see it: inside the project, which syncs.
+      // that wrote it will see it: inside the workspace, which syncs.
       const kept = await this.keepCopy(path, remote.text);
       if (kept) this.options.onConflict?.({ path, keptCopy: this.absolute(kept) });
     }
@@ -406,7 +408,7 @@ export class ProjectSync {
       if (!known || known.hash === TOMBSTONE_HASH) return;
       let outcome;
       try {
-        outcome = await this.backend.remove(this.projectId, path, known.version);
+        outcome = await this.backend.remove(this.organizationId, path, known.version);
       } catch (error) {
         this.defer(path, error);
         return;
@@ -428,7 +430,7 @@ export class ProjectSync {
     const expected = known && known.hash !== TOMBSTONE_HASH ? known.version : null;
     let outcome;
     try {
-      outcome = await this.backend.write(this.projectId, path, local.text, local.hash, expected);
+      outcome = await this.backend.write(this.organizationId, path, local.text, local.hash, expected);
     } catch (error) {
       this.defer(path, error);
       return;
@@ -453,7 +455,7 @@ export class ProjectSync {
     const walk = async (parent: string): Promise<void> => {
       const entries = await readdir(join(this.dir, ...parent.split("/").filter(Boolean)), { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
-        if (!shouldDescend(parent, entry.name)) continue;
+        if (!shouldDescend(entry.name)) continue;
         const path = parent ? `${parent}/${entry.name}` : entry.name;
         if (entry.isDirectory()) await walk(path);
         else if (entry.isFile() && isSyncablePath(path)) {
@@ -475,7 +477,7 @@ export class ProjectSync {
     this.pending.add(path);
     if (!this.offline) {
       this.offline = true;
-      console.warn(`[sync] ${this.projectId} offline: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[sync] ${this.organizationId} offline: ${error instanceof Error ? error.message : String(error)}`);
     }
     this.emitStatus();
     if (this.retryTimer || this.stopped) return;
@@ -572,13 +574,13 @@ export class ProjectSync {
 // ---------------------------------------------------------------------------
 // Publishing
 
-/** Every syncable file under `dir`, read as text, project-relative paths. */
+/** Every syncable file under `dir`, read as text, workspace-relative paths. */
 export async function collectSyncableFiles(dir: string): Promise<Array<{ path: string; text: string; hash: string }>> {
   const files: Array<{ path: string; text: string; hash: string }> = [];
   const walk = async (parent: string): Promise<void> => {
     const entries = await readdir(join(dir, ...parent.split("/").filter(Boolean)), { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
-      if (!shouldDescend(parent, entry.name)) continue;
+      if (!shouldDescend(entry.name)) continue;
       const path = parent ? `${parent}/${entry.name}` : entry.name;
       if (entry.isDirectory()) await walk(path);
       else if (entry.isFile() && isSyncablePath(path)) {
@@ -593,11 +595,11 @@ export async function collectSyncableFiles(dir: string): Promise<Array<{ path: s
   return files;
 }
 
-/** Force-writes a local folder's files as the project's rows, in bounded batches. */
-export async function publishFolder(dir: string, projectId: string, backend: SyncBackend, batch = 32): Promise<number> {
+/** Force-writes a local folder's files as the organization's rows, in bounded batches. */
+export async function publishFolder(dir: string, organizationId: string, backend: SyncBackend, batch = 32): Promise<number> {
   const files = await collectSyncableFiles(dir);
   for (let i = 0; i < files.length; i += batch) {
-    await backend.writeMany(projectId, files.slice(i, i + batch));
+    await backend.writeMany(organizationId, files.slice(i, i + batch));
   }
   return files.length;
 }

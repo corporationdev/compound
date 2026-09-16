@@ -24,60 +24,60 @@ export class FakeBackend implements SyncBackend {
   writes = 0;
   removes = 0;
 
-  private table(projectId: string): Map<string, RemoteFile> {
-    let table = this.rows.get(projectId);
-    if (!table) this.rows.set(projectId, (table = new Map()));
+  private table(organizationId: string): Map<string, RemoteFile> {
+    let table = this.rows.get(organizationId);
+    if (!table) this.rows.set(organizationId, (table = new Map()));
     return table;
   }
 
-  snapshot(projectId: string): RemoteFileMeta[] {
-    return [...this.table(projectId).values()].sort((a, b) => a.path.localeCompare(b.path)).map(meta);
+  snapshot(organizationId: string): RemoteFileMeta[] {
+    return [...this.table(organizationId).values()].sort((a, b) => a.path.localeCompare(b.path)).map(meta);
   }
 
-  async fetch(projectId: string, path: string): Promise<RemoteFile | null> {
+  async fetch(organizationId: string, path: string): Promise<RemoteFile | null> {
     await this.check();
-    const row = this.table(projectId).get(path);
+    const row = this.table(organizationId).get(path);
     return row ? { ...row } : null;
   }
 
   /** The live text at a path, or null when absent or a tombstone. */
-  text(projectId: string, path: string): string | null {
-    const row = this.table(projectId).get(path);
+  text(organizationId: string, path: string): string | null {
+    const row = this.table(organizationId).get(path);
     return row && !row.deleted ? row.text : null;
   }
 
-  version(projectId: string, path: string): number | undefined {
-    return this.table(projectId).get(path)?.version;
+  version(organizationId: string, path: string): number | undefined {
+    return this.table(organizationId).get(path)?.version;
   }
 
   setOffline(offline: boolean): void {
     this.offline = offline;
-    if (!offline) for (const projectId of [...this.held]) this.notify(projectId);
+    if (!offline) for (const organizationId of [...this.held]) this.notify(organizationId);
   }
 
-  subscribe(projectId: string, onSnapshot: Subscriber, _onError: (error: Error) => void): () => void {
-    let set = this.subscribers.get(projectId);
-    if (!set) this.subscribers.set(projectId, (set = new Set()));
+  subscribe(organizationId: string, onSnapshot: Subscriber, _onError: (error: Error) => void): () => void {
+    let set = this.subscribers.get(organizationId);
+    if (!set) this.subscribers.set(organizationId, (set = new Set()));
     set.add(onSnapshot);
     setTimeout(() => {
-      if (set!.has(onSnapshot) && !this.offline) onSnapshot(this.snapshot(projectId));
-      else if (this.offline) this.held.add(projectId);
+      if (set!.has(onSnapshot) && !this.offline) onSnapshot(this.snapshot(organizationId));
+      else if (this.offline) this.held.add(organizationId);
     }, this.delayMs);
     return () => {
       set!.delete(onSnapshot);
     };
   }
 
-  private notify(projectId: string): void {
+  private notify(organizationId: string): void {
     if (this.offline) {
-      this.held.add(projectId);
+      this.held.add(organizationId);
       return;
     }
-    this.held.delete(projectId);
-    const snapshot = this.snapshot(projectId);
-    for (const subscriber of this.subscribers.get(projectId) ?? []) {
+    this.held.delete(organizationId);
+    const snapshot = this.snapshot(organizationId);
+    for (const subscriber of this.subscribers.get(organizationId) ?? []) {
       setTimeout(() => {
-        if (this.subscribers.get(projectId)?.has(subscriber)) subscriber(snapshot);
+        if (this.subscribers.get(organizationId)?.has(subscriber)) subscriber(snapshot);
       }, this.delayMs);
     }
   }
@@ -86,9 +86,9 @@ export class FakeBackend implements SyncBackend {
     if (this.offline) throw new Error("offline");
   }
 
-  async write(projectId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
+  async write(organizationId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
     await this.check();
-    const table = this.table(projectId);
+    const table = this.table(organizationId);
     const row = table.get(path);
     if (expectedVersion === null) {
       if (row && !row.deleted) return { status: "conflict", current: { ...row } };
@@ -99,26 +99,26 @@ export class FakeBackend implements SyncBackend {
     const version = (row?.version ?? 0) + 1;
     table.set(path, { path, text, hash, version, deleted: false, updatedAt: Date.now(), updatedBy: "test" });
     this.writes++;
-    this.notify(projectId);
+    this.notify(organizationId);
     return { status: "ok", version };
   }
 
-  async remove(projectId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
+  async remove(organizationId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
     await this.check();
-    const table = this.table(projectId);
+    const table = this.table(organizationId);
     const row = table.get(path);
     if (!row) return { status: "conflict", current: null };
     if (row.version !== expectedVersion) return { status: "conflict", current: { ...row } };
     const version = row.version + 1;
     table.set(path, { ...row, text: "", hash: "", version, deleted: true, updatedAt: Date.now() });
     this.removes++;
-    this.notify(projectId);
+    this.notify(organizationId);
     return { status: "ok", version };
   }
 
-  async writeMany(projectId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
+  async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
     await this.check();
-    const table = this.table(projectId);
+    const table = this.table(organizationId);
     for (const file of files) {
       const row = table.get(file.path);
       table.set(file.path, {
@@ -129,6 +129,6 @@ export class FakeBackend implements SyncBackend {
         updatedBy: "test",
       });
     }
-    this.notify(projectId);
+    this.notify(organizationId);
   }
 }

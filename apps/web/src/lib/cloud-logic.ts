@@ -4,7 +4,7 @@
 
 // The pure parts of the cloud stores, kept apart from the Convex client and
 // the desktop bridge so they can be tested without a window. Re-exported by
-// `organizations.ts` and `cloud-projects.ts`, which are where callers get them.
+// `organizations.ts`, which is where callers get them.
 
 export type OrganizationSummary = { id: string; name: string; slug: string; role: string };
 
@@ -26,24 +26,4 @@ export function pickActiveOrganization(
 export function canManageMembers(role: string | undefined): boolean {
   if (!role) return false;
   return role.split(',').some((part) => part.trim() === 'owner' || part.trim() === 'admin');
-}
-
-/**
- * Pairs cloud projects with the local checkouts that carry their id. Records
- * are taken in the order given (most recently opened first, as `listProjects`
- * answers), so a cloud project checked out twice pairs with the one that was
- * open last. Records for no listed cloud project are left out.
- */
-export function matchCloudToLocal<
-  Cloud extends { _id: string },
-  Local extends { cloudProjectId?: string },
->(cloudProjects: readonly Cloud[], records: readonly Local[]): Map<string, Local> {
-  const ids = new Set(cloudProjects.map((project) => project._id));
-  const matches = new Map<string, Local>();
-  for (const record of records) {
-    const id = record.cloudProjectId;
-    if (!id || !ids.has(id) || matches.has(id)) continue;
-    matches.set(id, record);
-  }
-  return matches;
 }

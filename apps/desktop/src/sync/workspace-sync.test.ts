@@ -9,14 +9,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { FakeBackend } from "./testing/fake-backend";
 import { withProjectLock } from "./locks";
-import { ProjectSync, collectSyncableFiles, publishFolder } from "./project-sync";
-import type { ConflictNotice, SyncStatus } from "./project-sync";
+import { WorkspaceSync, collectSyncableFiles, publishFolder } from "./workspace-sync";
+import type { ConflictNotice, SyncStatus } from "./workspace-sync";
 
-const PROJECT = "proj_1";
+const PROJECT = "org_1";
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 let root: string;
-const syncs: ProjectSync[] = [];
+const syncs: WorkspaceSync[] = [];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "sync-test-"));
@@ -27,31 +27,31 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function checkout(name: string, backend: FakeBackend, extra: Partial<ConstructorParameters<typeof ProjectSync>[0]> = {}): Promise<ProjectSync> {
+async function checkout(name: string, backend: FakeBackend, extra: Partial<ConstructorParameters<typeof WorkspaceSync>[0]> = {}): Promise<WorkspaceSync> {
   const dir = join(root, name);
   await mkdir(dir, { recursive: true });
-  const sync = new ProjectSync({ dir, projectId: PROJECT, backend, watch: false, coalesceMs: 5, retryBaseMs: 20, ...extra });
+  const sync = new WorkspaceSync({ dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5, retryBaseMs: 20, ...extra });
   syncs.push(sync);
   await sync.start();
   return sync;
 }
 
-const read = (sync: ProjectSync, path: string): Promise<string> => readFile(join(sync.dir, path), "utf8");
-const exists = (sync: ProjectSync, path: string): Promise<boolean> => stat(join(sync.dir, path)).then(() => true, () => false);
+const read = (sync: WorkspaceSync, path: string): Promise<string> => readFile(join(sync.dir, path), "utf8");
+const exists = (sync: WorkspaceSync, path: string): Promise<boolean> => stat(join(sync.dir, path)).then(() => true, () => false);
 
-async function edit(sync: ProjectSync, path: string, text: string): Promise<void> {
+async function edit(sync: WorkspaceSync, path: string, text: string): Promise<void> {
   await mkdir(join(sync.dir, ...path.split("/").slice(0, -1)), { recursive: true });
   await writeFile(join(sync.dir, path), text);
   sync.noteChange(path);
 }
 
-async function remove(sync: ProjectSync, path: string): Promise<void> {
+async function remove(sync: WorkspaceSync, path: string): Promise<void> {
   await rm(join(sync.dir, path));
   sync.noteChange(path);
 }
 
 /** Waits until every checkout is idle and the cloud has nothing more to deliver. */
-async function settle(...all: ProjectSync[]): Promise<void> {
+async function settle(...all: WorkspaceSync[]): Promise<void> {
   for (let round = 0; round < 50; round++) {
     await Promise.all(all.map((sync) => sync.idle()));
     await sleep(15);
@@ -100,7 +100,7 @@ describe("one checkout", () => {
     expect(backend.snapshot(PROJECT).map((row) => row.path)).toEqual(["index.tsx", "package.json"]);
 
     const writes = backend.writes;
-    const a = new ProjectSync({ dir, projectId: PROJECT, backend, watch: false, coalesceMs: 5 });
+    const a = new WorkspaceSync({ dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5 });
     syncs.push(a);
     await a.start();
     await settle(a);
@@ -182,7 +182,7 @@ describe("one checkout", () => {
     syncs.splice(syncs.indexOf(a), 1);
     const writes = backend.writes;
 
-    const again = new ProjectSync({ dir: a.dir, projectId: PROJECT, backend, watch: false, coalesceMs: 5 });
+    const again = new WorkspaceSync({ dir: a.dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5 });
     syncs.push(again);
     await again.start();
     await settle(again);
@@ -278,7 +278,7 @@ describe("two checkouts", () => {
     await mkdir(dir);
     await writeFile(join(dir, "index.tsx"), "mine\n");
     const conflicts: ConflictNotice[] = [];
-    const a = new ProjectSync({ dir, projectId: PROJECT, backend, watch: false, coalesceMs: 5, onConflict: (notice) => conflicts.push(notice) });
+    const a = new WorkspaceSync({ dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5, onConflict: (notice) => conflicts.push(notice) });
     syncs.push(a);
     await a.start();
     await settle(a);
@@ -296,11 +296,11 @@ describe("two checkouts", () => {
     await a.stop();
     syncs.splice(syncs.indexOf(a), 1);
     await writeFile(join(a.dir, "index.tsx"), "edited\n");
-    const other = new ProjectSync({ dir: a.dir, projectId: "proj_other", backend, watch: false, coalesceMs: 5 });
+    const other = new WorkspaceSync({ dir: a.dir, organizationId: "org_other", backend, watch: false, coalesceMs: 5 });
     syncs.push(other);
-    await expect(other.start()).rejects.toThrow(/different cloud project/);
+    await expect(other.start()).rejects.toThrow(/different organization/);
     expect(other.status.state).toBe("error");
-    expect(backend.snapshot("proj_other")).toEqual([]);
+    expect(backend.snapshot("org_other")).toEqual([]);
     expect(backend.text(PROJECT, "index.tsx")).toBe("v1\n");
   });
 
@@ -314,7 +314,7 @@ describe("two checkouts", () => {
     // A teammate changes line 2 while this checkout is closed.
     await backend.write(PROJECT, "index.tsx", "1\ntwo\n3\n", "y", 1);
     const conflicts: ConflictNotice[] = [];
-    const again = new ProjectSync({ dir: a.dir, projectId: PROJECT, backend, watch: false, coalesceMs: 5, onConflict: (notice) => conflicts.push(notice) });
+    const again = new WorkspaceSync({ dir: a.dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5, onConflict: (notice) => conflicts.push(notice) });
     syncs.push(again);
     await again.start();
     await settle(again);
@@ -443,7 +443,7 @@ describe("with the folder watcher", () => {
     await backend.writeMany(PROJECT, [{ path: "index.tsx", text: "v1\n", hash: "x" }]);
     const dir = join(root, "watched");
     await mkdir(dir);
-    const a = new ProjectSync({ dir, projectId: PROJECT, backend, coalesceMs: 20 });
+    const a = new WorkspaceSync({ dir, organizationId: PROJECT, backend, coalesceMs: 20 });
     syncs.push(a);
     await a.start();
     await writeFile(join(dir, "index.tsx"), "edited by hand\n");

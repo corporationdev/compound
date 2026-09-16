@@ -83,7 +83,7 @@ function once<T>(map: Map<string, Promise<T>>, key: string, run: () => Promise<T
 export async function uploadAssetOriginal(request: UploadRequest): Promise<UploadResponse> {
   if (!validSampleId(request.sampleId)) throw new Error("Invalid asset id");
   if (!isAbsolute(request.source)) throw new Error("Asset source must be an absolute path");
-  return once(inflightUploads, `${request.projectId}:${request.sampleId}`, () => upload(request));
+  return once(inflightUploads, `${request.organizationId}:${request.sampleId}`, () => upload(request));
 }
 
 async function upload(request: UploadRequest): Promise<UploadResponse> {
@@ -93,7 +93,7 @@ async function upload(request: UploadRequest): Promise<UploadResponse> {
 
   const registered = (await mediaRequest(
     "asset-upload-url",
-    { projectId: request.projectId, sampleId: request.sampleId, size: info.size, mimeType: request.mimeType, name: request.name },
+    { organizationId: request.organizationId, sampleId: request.sampleId, size: info.size, mimeType: request.mimeType, name: request.name },
     request.token,
   )) as { assetId: string; uploadUrl: string | null };
   if (!registered.uploadUrl) return { assetId: registered.assetId, state: "ready" };
@@ -129,7 +129,7 @@ async function download(request: FetchRequest): Promise<FetchResponse> {
   try {
     media = (await mediaRequest(
       "asset-download-url",
-      { projectId: request.projectId, sampleId: request.sampleId },
+      { organizationId: request.organizationId, sampleId: request.sampleId },
       request.token,
     )) as typeof media;
   } catch (error) {

@@ -7,7 +7,8 @@ import { toast } from "somoto";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { pickProjectsRoot, projectsRoot } from "@/projects";
+import { revealPath } from "@/lib/shell";
+import { pickWorkspaceRoot, workspaceDir, workspaceRoot } from "@/lib/workspace";
 import { usePermissionState, type PermissionState } from "@/hooks/use-permission";
 
 import { DashboardOrganizationSection } from "./organization-section";
@@ -18,21 +19,44 @@ import {
   DashboardSurfaceSection,
 } from "./shared";
 
-function DashboardProjectsFolderSection() {
+function DashboardWorkspaceFolderSection() {
   const handleChange = async () => {
     try {
-      await pickProjectsRoot();
+      await pickWorkspaceRoot();
     } catch (e) {
-      toast.error("Failed to choose projects folder", { description: (e as Error).message });
+      toast.error("Failed to choose workspace folder", { description: (e as Error).message });
+    }
+  };
+
+  const handleReveal = async () => {
+    const dir = workspaceDir();
+    if (!dir) return;
+    try {
+      await revealPath(dir);
+    } catch (e) {
+      toast.error("Failed to reveal workspace", { description: (e as Error).message });
     }
   };
 
   return (
-    <DashboardSurfaceSection title="Projects folder">
+    <DashboardSurfaceSection
+      title="Workspace"
+      description="Each organization's workspace is a folder on this Mac, kept in step with the cloud. Projects and documents live inside it."
+    >
       <DashboardInfoActionRow
-        title="Save projects to"
+        title="This organization's workspace"
         leading={<Icon name="navigation.folder" class="text-foreground" />}
-        description={projectsRoot() ?? "No folder selected"}
+        description={workspaceDir() ?? "Not open yet"}
+        action={
+          <Button variant="secondary" onClick={handleReveal} disabled={!workspaceDir()}>
+            Reveal in Finder
+          </Button>
+        }
+      />
+      <DashboardInfoActionRow
+        title="Workspaces are kept under"
+        leading={<Icon name="folders-icon" class="text-foreground" />}
+        description={workspaceRoot() ?? "No folder selected"}
         action={
           <Button variant="secondary" onClick={handleChange}>
             Change...
@@ -195,7 +219,7 @@ function DashboardPermissionsSection() {
 export function DashboardSettingsView() {
   return (
     <DashboardScrollView>
-      <DashboardProjectsFolderSection />
+      <DashboardWorkspaceFolderSection />
       <DashboardOrganizationSection />
       <DashboardPermissionsSection />
     </DashboardScrollView>

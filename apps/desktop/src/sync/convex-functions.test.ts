@@ -1,5 +1,5 @@
 // The engine against the real Convex functions, run in-process by
-// convex-test: the same two-checkout scenarios as project-sync.test.ts, but
+// convex-test: the same two-checkout scenarios as workspace-sync.test.ts, but
 // with `files.write` / `files.remove` / `files.list` deciding versions and
 // conflicts instead of the fake. Subscriptions are polled, since convex-test
 // has no WebSocket; everything else is the code the app ships.
@@ -12,7 +12,7 @@ import { convexTest } from "convex-test";
 
 import schema from "../../../../packages/backend/convex/schema";
 import { api, components } from "../../../../packages/backend/convex/_generated/api";
-import { ProjectSync, collectSyncableFiles } from "./project-sync";
+import { WorkspaceSync, collectSyncableFiles } from "./workspace-sync";
 import type { RemoteFile, RemoteFileMeta, SyncBackend, WriteOutcome } from "./backend";
 
 const backendDir = resolve(import.meta.dirname, "../../../../packages/backend/convex");
@@ -49,7 +49,7 @@ async function member(t: Harness, email: string) {
  * what the WebSocket would do.
  */
 class HarnessBackend implements SyncBackend {
-  private readonly subscribers = new Set<{ projectId: string; deliver: () => Promise<void> }>();
+  private readonly subscribers = new Set<{ organizationId: string; deliver: () => Promise<void> }>();
   readonly as: Signed;
   private readonly peers: Set<HarnessBackend>;
   constructor(as: Signed, peers: Set<HarnessBackend>) {
@@ -62,12 +62,12 @@ class HarnessBackend implements SyncBackend {
     for (const peer of this.peers) for (const subscriber of peer.subscribers) await subscriber.deliver();
   }
 
-  subscribe(projectId: string, onSnapshot: (files: RemoteFileMeta[]) => void, onError: (error: Error) => void): () => void {
+  subscribe(organizationId: string, onSnapshot: (files: RemoteFileMeta[]) => void, onError: (error: Error) => void): () => void {
     const subscriber = {
-      projectId,
+      organizationId,
       deliver: async () => {
         try {
-          const files = (await this.as.query(api.files.list, { projectId: projectId as never })) as RemoteFileMeta[];
+          const files = (await this.as.query(api.files.list, { organizationId })) as RemoteFileMeta[];
           onSnapshot(files);
         } catch (error) {
           // What the WebSocket client reports through its onError callback.
@@ -82,30 +82,30 @@ class HarnessBackend implements SyncBackend {
     };
   }
 
-  fetch(projectId: string, path: string): Promise<RemoteFile | null> {
-    return this.as.query(api.files.get, { projectId: projectId as never, path }) as Promise<RemoteFile | null>;
+  fetch(organizationId: string, path: string): Promise<RemoteFile | null> {
+    return this.as.query(api.files.get, { organizationId, path }) as Promise<RemoteFile | null>;
   }
 
-  async write(projectId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
-    const outcome = (await this.as.mutation(api.files.write, { projectId: projectId as never, path, text, hash, expectedVersion })) as WriteOutcome;
+  async write(organizationId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
+    const outcome = (await this.as.mutation(api.files.write, { organizationId, path, text, hash, expectedVersion })) as WriteOutcome;
     await this.notifyAll();
     return outcome;
   }
 
-  async remove(projectId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
-    const outcome = (await this.as.mutation(api.files.remove, { projectId: projectId as never, path, expectedVersion })) as WriteOutcome;
+  async remove(organizationId: string, path: string, expectedVersion: number): Promise<WriteOutcome> {
+    const outcome = (await this.as.mutation(api.files.remove, { organizationId, path, expectedVersion })) as WriteOutcome;
     await this.notifyAll();
     return outcome;
   }
 
-  async writeMany(projectId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
-    await this.as.mutation(api.files.writeMany, { projectId: projectId as never, files });
+  async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
+    await this.as.mutation(api.files.writeMany, { organizationId, files });
     await this.notifyAll();
   }
 }
 
 let root: string;
-const syncs: ProjectSync[] = [];
+const syncs: WorkspaceSync[] = [];
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 beforeEach(async () => {
@@ -117,7 +117,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function settle(...all: ProjectSync[]): Promise<void> {
+async function settle(...all: WorkspaceSync[]): Promise<void> {
   for (let round = 0; round < 60; round++) {
     await Promise.all(all.map((sync) => sync.idle()));
     await sleep(10);
@@ -128,56 +128,55 @@ async function settle(...all: ProjectSync[]): Promise<void> {
   }
 }
 
-async function checkout(name: string, backend: SyncBackend, projectId: string): Promise<ProjectSync> {
+async function checkout(name: string, backend: SyncBackend, organizationId: string): Promise<WorkspaceSync> {
   const dir = join(root, name);
   await mkdir(dir, { recursive: true });
-  const sync = new ProjectSync({ dir, projectId, backend, watch: false, coalesceMs: 5, retryBaseMs: 20 });
+  const sync = new WorkspaceSync({ dir, organizationId, backend, watch: false, coalesceMs: 5, retryBaseMs: 20 });
   syncs.push(sync);
   await sync.start();
   return sync;
 }
 
-async function edit(sync: ProjectSync, path: string, text: string): Promise<void> {
+async function edit(sync: WorkspaceSync, path: string, text: string): Promise<void> {
   await writeFile(join(sync.dir, path), text);
   sync.noteChange(path);
 }
 
-const read = (sync: ProjectSync, path: string): Promise<string> => readFile(join(sync.dir, path), "utf8");
+const read = (sync: WorkspaceSync, path: string): Promise<string> => readFile(join(sync.dir, path), "utf8");
 
 async function setup() {
   const t = convexTest(schema, await modules(backendDir, ["betterAuth/"]));
   t.registerComponent("betterAuth", componentSchema, await modules(componentDir));
   const alice = await member(t, "alice@example.com");
   const { id: organizationId } = await alice.mutation(api.organizations.ensurePersonal, {});
-  const { projectId } = await alice.mutation(api.projects.create, { organizationId, name: "Demo" });
   const bob = await member(t, "bob@example.com");
   await t.mutation(components.betterAuth.adapter.create, {
     input: { model: "member", data: { organizationId, userId: (await bob.query(api.auth.getCurrentUser, {}))!.id, role: "member", createdAt: Date.now() } },
   });
   const peers = new Set<HarnessBackend>();
-  return { t, projectId: projectId as string, alice: new HarnessBackend(alice, peers), bob: new HarnessBackend(bob, peers), outsider: new HarnessBackend(await member(t, "eve@example.com"), new Set()) };
+  return { t, organizationId, alice: new HarnessBackend(alice, peers), bob: new HarnessBackend(bob, peers), outsider: new HarnessBackend(await member(t, "eve@example.com"), new Set()) };
 }
 
 describe("sync engine over the Convex functions", () => {
-  it("publishes from one member and materializes for another", async () => {
-    const { projectId, alice, bob } = await setup();
-    const a = await checkout("a", alice, projectId);
+  it("pushes from one member and checks out for another", async () => {
+    const { organizationId, alice, bob } = await setup();
+    const a = await checkout("a", alice, organizationId);
     await edit(a, "index.tsx", "export default () => <stage />;\n");
     await edit(a, "package.json", "{}\n");
     await settle(a);
-    const b = await checkout("b", bob, projectId);
+    const b = await checkout("b", bob, organizationId);
     expect(await read(b, "index.tsx")).toBe("export default () => <stage />;\n");
     expect((await collectSyncableFiles(b.dir)).map((file) => file.path).sort()).toEqual(["index.tsx", "package.json"]);
   });
 
   it("merges concurrent edits to different lines through real version checks", async () => {
-    const { projectId, alice, bob } = await setup();
+    const { organizationId, alice, bob } = await setup();
     const base = "1\n2\n3\n4\n5\n";
-    await alice.writeMany(projectId, [{ path: "index.tsx", text: base, hash: "" }]).catch(() => { });
-    const a = await checkout("a", alice, projectId);
+    await alice.writeMany(organizationId, [{ path: "index.tsx", text: base, hash: "" }]).catch(() => { });
+    const a = await checkout("a", alice, organizationId);
     await edit(a, "index.tsx", base);
     await settle(a);
-    const b = await checkout("b", bob, projectId);
+    const b = await checkout("b", bob, organizationId);
     await settle(a, b);
     // Each edits its own copy before the other's push lands: the second push
     // is refused by the mutation's version check and merged.
@@ -191,25 +190,25 @@ describe("sync engine over the Convex functions", () => {
   });
 
   it("propagates a delete as a tombstone the other checkout honours", async () => {
-    const { projectId, alice, bob } = await setup();
-    const a = await checkout("a", alice, projectId);
+    const { organizationId, alice, bob } = await setup();
+    const a = await checkout("a", alice, organizationId);
     await edit(a, "old.tsx", "x\n");
     await settle(a);
-    const b = await checkout("b", bob, projectId);
+    const b = await checkout("b", bob, organizationId);
     await settle(a, b);
     await rm(join(a.dir, "old.tsx"));
     a.noteChange("old.tsx");
     await settle(a, b);
     await expect(read(b, "old.tsx")).rejects.toThrow();
-    const rows = (await alice.as.query(api.files.list, { projectId: projectId as never })) as RemoteFileMeta[];
+    const rows = (await alice.as.query(api.files.list, { organizationId })) as RemoteFileMeta[];
     expect(rows).toEqual([expect.objectContaining({ path: "old.tsx", deleted: true, version: 2 })]);
   });
 
   it("refuses a checkout for someone outside the organization", async () => {
-    const { projectId, outsider } = await setup();
+    const { organizationId, outsider } = await setup();
     const dir = join(root, "eve");
     await mkdir(dir);
-    const sync = new ProjectSync({ dir, projectId, backend: outsider, watch: false });
+    const sync = new WorkspaceSync({ dir, organizationId, backend: outsider, watch: false });
     syncs.push(sync);
     await expect(sync.start()).rejects.toThrow(/member/);
     expect(await collectSyncableFiles(dir)).toEqual([]);

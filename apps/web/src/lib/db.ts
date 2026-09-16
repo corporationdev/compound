@@ -128,7 +128,7 @@ function placeholderRecord(dir: string, recordedAt: string, lastOpenedAt: string
  * own (`kind: 'single'`). Version 3 does away with it. The single ones become
  * project records; the multi ones are dropped — the projects root lives in
  * localStorage now, and the projects the old one held come back on record
- * when the user picks a root again (see `adoptProjectsRoot` in @/projects).
+ * when the workspace is opened again (see `listProjects` in @/projects).
  */
 async function retireRoots(db: idb.IDBPDatabase<GlobalDBSchema>, tx: UpgradeTransaction): Promise<void> {
   type LegacyRoot = { path: string; kind?: 'multi' | 'single'; createdAt: string; lastUsedAt: string };

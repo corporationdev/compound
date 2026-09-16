@@ -44,12 +44,11 @@ async function identity(t: T, email: string) {
   });
   return { user: user!, as: t.withIdentity({ subject: user!._id, sessionId: session!._id }) };
 }
-/** A member with their personal organization and one project in it. */
+/** A member with their personal organization, whose workspace the files tests write into. */
 async function member(t: T, email: string) {
   const who = await identity(t, email);
   const { id: organizationId } = await who.as.mutation(api.organizations.ensurePersonal, {});
-  const { projectId } = await who.as.mutation(api.projects.create, { organizationId, name: 'Demo' });
-  return { ...who, organizationId, projectId };
+  return { ...who, organizationId };
 }
 async function sha256(text: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -129,144 +128,136 @@ test('non-members cannot list, get or write; members can', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
   const bob = await identity(t, 'bob@example.com');
+  const organizationId = alice.organizationId;
   const denied = 'Not a member of this organization';
-  await expect(bob.as.query(api.projects.list, { organizationId: alice.organizationId })).rejects.toThrow(denied);
-  await expect(bob.as.query(api.projects.get, { projectId: alice.projectId })).rejects.toThrow(denied);
-  await expect(bob.as.mutation(api.projects.create, { organizationId: alice.organizationId, name: 'X' })).rejects.toThrow(denied);
-  await expect(bob.as.query(api.files.list, { projectId: alice.projectId })).rejects.toThrow(denied);
+  await expect(bob.as.query(api.files.list, { organizationId })).rejects.toThrow(denied);
+  await expect(bob.as.query(api.files.get, { organizationId, path: 'index.tsx' })).rejects.toThrow(denied);
   await expect(
-    bob.as.mutation(api.files.write, { projectId: alice.projectId, expectedVersion: null, ...(await file('index.tsx', 'x')) }),
+    bob.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('index.tsx', 'x')) }),
   ).rejects.toThrow(denied);
   await expect(
-    bob.as.mutation(api.files.writeMany, { projectId: alice.projectId, files: [await file('index.tsx', 'x')] }),
+    bob.as.mutation(api.files.writeMany, { organizationId, files: [await file('index.tsx', 'x')] }),
   ).rejects.toThrow(denied);
-  await expect(bob.as.mutation(api.projects.rename, { projectId: alice.projectId, name: 'Y' })).rejects.toThrow(denied);
-  await expect(t.query(api.projects.list, { organizationId: alice.organizationId })).rejects.toThrow('Unauthenticated');
+  await expect(bob.as.mutation(api.files.remove, { organizationId, path: 'index.tsx', expectedVersion: 1 })).rejects.toThrow(denied);
+  await expect(t.query(api.files.list, { organizationId })).rejects.toThrow('Unauthenticated');
 
-  const projects = await alice.as.query(api.projects.list, { organizationId: alice.organizationId });
-  expect(projects.map((p) => p._id)).toEqual([alice.projectId]);
-  expect(projects[0]).toMatchObject({ name: 'Demo', entry: 'index.tsx', createdBy: alice.user._id });
-  expect((await alice.as.query(api.projects.get, { projectId: alice.projectId }))?._id).toBe(alice.projectId);
   const written = await alice.as.mutation(api.files.write, {
-    projectId: alice.projectId,
+    organizationId,
     expectedVersion: null,
-    ...(await file('index.tsx', 'export default 1')),
+    ...(await file('projects/demo/index.tsx', 'export default 1')),
   });
   expect(written).toEqual({ status: 'ok', version: 1 });
-  await alice.as.mutation(api.projects.rename, { projectId: alice.projectId, name: 'Renamed' });
-  await alice.as.mutation(api.projects.archive, { projectId: alice.projectId });
-  expect(await alice.as.query(api.projects.list, { organizationId: alice.organizationId })).toEqual([]);
-  expect((await alice.as.query(api.projects.get, { projectId: alice.projectId }))?.name).toBe('Renamed');
+  expect((await alice.as.query(api.files.list, { organizationId })).map((f) => f.path)).toEqual(['projects/demo/index.tsx']);
+  // Another organization's workspace is another table: nothing of alice's shows there.
+  const carol = await member(t, 'carol@example.com');
+  expect(await carol.as.query(api.files.list, { organizationId: carol.organizationId })).toEqual([]);
 });
 
 test('create semantics: null expectedVersion conflicts on a live row and succeeds on a tombstone', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
+  const organizationId = alice.organizationId;
   const first = await file('a.tsx', 'one');
-  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...first })).toEqual({ status: 'ok', version: 1 });
-  const again = await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a.tsx', 'two')) });
+  expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...first })).toEqual({ status: 'ok', version: 1 });
+  const again = await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('a.tsx', 'two')) });
   expect(again).toEqual({
     status: 'conflict',
     current: { ...first, version: 1, deleted: false, updatedAt: expect.any(Number), updatedBy: alice.user._id },
   });
-  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'a.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
-  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a.tsx', 'three')) })).toEqual({ status: 'ok', version: 3 });
+  expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'a.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
+  expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('a.tsx', 'three')) })).toEqual({ status: 'ok', version: 3 });
 });
 
 test('version conflicts return the current row, or null when the file never existed', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
+  const organizationId = alice.organizationId;
   const v1 = await file('b.tsx', 'v1');
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...v1 });
-  const stale = await alice.as.mutation(api.files.write, { projectId, expectedVersion: 0, ...(await file('b.tsx', 'stale')) });
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...v1 });
+  const stale = await alice.as.mutation(api.files.write, { organizationId, expectedVersion: 0, ...(await file('b.tsx', 'stale')) });
   expect(stale.status).toBe('conflict');
   expect(stale.status === 'conflict' && stale.current).toMatchObject({ ...v1, version: 1, deleted: false });
-  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: 1, ...(await file('b.tsx', 'v2')) })).toEqual({ status: 'ok', version: 2 });
-  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: 3, ...(await file('missing.tsx', 'x')) })).toEqual({ status: 'conflict', current: null });
-  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'missing.tsx', expectedVersion: 1 })).toEqual({ status: 'conflict', current: null });
-  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'b.tsx', expectedVersion: 1 })).toMatchObject({ status: 'conflict', current: { version: 2 } });
+  expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: 1, ...(await file('b.tsx', 'v2')) })).toEqual({ status: 'ok', version: 2 });
+  expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: 3, ...(await file('missing.tsx', 'x')) })).toEqual({ status: 'conflict', current: null });
+  expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'missing.tsx', expectedVersion: 1 })).toEqual({ status: 'conflict', current: null });
+  expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'b.tsx', expectedVersion: 1 })).toMatchObject({ status: 'conflict', current: { version: 2 } });
 });
 
 test('remove creates a tombstone with a bumped version and list includes it', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('z.tsx', 'z')) });
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a/b.tsx', 'ab')) });
-  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'z.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
-  const listed = await alice.as.query(api.files.list, { projectId });
+  const organizationId = alice.organizationId;
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('z.tsx', 'z')) });
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('a/b.tsx', 'ab')) });
+  expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'z.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
+  const listed = await alice.as.query(api.files.list, { organizationId });
   expect(listed.map((f) => [f.path, f.version, f.deleted])).toEqual([
     ['a/b.tsx', 1, false],
     ['z.tsx', 2, true],
   ]);
   expect('text' in listed[0]!).toBe(false);
   expect(listed[1]!.hash).toBe(await sha256(''));
-  expect(await alice.as.query(api.files.get, { projectId, path: 'a/b.tsx' })).toMatchObject({ path: 'a/b.tsx', text: 'ab', version: 1 });
-  expect(await alice.as.query(api.files.get, { projectId, path: 'z.tsx' })).toMatchObject({ deleted: true, text: '' });
-  expect(await alice.as.query(api.files.get, { projectId, path: 'never.tsx' })).toBeNull();
+  expect(await alice.as.query(api.files.get, { organizationId, path: 'a/b.tsx' })).toMatchObject({ path: 'a/b.tsx', text: 'ab', version: 1 });
+  expect(await alice.as.query(api.files.get, { organizationId, path: 'z.tsx' })).toMatchObject({ deleted: true, text: '' });
+  expect(await alice.as.query(api.files.get, { organizationId, path: 'never.tsx' })).toBeNull();
   // Removing a tombstone again is a no-op success.
-  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'z.tsx', expectedVersion: 2 })).toEqual({ status: 'ok', version: 2 });
+  expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'z.tsx', expectedVersion: 2 })).toEqual({ status: 'ok', version: 2 });
 });
 
 test('writeMany forces writes, bumps versions and enforces limits', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'old')) });
+  const organizationId = alice.organizationId;
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('index.tsx', 'old')) });
   await alice.as.mutation(api.files.writeMany, {
-    projectId,
+    organizationId,
     files: [await file('index.tsx', 'new'), await file('package.json', '{}')],
   });
-  const listed = await alice.as.query(api.files.list, { projectId });
+  const listed = await alice.as.query(api.files.list, { organizationId });
   expect(listed.map((f) => [f.path, f.version, f.deleted])).toEqual([
     ['index.tsx', 2, false],
     ['package.json', 1, false],
   ]);
-  expect((await alice.as.query(api.files.get, { projectId, path: 'index.tsx' }))?.text).toBe('new');
+  expect((await alice.as.query(api.files.get, { organizationId, path: 'index.tsx' }))?.text).toBe('new');
   const many = await Promise.all(Array.from({ length: 65 }, (_, i) => file(`f${i}.tsx`, 'x')));
-  await expect(alice.as.mutation(api.files.writeMany, { projectId, files: many })).rejects.toThrow('At most 64');
+  await expect(alice.as.mutation(api.files.writeMany, { organizationId, files: many })).rejects.toThrow('At most 64');
   await expect(
-    alice.as.mutation(api.files.writeMany, { projectId, files: [await file('a.tsx', 'x'), await file('a.tsx', 'y')] }),
+    alice.as.mutation(api.files.writeMany, { organizationId, files: [await file('a.tsx', 'x'), await file('a.tsx', 'y')] }),
   ).rejects.toThrow('Duplicate');
   const big = 'x'.repeat(512 * 1024 + 1);
-  await expect(alice.as.mutation(api.files.writeMany, { projectId, files: [await file('big.tsx', big)] })).rejects.toThrow('512 KiB');
+  await expect(alice.as.mutation(api.files.writeMany, { organizationId, files: [await file('big.tsx', big)] })).rejects.toThrow('512 KiB');
 });
 
 test('write validates paths, text and hashes', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
+  const organizationId = alice.organizationId;
   const ok = await file('ok.tsx', 'ok');
   for (const path of ['/abs.tsx', '../up.tsx', 'a/../b.tsx', 'a\\b.tsx', 'a\0b', '', 'a//b.tsx', 'x'.repeat(513)])
-    await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, path })).rejects.toThrow();
-  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, hash: 'deadbeef' })).rejects.toThrow('64 lowercase hex');
-  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, hash: await sha256('other') })).rejects.toThrow('does not match');
-  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('nul.tsx', 'a\0b')) })).rejects.toThrow('NUL');
-  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('deep/dir/.hidden', '')) })).toEqual({ status: 'ok', version: 1 });
+    await expect(alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...ok, path })).rejects.toThrow();
+  await expect(alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...ok, hash: 'deadbeef' })).rejects.toThrow('64 lowercase hex');
+  await expect(alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...ok, hash: await sha256('other') })).rejects.toThrow('does not match');
+  await expect(alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('nul.tsx', 'a\0b')) })).rejects.toThrow('NUL');
+  expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('deep/dir/.hidden', '')) })).toEqual({ status: 'ok', version: 1 });
 });
 
 test('assets.register is idempotent per organization and sample, and markReady flips state', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
   const bob = await identity(t, 'bob@example.com');
-  const args = { projectId: alice.projectId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const args = { organizationId: alice.organizationId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
   const first = await alice.as.mutation(api.assets.register, args);
   expect(first).toEqual({ assetId: expect.any(String), state: 'uploading', uploadNeeded: true });
   const second = await alice.as.mutation(api.assets.register, { ...args, name: 'renamed.mp4' });
   expect(second).toEqual({ assetId: first.assetId, state: 'uploading', uploadNeeded: true });
-  // Another project in the same organization shares the asset.
-  const { projectId: other } = await alice.as.mutation(api.projects.create, { organizationId: alice.organizationId, name: 'Other' });
-  expect((await alice.as.mutation(api.assets.register, { ...args, projectId: other })).assetId).toBe(first.assetId);
   await expect(bob.as.mutation(api.assets.register, args)).rejects.toThrow('Not a member');
-  await expect(bob.as.query(api.assets.get, { projectId: alice.projectId, sampleId: args.sampleId })).rejects.toThrow('Not a member');
+  await expect(bob.as.query(api.assets.get, { organizationId: alice.organizationId, sampleId: args.sampleId })).rejects.toThrow('Not a member');
   await expect(alice.as.mutation(api.assets.register, { ...args, sampleId: 'nope' })).rejects.toThrow('16 hex');
-  expect(await alice.as.query(api.assets.get, { projectId: alice.projectId, sampleId: 'ffffffffffffffff' })).toBeNull();
+  expect(await alice.as.query(api.assets.get, { organizationId: alice.organizationId, sampleId: 'ffffffffffffffff' })).toBeNull();
 
   await t.mutation(internal.assets.markReady, { assetId: first.assetId as Id<'assets'>, originalKey: `assets/${alice.organizationId}/${args.sampleId}/clip.mp4` });
   expect(await alice.as.mutation(api.assets.register, args)).toEqual({ assetId: first.assetId, state: 'ready', uploadNeeded: false });
-  const asset = await alice.as.query(api.assets.get, { projectId: alice.projectId, sampleId: args.sampleId });
+  const asset = await alice.as.query(api.assets.get, { organizationId: alice.organizationId, sampleId: args.sampleId });
   expect(asset).toMatchObject({ organizationId: alice.organizationId, name: 'clip.mp4', originalState: 'ready', uploadedBy: alice.user._id });
 });
 
@@ -274,7 +265,7 @@ test('assets.describe and assets.finish are for members only, and finish binds t
   const t = setup();
   const alice = await member(t, 'alice@example.com');
   const bob = await identity(t, 'bob@example.com');
-  const args = { projectId: alice.projectId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const args = { organizationId: alice.organizationId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
   const { assetId } = await alice.as.mutation(api.assets.register, args);
   const id = assetId as Id<'assets'>;
   const key = `assets/${alice.organizationId}/${args.sampleId}/clip.mp4`;
@@ -299,7 +290,7 @@ test('addMemberByEmail requires owner/admin and an existing account, then grants
   await expect(alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'nobody@example.com' })).rejects.toThrow('No account');
   await alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'Bob@example.com' });
   expect(await bob.as.query(api.organizations.listMine, {})).toEqual([{ id: org, name: 'alice', slug: `personal-${alice.user._id}`, role: 'member' }]);
-  expect((await bob.as.query(api.projects.list, { organizationId: org })).map((p) => p._id)).toEqual([alice.projectId]);
+  expect(await bob.as.query(api.files.list, { organizationId: org })).toEqual([]);
   // A plain member cannot add others; an admin can.
   await expect(bob.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'carol@example.com' })).rejects.toThrow('owners and admins');
   await expect(alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'bob@example.com' })).rejects.toThrow();
@@ -311,16 +302,62 @@ test('addMemberByEmail requires owner/admin and an existing account, then grants
 test('a create that differs from an existing path only by case is refused', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');
-  const projectId = alice.projectId;
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('Index.tsx', 'a')) });
+  const organizationId = alice.organizationId;
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('Index.tsx', 'a')) });
   await expect(
-    alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'b')) }),
+    alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('index.tsx', 'b')) }),
   ).rejects.toThrow('differing only in case');
   await expect(
-    alice.as.mutation(api.files.writeMany, { projectId, files: [await file('INDEX.tsx', 'c')] }),
+    alice.as.mutation(api.files.writeMany, { organizationId, files: [await file('INDEX.tsx', 'c')] }),
   ).rejects.toThrow('differing only in case');
   // The same path again is not a collision with itself, and a tombstone frees the name.
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: 1, ...(await file('Index.tsx', 'a2')) });
-  await alice.as.mutation(api.files.remove, { projectId, path: 'Index.tsx', expectedVersion: 2 });
-  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'b')) });
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: 1, ...(await file('Index.tsx', 'a2')) });
+  await alice.as.mutation(api.files.remove, { organizationId, path: 'Index.tsx', expectedVersion: 2 });
+  await alice.as.mutation(api.files.write, { organizationId, expectedVersion: null, ...(await file('index.tsx', 'b')) });
+});
+
+test('migrations.projectsToWorkspace copies legacy rows under the desktop folder name, drops cloudProjectId, and skips what a desktop already pushed', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const now = Date.now();
+  const insertProject = (name: string, archived = false) =>
+    t.run((ctx) =>
+      ctx.db.insert('projects', { organizationId: alice.organizationId, name, entry: 'index.tsx', createdBy: alice.user._id, createdAt: now, updatedAt: now, ...(archived ? { archivedAt: now } : {}) }),
+    );
+  const insertRow = async (projectId: Id<'projects'>, path: string, text: string, deleted = false) =>
+    t.run(async (ctx) => {
+      await ctx.db.insert('projectFiles', { projectId, ...(await file(path, text)), version: 1, deleted, updatedAt: now, updatedBy: alice.user._id });
+    });
+  const legacyPackage = JSON.stringify({ name: 'film', projectId: 'p_film', cloudProjectId: 'legacy', main: 'index.tsx' }, null, 2) + '\n';
+
+  const film = await insertProject('My Film: Cut 2');
+  await insertRow(film, 'index.tsx', 'legacy');
+  await insertRow(film, 'package.json', legacyPackage);
+  await insertRow(film, 'gone.tsx', '', true);
+  const archived = await insertProject('Old', true);
+  await insertRow(archived, 'index.tsx', 'x');
+  // A project the desktop already moved and pushed, under its on-disk name: skipped whole.
+  const pushed = await insertProject('Pushed');
+  await insertRow(pushed, 'index.tsx', 'stale');
+  await insertRow(pushed, 'package.json', JSON.stringify({ projectId: 'p_pushed', cloudProjectId: 'legacy2' }, null, 2) + '\n');
+  await alice.as.mutation(api.files.write, { organizationId: alice.organizationId, expectedVersion: null, ...(await file('projects/pushed-renamed/package.json', JSON.stringify({ projectId: 'p_pushed' }, null, 2) + '\n')) });
+  // A path that differs only by case from what the workspace holds is left alone.
+  await alice.as.mutation(api.files.write, { organizationId: alice.organizationId, expectedVersion: null, ...(await file('projects/my-film-cut-2/INDEX.tsx', 'theirs')) });
+
+  expect(await t.mutation(internal.migrations.projectsToWorkspace, {})).toEqual({ projects: 3, copied: 1, skipped: 1, skippedProjects: 1 });
+  const listed = await alice.as.query(api.files.list, { organizationId: alice.organizationId });
+  expect(listed.map((f) => f.path).sort()).toEqual(['projects/my-film-cut-2/INDEX.tsx', 'projects/my-film-cut-2/package.json', 'projects/pushed-renamed/package.json']);
+  const copied = await alice.as.query(api.files.get, { organizationId: alice.organizationId, path: 'projects/my-film-cut-2/package.json' });
+  // Written the way the desktop writes package.json, so the two copies agree byte for byte.
+  expect(copied?.text).toBe(JSON.stringify({ name: 'film', projectId: 'p_film', main: 'index.tsx' }, null, 2) + '\n');
+  expect(copied?.hash).toBe(await sha256(copied!.text));
+  // Running it again copies nothing.
+  expect(await t.mutation(internal.migrations.projectsToWorkspace, {})).toEqual({ projects: 3, copied: 0, skipped: 0, skippedProjects: 2 });
+});
+
+test('sha256Hex matches the platform digest', async () => {
+  const { sha256Hex } = await import('../convex/lib/sha256');
+  for (const text of ['', 'abc', 'x'.repeat(55), 'x'.repeat(56), 'x'.repeat(64), 'héllo wörld\n'.repeat(40)]) {
+    expect(sha256Hex(text)).toBe(await sha256(text));
+  }
 });

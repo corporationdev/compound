@@ -3,13 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // The main process's view of every checkout it keeps in sync: one Convex
-// client, one `ProjectSync` per open cloud project, status pushed to the
-// window as events. The renderer says which folder belongs to which cloud
-// project and hands over the signed native session it holds; JWTs for the
-// Convex connection are minted from that session here.
+// client, one `WorkspaceSync` per open workspace folder, status pushed to
+// the window as events. The renderer says which folder is which
+// organization's workspace and hands over the signed native session it
+// holds; JWTs for the Convex connection are minted from that session here.
 
-import { mkdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 
 import type { BrowserWindow } from "electron";
 
@@ -17,17 +16,17 @@ import { authRequest, cloudConfig } from "../cloud";
 import { MAIN_CHANNELS } from "../main-channels";
 import { mainBridge } from "../main-manager";
 import { ConvexSyncBackend } from "./convex-backend";
-import { ProjectSync, publishFolder } from "./project-sync";
+import { WorkspaceSync } from "./workspace-sync";
 
-import type { SyncStatus } from "./project-sync";
+import type { SyncStatus } from "./workspace-sync";
 import type { SyncBackend } from "./backend";
 
-export type SyncStartRequest = { dir: string; projectId: string; sessionToken: string };
+export type SyncStartRequest = { dir: string; organizationId: string; sessionToken: string };
 
 export class SyncManager {
   private backend: ConvexSyncBackend | SyncBackend | undefined;
   private sessionToken: string | null = null;
-  private readonly syncs = new Map<string, ProjectSync>();
+  private readonly syncs = new Map<string, WorkspaceSync>();
   private window: BrowserWindow | null = null;
 
   /** Tests hand in their own backend; the app builds a Convex one on first use. */
@@ -67,18 +66,23 @@ export class SyncManager {
     return this.syncs.get(dir)?.status ?? null;
   }
 
-  /** Starts keeping `dir` in step with `projectId`; a folder already syncing that project is left alone. */
-  async start({ dir, projectId, sessionToken }: SyncStartRequest): Promise<SyncStatus> {
+  /**
+   * Starts keeping `dir` in step with the organization's workspace; a folder
+   * already syncing it is left alone. A folder with files and no sync
+   * history has them pushed up as creates by the engine's startup
+   * reconcile, so binding a folder for the first time is this same call.
+   */
+  async start({ dir, organizationId, sessionToken }: SyncStartRequest): Promise<SyncStatus> {
     const existing = this.syncs.get(dir);
-    if (existing && existing.projectId === projectId) {
+    if (existing && existing.organizationId === organizationId) {
       this.sessionToken = sessionToken;
       return existing.status;
     }
     if (existing) await this.stop(dir);
     const backend = await this.ensureBackend(sessionToken);
-    const sync = new ProjectSync({
+    const sync = new WorkspaceSync({
       dir,
-      projectId,
+      organizationId,
       backend,
       onStatus: (status) => this.emit(MAIN_CHANNELS.SYNC_STATUS, { dir, status }),
       onConflict: (notice) => this.emit(MAIN_CHANNELS.SYNC_CONFLICT, { dir, ...notice }),
@@ -105,26 +109,6 @@ export class SyncManager {
     await Promise.all([...this.syncs.keys()].map((dir) => this.stop(dir)));
   }
 
-  /** Pushes every syncable file of a local folder up as the project's rows, then starts syncing it. */
-  async publish({ dir, projectId, sessionToken }: SyncStartRequest): Promise<{ files: number; status: SyncStatus }> {
-    const backend = await this.ensureBackend(sessionToken);
-    await this.stop(dir);
-    const files = await publishFolder(dir, projectId, backend);
-    const status = await this.start({ dir, projectId, sessionToken });
-    return { files, status };
-  }
-
-  /**
-   * Gives a cloud project a folder on this machine: an empty one under
-   * `root`, filled by the first snapshot. Returns the folder.
-   */
-  async materialize({ root, projectId, name, sessionToken }: { root: string; projectId: string; name: string; sessionToken: string }): Promise<string> {
-    const dir = await freeFolder(root, folderName(name));
-    await mkdir(dir, { recursive: true });
-    await this.start({ dir, projectId, sessionToken });
-    return dir;
-  }
-
   private emit<C extends typeof MAIN_CHANNELS.SYNC_STATUS | typeof MAIN_CHANNELS.SYNC_CONFLICT>(
     channel: C,
     data: C extends typeof MAIN_CHANNELS.SYNC_STATUS
@@ -134,21 +118,6 @@ export class SyncManager {
     if (!this.window || this.window.isDestroyed()) return;
     mainBridge.emit(this.window, channel, data as never);
   }
-}
-
-/** A folder name a project may be given on disk: what the record calls it, made safe. */
-export function folderName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|\x00-\x1f]/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "");
-  return cleaned || "project";
-}
-
-/** `base`, or `base-2`, `base-3`... when the folder is taken. */
-async function freeFolder(root: string, base: string): Promise<string> {
-  const { stat } = await import("node:fs/promises");
-  const taken = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
-  let name = base;
-  for (let i = 2; await taken(join(root, name)); i++) name = `${base}-${i}`;
-  return join(root, name);
 }
 
 export const syncManager = new SyncManager();

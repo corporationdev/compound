@@ -1,6 +1,6 @@
 import { ConvexError, v } from 'convex/values';
 import { internalMutation, mutation, query } from './_generated/server';
-import { requireMember, requireProjectMember } from './lib/membership';
+import { requireMember } from './lib/membership';
 import { originalKeyFor } from '../assets-key';
 
 export const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
@@ -21,16 +21,15 @@ function validate(args: { sampleId: string; size: number; mimeType: string; name
  */
 export const register = mutation({
   args: {
-    projectId: v.id('projects'),
+    organizationId: v.string(),
     sampleId: v.string(),
     size: v.number(),
     mimeType: v.string(),
     name: v.string(),
   },
-  handler: async (ctx, { projectId, ...args }) => {
-    const { user, project } = await requireProjectMember(ctx, projectId);
+  handler: async (ctx, { organizationId, ...args }) => {
+    const { user } = await requireMember(ctx, organizationId);
     validate(args);
-    const organizationId = project.organizationId;
     const existing = await ctx.db
       .query('assets')
       .withIndex('by_org_sample', (q) => q.eq('organizationId', organizationId).eq('sampleId', args.sampleId))
@@ -56,12 +55,12 @@ export const register = mutation({
 });
 
 export const get = query({
-  args: { projectId: v.id('projects'), sampleId: v.string() },
-  handler: async (ctx, { projectId, sampleId }) => {
-    const { project } = await requireProjectMember(ctx, projectId);
+  args: { organizationId: v.string(), sampleId: v.string() },
+  handler: async (ctx, { organizationId, sampleId }) => {
+    await requireMember(ctx, organizationId);
     return await ctx.db
       .query('assets')
-      .withIndex('by_org_sample', (q) => q.eq('organizationId', project.organizationId).eq('sampleId', sampleId))
+      .withIndex('by_org_sample', (q) => q.eq('organizationId', organizationId).eq('sampleId', sampleId))
       .unique();
   },
 });
