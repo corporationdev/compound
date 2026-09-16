@@ -6,6 +6,9 @@
 // something else, bold, italic, underline, strike, code, link. Shown while
 // something is selected in the body and hidden the moment it is not.
 
+import { NodeSelection } from "@tiptap/pm/state";
+import { DocumentBlockSelection } from "./document-block-selection";
+import { CellSelection } from "@tiptap/pm/tables";
 import { posToDOMRect, type Editor } from "@tiptap/core";
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 
@@ -49,12 +52,15 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
   const [rect, setRect] = createSignal<DOMRect | null>(null);
   const [tick, setTick] = createSignal(0);
   const [linkDraft, setLinkDraft] = createSignal<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = createSignal(false);
+  let toolbar: HTMLDivElement | undefined;
+  let blurTimer: ReturnType<typeof setTimeout> | undefined;
 
   const update = () => {
     const { editor } = props;
     const { from, to, empty } = editor.state.selection;
-    const focused = editor.isFocused || linkDraft() !== null;
-    if (empty || !focused || editor.isActive("codeBlock")) {
+    const focused = editor.isFocused || linkDraft() !== null || dropdownOpen() || !!toolbar?.contains(document.activeElement);
+    if ((empty && linkDraft() === null) || !focused || editor.isActive("codeBlock") || editor.state.selection instanceof NodeSelection || editor.state.selection instanceof DocumentBlockSelection || editor.state.selection instanceof CellSelection) {
       setRect(null);
       setLinkDraft(null);
       return;
@@ -63,15 +69,41 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
     setTick((value) => value + 1);
   };
 
+  const blur = () => { clearTimeout(blurTimer); blurTimer = setTimeout(update, 120); };
+  const openLink = () => {
+    if (props.editor.isActive("link")) props.editor.commands.extendMarkRange("link");
+    setLinkDraft((props.editor.getAttributes("link").href as string | undefined) ?? "");
+    update();
+  };
+  const keydown = (event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault(); event.stopPropagation(); openLink();
+    }
+  };
+  const outside = (event: PointerEvent) => {
+    if (linkDraft() !== null && event.target instanceof Node && !toolbar?.contains(event.target)) {
+      setLinkDraft(null);
+      setRect(null);
+    }
+  };
   onMount(() => {
+    document.addEventListener("pointerdown", outside, true);
     props.editor.on("selectionUpdate", update);
     props.editor.on("transaction", update);
-    props.editor.on("blur", () => setTimeout(update, 120));
+    props.editor.on("blur", blur);
+    props.editor.view.dom.addEventListener("keydown", keydown);
     props.editor.on("focus", update);
     window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
     onCleanup(() => {
+      document.removeEventListener("pointerdown", outside, true);
       props.editor.off("selectionUpdate", update);
       props.editor.off("transaction", update);
+      props.editor.off("blur", blur);
+      props.editor.off("focus", update);
+      props.editor.view.dom.removeEventListener("keydown", keydown);
+      clearTimeout(blurTimer);
+      window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     });
   });
@@ -86,8 +118,6 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
     return BLOCKS.find((block) => block.active(props.editor)) ?? BLOCKS[0]!;
   };
 
-  let toolbar: HTMLDivElement | undefined;
-
   // Centred over the selection and kept on screen; the toolbar is as wide
   // as its buttons, so its width is measured rather than assumed.
   const style = () => {
@@ -96,13 +126,14 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
     tick();
     const width = toolbar?.offsetWidth ?? 320;
     const left = Math.max(8, Math.min(box.left + box.width / 2 - width / 2, window.innerWidth - width - 8));
-    const top = box.top - 44;
+    const top = box.top < 52 ? box.bottom + 8 : box.top - 44;
     return { left: `${left}px`, top: `${Math.max(8, top)}px` };
   };
 
   const applyLink = (href: string) => {
     const value = href.trim();
-    if (value) props.editor.chain().focus().extendMarkRange("link").setLink({ href: value }).run();
+    if (value && props.editor.state.selection.empty) props.editor.chain().focus().insertContent({ type: "text", text: value, marks: [{ type: "link", attrs: { href: value } }] }).run();
+    else if (value) props.editor.chain().focus().extendMarkRange("link").setLink({ href: value }).run();
     else props.editor.chain().focus().extendMarkRange("link").unsetLink().run();
     setLinkDraft(null);
   };
@@ -120,28 +151,33 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
           // The selection must survive a click on the toolbar.
           if ((event.target as HTMLElement).tagName !== "INPUT") event.preventDefault();
         }}
-        class="fixed z-50 flex h-9 w-max items-center gap-0.5 rounded-lg border border-border-strong bg-popover px-1 shadow-lg"
+        class="fixed z-50 flex h-9 max-w-[calc(100vw-16px)] w-max items-center gap-0.5 rounded-lg border border-border-strong bg-popover px-1 shadow-lg"
       >
         <Show
           when={linkDraft() === null}
           fallback={
+            <div class="flex min-w-0 items-center gap-1">
             <input
-              ref={(el) => queueMicrotask(() => el.focus())}
+              ref={(el) => queueMicrotask(() => { el.focus(); setTick((value) => value + 1); })}
               type="text"
               value={linkDraft() ?? ""}
+              onInput={(event) => setLinkDraft(event.currentTarget.value)}
               placeholder="Paste a link, or a page path"
               aria-label="Link"
               onKeyDown={(event) => {
                 event.stopPropagation();
-                if (event.key === "Enter") applyLink(event.currentTarget.value);
-                if (event.key === "Escape") setLinkDraft(null);
+                if (event.key === "Enter") { event.preventDefault(); applyLink(event.currentTarget.value); }
+                if (event.key === "Escape") { event.preventDefault(); setLinkDraft(null); props.editor.commands.focus(); }
               }}
-              onBlur={(event) => applyLink(event.currentTarget.value)}
               class="h-7 w-72 min-w-0 rounded-md bg-input px-2 text-xs text-foreground outline-none ring-1 ring-ring select-text"
             />
+            <button type="button" class={cx(button, "px-2")} onClick={() => applyLink(linkDraft() ?? "")}>Apply</button>
+            <Show when={props.editor.isActive("link")}><button type="button" class={cx(button, "px-2")} onClick={() => applyLink("")}>Remove</button></Show>
+            <button type="button" aria-label="Cancel link" class={button} onClick={() => { setLinkDraft(null); props.editor.commands.focus(); }}>×</button>
+            </div>
           }
         >
-          <DropdownMenu placement="bottom-start">
+          <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen} placement="bottom-start">
             <DropdownMenuTrigger as="button" type="button" class={cx(button, "gap-1 pl-2")}>
               <span>{currentBlock().label}</span>
               <Icon name="chevron-down" class="size-4" />
@@ -194,7 +230,7 @@ export function BubbleMenu(props: { editor: Editor; hidden?: boolean }) {
             title="Link ⌘K"
             aria-label="Link"
             aria-pressed={active("link")}
-            onClick={() => setLinkDraft((props.editor.getAttributes("link").href as string | undefined) ?? "")}
+            onClick={openLink}
             class={cx(button, "gap-1 px-2", active("link") && "bg-accent text-foreground")}
           >
             <Icon name="external-link" class="size-4" />

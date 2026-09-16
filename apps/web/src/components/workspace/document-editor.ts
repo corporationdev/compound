@@ -14,6 +14,7 @@ import { TaskList } from '@tiptap/extension-task-list';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
+import { DocumentBlocks } from './document-blocks';
 
 export type DocumentEditorOptions = {
   /** The body as markdown. */
@@ -27,7 +28,7 @@ export type DocumentEditorOptions = {
   extensions?: AnyExtension[];
 };
 
-export function createDocumentEditor(element: HTMLElement, options: DocumentEditorOptions): Editor {
+export function createDocumentEditor(element: HTMLElement | null, options: DocumentEditorOptions): Editor {
   return new Editor({
     element,
     content: options.content,
@@ -37,8 +38,15 @@ export function createDocumentEditor(element: HTMLElement, options: DocumentEdit
         link: { openOnClick: false, autolink: true },
       }),
       Markdown,
-      Placeholder.configure({ placeholder: options.placeholder ?? "Start writing, or type '/' for blocks" }),
-      TableKit.configure({ table: { resizable: false } }),
+      DocumentBlocks,
+      Placeholder.configure({
+        placeholder: ({ node }) => node.type.name === 'heading'
+          ? `Heading ${node.attrs.level}`
+          : options.placeholder ?? "Type '/' for commands",
+        showOnlyCurrent: true,
+        includeChildren: true,
+      }),
+      TableKit.configure({ table: { resizable: false, allowTableNodeSelection: true } }),
       TaskList,
       TaskItem.configure({ nested: true }),
       ...(options.extensions ?? []),

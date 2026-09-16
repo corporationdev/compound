@@ -14,10 +14,9 @@ import { Node, createAtomBlockMarkdownSpec, mergeAttributes } from "@tiptap/core
 import { Show } from "solid-js";
 import { render } from "solid-js/web";
 
-import { Icon } from "@/components/ui/icon";
-import { baseName, workspaceEntries, workspaceRoute } from "@/lib/workspace";
+import { workspaceEntries, workspaceRoute } from "@/lib/workspace";
 
-import { DatabaseGrid, createDatabase } from "./database-grid";
+import { DatabaseGrid } from "./database-grid";
 
 export const DATABASE_NODE = "database";
 
@@ -27,29 +26,17 @@ const open = (path: string) => {
 };
 
 function DatabaseEmbed(props: { path: string; selected: () => boolean }) {
-  const db = createDatabase(() => props.path);
   const exists = () => (workspaceEntries() ?? []).some((entry) => entry.path === props.path && entry.kind === "directory");
   return (
     <div
       class="database-embed my-2 rounded-lg"
       classList={{ "ring-1 ring-ring": props.selected() }}
     >
-      <div class="mb-2 flex items-center gap-2">
-        <Icon name="page-table" class="size-5 text-muted-foreground" />
-        <button
-          type="button"
-          onClick={() => open(props.path)}
-          class="min-w-0 truncate text-left text-sm font-450 text-foreground hover:underline"
-        >
-          {db.schema.latest?.name ?? baseName(props.path)}
-        </button>
-        <span class="text-xs text-muted-foreground">{db.count()} row{db.count() === 1 ? "" : "s"}</span>
-      </div>
       <Show
         when={exists()}
         fallback={<p class="rounded-lg border border-dashed border-border-strong px-3 py-2 text-xs text-muted-foreground">No database at {props.path}.</p>}
       >
-        <DatabaseGrid path={props.path} onOpen={open} header={false} />
+        <DatabaseGrid path={props.path} onOpen={open} onOpenTitle={() => open(props.path)} header={false} />
       </Show>
     </div>
   );

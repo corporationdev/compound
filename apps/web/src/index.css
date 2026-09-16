@@ -343,13 +343,6 @@
 .workspace-doc > * + * {
   margin-top: 0.5em;
 }
-.workspace-doc p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  color: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
 .workspace-doc h1,
 .workspace-doc h2,
 .workspace-doc h3,
@@ -443,27 +436,28 @@
   border-top: 1px solid var(--border-strong);
   margin: 1.5em 0;
 }
-.workspace-doc table {
+/* Embedded databases own their grid layout; prose table spacing must not leak in. */
+.workspace-doc table:not([data-type="database"] *) {
   border-collapse: collapse;
   width: 100%;
   font-size: 13px;
   table-layout: fixed;
   margin: 0.75em 0;
 }
-.workspace-doc th,
-.workspace-doc td {
+.workspace-doc th:not([data-type="database"] *),
+.workspace-doc td:not([data-type="database"] *) {
   border: 1px solid var(--border-strong);
   padding: 0.35em 0.6em;
   vertical-align: top;
   text-align: left;
   position: relative;
 }
-.workspace-doc th {
+.workspace-doc th:not([data-type="database"] *) {
   background: var(--accent);
   font-weight: var(--font-weight-strong);
 }
-.workspace-doc th > p,
-.workspace-doc td > p {
+.workspace-doc th:not([data-type="database"] *) > p,
+.workspace-doc td:not([data-type="database"] *) > p {
   margin: 0;
 }
 .workspace-doc .selectedCell::after {
@@ -496,3 +490,45 @@
 .workspace-doc div[data-type="database"].ProseMirror-selectednode > .database-embed {
   box-shadow: 0 0 0 2px var(--ring);
 }
+
+/* Editor menus use explicit line heights and nonshrinking rows at every UI scale. */
+.workspace-slash-menu {
+  position: fixed; z-index: 70; display: flex; flex-direction: column;
+  overflow: hidden; border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--popover); color: var(--foreground);
+  box-shadow: 0 12px 40px #0003, 0 2px 8px #0002;
+}
+.workspace-slash-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 5px; }
+.workspace-slash-group { padding: 9px 9px 5px; font-size: 11px; line-height: 18px; font-weight: 600; color: var(--muted-foreground); }
+.workspace-slash-option {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 51px;
+  border-radius: 6px; padding: 7px 9px; text-align: left; cursor: pointer;
+}
+.workspace-slash-option.is-selected { background: var(--accent); }
+.workspace-slash-icon {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px;
+  border: 1px solid var(--border-strong); border-radius: 5px; background: var(--background);
+  font-size: 19px; font-weight: 500; line-height: 1; color: var(--foreground);
+}
+.workspace-slash-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
+.workspace-slash-title { font-size: 14px; line-height: 19px; font-weight: 500; }
+.workspace-slash-description { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.workspace-slash-enter { color: var(--muted-foreground); font-size: 14px; }
+.workspace-slash-footer { flex: 0 0 auto; display: flex; justify-content: space-between; padding: 8px 12px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 10px; line-height: 15px; }
+.workspace-slash-empty { padding: 20px 12px; font-size: 13px; color: var(--muted-foreground); }
+.workspace-document-host .workspace-doc { min-height: 160px; }
+.workspace-doc .is-empty::before { content: attr(data-placeholder); color: var(--muted-foreground); opacity: .65; float: left; height: 0; pointer-events: none; }
+.workspace-doc .ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
+
+.workspace-block-gutter { position: fixed; z-index: 35; display: flex; align-items: center; height: 25px; }
+.workspace-block-button { display: grid; place-items: center; width: 23px; height: 25px; border-radius: 4px; color: var(--muted-foreground); cursor: pointer; }
+.workspace-block-button:hover { color: var(--foreground); background: var(--accent); }
+.workspace-block-button[draggable] { cursor: grab; }
+.workspace-block-grip { font-size: 23px; line-height: 20px; }
+.workspace-block-drop { position: fixed; z-index: 60; height: 3px; border-radius: 2px; background: var(--primary); pointer-events: none; }
+
+.workspace-table-toolbar { position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--popover); box-shadow: 0 3px 12px #0002; }
+.workspace-table-toolbar button { display: flex; align-items: center; justify-content: center; min-width: 28px; height: 25px; padding: 0 8px; border-radius: 4px; font-size: 12px; color: var(--muted-foreground); cursor: pointer; }
+.workspace-table-toolbar button:hover { color: var(--foreground); background: var(--accent); }
+
+.workspace-doc .workspace-selected-block { background: color-mix(in oklab, var(--primary) 16%, transparent); outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 3px; }

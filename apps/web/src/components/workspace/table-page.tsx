@@ -21,15 +21,13 @@ export function TablePage(props: { path: string }) {
 
   return (
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div class="mx-auto flex w-full max-w-3xl flex-col px-12 pb-40 pt-14">
+      <div class="mx-auto flex w-full max-w-6xl flex-col px-6 pb-40 pt-14 sm:px-12">
         <WorkspaceBreadcrumbs path={props.path} />
         <h1 class="mt-3 min-w-0 truncate text-6xl font-450 leading-tight text-foreground">{title()}</h1>
         <div class="mt-8">
           <DatabaseGrid path={props.path} onOpen={(path) => navigate(workspaceRoute(path))} />
         </div>
-        <p class="mt-3 text-xxs text-muted-foreground/70">
-          Each row is a markdown file in this folder. Columns come from <code class="font-mono">_table.yaml</code> and the rows' properties.
-        </p>
+
       </div>
     </div>
   );

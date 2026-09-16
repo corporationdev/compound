@@ -30,12 +30,16 @@ import {
   workspaceRoute,
   writeWorkspaceFile,
 } from "@/lib/workspace";
-import { buildTree } from "./tree-model";
+import { buildTree, withoutProjects } from "./tree-model";
+import { workspaceLinkPages } from "./page-link-items";
 
+import { BlockMenu } from "./block-menu";
+import { TableMenu } from "./table-menu";
 import { BubbleMenu } from "./bubble-menu";
 import { DATABASE_NODE, DatabaseBlock } from "./database-block";
 import { loadSchema } from "./database-grid";
 import { createDocumentEditor, replaceContent } from "./document-editor";
+import { createDocumentPersistence } from "./document-persistence";
 import { SlashMenu, blockItems, createSlashExtension, type SlashItem, type SlashState } from "./slash-menu";
 import { joinDocument, splitDocument, TABLE_SCHEMA_FILE, type Properties } from "./markdown";
 import { PropertiesPanel } from "./properties";
@@ -59,45 +63,21 @@ export function DocumentPage(props: { path: string }) {
 
   let host: HTMLDivElement | undefined;
   let editor: Editor | undefined;
-  let lastWritten = "";
-  let dirty = false;
+  let disposed = false;
+  let persistence: ReturnType<typeof createDocumentPersistence> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let saving: Promise<void> = Promise.resolve();
 
   const serialize = (): string => joinDocument(properties(), editor?.getMarkdown() ?? "");
-
-  const save = (): Promise<void> => {
-    saving = saving.then(async () => {
-      if (!editor) return;
-      const text = serialize();
-      dirty = false;
-      if (text === lastWritten) return;
-      const base = lastWritten;
-      lastWritten = text;
-      try {
-        const result = await writeWorkspaceFile(props.path, text, base);
-        if (result.status === "merged") {
-          // Someone else's edit landed while this one was typed: what is on
-          // disk now is the merge, and it is what the page shows.
-          lastWritten = result.text;
-          const { properties: found, body } = splitDocument(result.text);
-          setProperties(found);
-          replaceContent(editor, body);
-          if (result.conflicted) {
-            toast.warning("Merged an outside edit to this page", { description: "Where both changed the same lines, yours were kept." });
-          }
-        }
-      } catch (error) {
-        dirty = true;
-        lastWritten = base;
-        toast.error("Could not save the document", { description: (error as Error).message });
-      }
-    });
-    return saving;
+  const applyDocument = (text: string) => {
+    if (!editor) return;
+    const { properties: found, body } = splitDocument(text);
+    setProperties(found);
+    replaceContent(editor, body);
   };
+  const save = (): Promise<boolean> => persistence?.save() ?? Promise.resolve(true);
 
   const scheduleSave = () => {
-    dirty = true;
+    persistence?.markDirty();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => void save(), SAVE_DELAY_MS);
   };
@@ -109,11 +89,17 @@ export function DocumentPage(props: { path: string }) {
     } catch {
       file = null;
     }
-    if (!host) return;
+    if (!host || disposed) return;
     if (!file) return setState("missing");
     if (file.kind === "binary") return setState("binary");
     const { properties: found, body } = splitDocument(file.text);
-    lastWritten = file.text;
+    persistence = createDocumentPersistence(file.text, {
+      read: serialize,
+      apply: applyDocument,
+      write: (text, base) => writeWorkspaceFile(props.path, text, base),
+      onError: (error) => toast.error("Could not save the document", { description: (error as Error).message }),
+      onConflict: () => toast.warning("Merged an outside edit to this page", { description: "Where both changed the same lines, yours were kept." }),
+    });
     setProperties(found);
     editor = createDocumentEditor(host, {
       content: body,
@@ -133,7 +119,16 @@ export function DocumentPage(props: { path: string }) {
     }
     const parent = parentPath(props.path);
     const target = href.startsWith("/") ? href.slice(1) : parent ? `${parent}/${href}` : href;
-    navigate(workspaceRoute(decodeURI(target).replace(/\/+$/, "")));
+    try {
+      const parts: string[] = [];
+      for (const part of decodeURIComponent(target).split("/")) {
+        if (part === "..") parts.pop();
+        else if (part && part !== ".") parts.push(part);
+      }
+      navigate(workspaceRoute(parts.join("/")));
+    } catch {
+      toast.error("Could not open this page link");
+    }
   };
 
   /** The slash menu: the block items, plus making a page or a database beside this one. */
@@ -149,13 +144,34 @@ export function DocumentPage(props: { path: string }) {
         const parent = parentPath(props.path);
         const created = await createWorkspaceEntry(parent ? `${parent}/Untitled.md` : "Untitled.md", "file");
         const name = baseName(created);
-        current.chain().focus().insertContent({ type: "text", text: stemOf(name), marks: [{ type: "link", attrs: { href: encodeURI(name) } }] }).run();
-        await save();
-        navigate(workspaceRoute(created));
+        current.chain().focus().insertContent({ type: "text", text: stemOf(name), marks: [{ type: "link", attrs: { href: encodeURIComponent(name) } }] }).run();
+        if (await save()) navigate(workspaceRoute(created));
       },
     },
     {
+      id: "link-to-page",
+      title: "Link to page",
+      description: "Link to an existing page in your workspace",
+      icon: "page",
+      keywords: ["link", "page", "mention", "existing"],
+      picker: {
+        title: "Select a page",
+        placeholder: "Search for a page…",
+        noun: "pages",
+        items: () => workspaceLinkPages(workspaceEntries() ?? [], props.path).map((page): SlashItem => ({
+          id: `link:${page.path}`,
+          title: stemOf(page.name),
+          description: parentPath(page.path) || "Workspace",
+          icon: "page",
+          keywords: [page.path.toLowerCase()],
+          run: (current) => current.chain().focus().insertContent({ type: "text", text: stemOf(page.name), marks: [{ type: "link", attrs: { href: `/${page.path.split("/").map(encodeURIComponent).join("/")}` } }] }).run(),
+        })),
+      },
+      run: () => {},
+    },
+    {
       id: "database",
+      group: "Databases",
       title: "New database",
       description: "A table in this page; its rows are pages",
       icon: "page-table",
@@ -168,15 +184,30 @@ export function DocumentPage(props: { path: string }) {
         current.chain().focus().insertContent([{ type: DATABASE_NODE, attrs: { path: folder } }, { type: "paragraph" }]).run();
       },
     },
-    // Every database already in the workspace, to embed here.
-    ...databaseFolders().map((folder): SlashItem => ({
-      id: `embed:${folder.path}`,
-      title: `Database: ${folder.name}`,
-      description: `Show ${folder.path} in this page`,
+    {
+      id: "linked-database",
+      title: "Linked database",
+      description: "Show an existing database on this page",
       icon: "page-table",
-      keywords: ["embed", "linked", "database", folder.name.toLowerCase()],
-      run: (current) => current.chain().focus().insertContent([{ type: DATABASE_NODE, attrs: { path: folder.path } }, { type: "paragraph" }]).run(),
-    })),
+      group: "Databases",
+      keywords: ["embed", "linked", "database", "existing"],
+      picker: {
+        title: "Select a database",
+        placeholder: "Search databases…",
+        noun: "databases",
+        items: () => databaseFolders().map((folder): SlashItem => ({
+          id: `embed:${folder.path}`,
+          title: folder.name,
+          description: folder.path,
+          icon: "page-table",
+          keywords: [folder.path.toLowerCase()],
+          run: (current) => current.chain().focus().insertContent([{ type: DATABASE_NODE, attrs: { path: folder.path } }, { type: "paragraph" }]).run(),
+        })),
+      },
+      run: () => {},
+    },
+    { id: "duplicate", title: "Duplicate block", description: "Make a copy of this block", icon: "page", group: "Actions", keywords: ["copy"], run: (current) => current.chain().focus().duplicateDocumentBlock().run() },
+    { id: "delete", title: "Delete block", description: "Remove this block", icon: "trash", group: "Actions", keywords: ["remove"], run: (current) => current.chain().focus().deleteDocumentBlock().run() },
   ];
 
   /** Every table folder in the workspace, by path. */
@@ -184,38 +215,36 @@ export function DocumentPage(props: { path: string }) {
     const found: Array<{ path: string; name: string }> = [];
     const walk = (nodes: ReturnType<typeof buildTree>): void => {
       for (const node of nodes) {
-        if (node.kind !== "directory") continue;
+        if (node.kind !== "directory" || node.name.startsWith(".") || node.name.startsWith("_")) continue;
         if (node.table) found.push({ path: node.path, name: node.name });
         walk(node.children);
       }
     };
-    walk(buildTree(workspaceEntries() ?? []));
+    walk(withoutProjects(buildTree(workspaceEntries() ?? [])));
     return found;
   };
 
   onMount(() => void load());
 
   onCleanup(() => {
+    disposed = true;
     clearTimeout(saveTimer);
+    persistence?.stopWatching();
     // A page that went away (deleted here or elsewhere) is not written back into being.
     const stillThere = (workspaceEntries() ?? []).some((entry) => entry.path === props.path);
-    if (dirty && stillThere) void save();
-    saving.finally(() => editor?.destroy());
+    if (!stillThere) persistence?.cancelFutureWrites();
+    const flushed = persistence?.dirty && stillThere ? save() : persistence?.pending;
+    void (flushed ?? Promise.resolve()).finally(() => editor?.destroy());
   });
 
-  // The file changed on disk. Not by us: our writes come back with the text
-  // we sent, which matches `lastWritten`. While an edit here is still
-  // waiting to be written, nothing is done now: the save that follows
-  // merges against the text on disk and shows the result.
+  // A pending local draft is merged by the next save. Clean pages accept
+  // outside changes only if no newer edit/write happened during the read.
   onCleanup(onWorkspaceChange(async (changed) => {
-    if (changed !== props.path || !editor) return;
-    await saving;
-    const file = await readWorkspaceFile(props.path).catch(() => null);
-    if (!file || file.kind !== "text" || file.text === lastWritten || dirty) return;
-    lastWritten = file.text;
-    const { properties: found, body } = splitDocument(file.text);
-    setProperties(found);
-    replaceContent(editor, body);
+    if (changed !== props.path || !editor || disposed) return;
+    await persistence?.refresh(async () => {
+      const file = await readWorkspaceFile(props.path).catch(() => null);
+      return file?.kind === "text" ? file.text : null;
+    });
   }));
 
   const changeProperties = (next: Properties | null) => {
@@ -232,7 +261,7 @@ export function DocumentPage(props: { path: string }) {
     const parent = parentPath(props.path);
     const name = extension ? `${next}.${extension}` : next;
     const target = parent ? `${parent}/${name}` : name;
-    await save();
+    if (!(await save())) return;
     try {
       await renameWorkspaceEntry(props.path, target);
       navigate(workspaceRoute(target), { replace: true });
@@ -246,7 +275,7 @@ export function DocumentPage(props: { path: string }) {
       // A click on the page's empty space below the text puts the cursor at the end.
       if (event.target === event.currentTarget) editor?.commands.focus("end");
     }}>
-      <div class="mx-auto flex w-full max-w-3xl flex-col px-12 pb-40 pt-14">
+      <div class="mx-auto flex w-full max-w-3xl flex-col px-8 pb-40 pt-14 sm:px-12" onClick={(event) => { if (event.target === event.currentTarget) editor?.commands.focus("end"); }}>
         <WorkspaceBreadcrumbs path={props.path} />
         <input
           type="text"
@@ -283,16 +312,17 @@ export function DocumentPage(props: { path: string }) {
         </Switch>
         <div
           ref={host}
-          class="mt-6 min-h-40"
+          class="workspace-document-host relative mt-6 min-h-40"
           classList={{ hidden: state() !== "ready" && state() !== "loading" }}
         />
         <Show when={editorReady()}>
-          {(ready) => <BubbleMenu editor={ready()} hidden={slash() !== null} />}
+          {(ready) => <>
+            <BubbleMenu editor={ready()} hidden={slash() !== null} />
+            <BlockMenu editor={ready()} hidden={slash() !== null} />
+            <TableMenu editor={ready()} hidden={slash() !== null} />
+          </>}
         </Show>
         <SlashMenu state={slash()} keys={slashKeys} />
-        <Show when={state() === "ready"}>
-          <p class="mt-8 text-xxs text-muted-foreground/50">Type / for blocks, select text to format.</p>
-        </Show>
         <Show when={state() === "loading"}>
           <div class="flex items-center gap-2 text-xs text-muted-foreground">
             <Icon name="spinner-loader" class="size-4 animate-spin" />

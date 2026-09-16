@@ -6,15 +6,8 @@
 // name, and a value edited by its type. The type comes from the folder's
 // table schema when the document sits in a table, else from the value.
 
-import { For, Show, Switch, Match, createMemo, createSignal } from "solid-js";
+import { For, Show, Switch, Match, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
 import { Popover, PopoverContent, PopoverPortal, PopoverTrigger } from "@/components/ui/popover";
 import { cx } from "@/lib/cva";
@@ -48,7 +41,7 @@ export function schemaFor(name: string, value: unknown, schema: TableSchema | nu
 /** Property names in display order: the schema's first, then the rest as written. */
 export function propertyNames(properties: Properties | null, schema: TableSchema | null | undefined): string[] {
   const names = new Set<string>();
-  for (const name of Object.keys(schema?.properties ?? {})) if (properties && name in properties) names.add(name);
+  for (const name of Object.keys(schema?.properties ?? {})) names.add(name);
   for (const name of Object.keys(properties ?? {})) names.add(name);
   return [...names];
 }
@@ -59,6 +52,8 @@ type ValueProps = {
   onChange: (value: unknown) => void;
   /** Tighter, for a table cell. */
   compact?: boolean;
+  /** Accessible field name, especially inside a database row. */
+  label?: string;
   class?: string;
 };
 
@@ -76,7 +71,9 @@ export function PropertyValue(props: ValueProps) {
     event.stopPropagation();
     if (event.key === "Enter") (event.currentTarget as HTMLInputElement).blur();
     if (event.key === "Escape") {
-      (event.currentTarget as HTMLInputElement).value = propertyToText(props.value);
+      const input = event.currentTarget as HTMLInputElement;
+      const text = propertyToText(props.value);
+      input.value = input.type === "date" ? text.slice(0, 10) : text;
       (event.currentTarget as HTMLInputElement).blur();
     }
   };
@@ -84,9 +81,10 @@ export function PropertyValue(props: ValueProps) {
   return (
     <Switch>
       <Match when={props.schema.type === "checkbox"}>
-        <label class={cx("flex h-6 flex-1 items-center px-1.5", props.class)}>
+        <label class={cx("flex flex-1 items-center px-1.5", props.compact ? "min-h-8 cursor-pointer" : "h-6", props.class)}>
           <input
             type="checkbox"
+            aria-label={props.label ?? "Checkbox value"}
             checked={props.value === true}
             onChange={(event) => props.onChange(event.currentTarget.checked)}
             class="size-3.5 accent-primary"
@@ -94,81 +92,105 @@ export function PropertyValue(props: ValueProps) {
         </label>
       </Match>
       <Match when={props.schema.type === "select"}>
-        <SelectValueEditor value={props.value} options={props.schema.options ?? []} onChange={props.onChange} class={props.class} />
+        <SelectValueEditor value={props.value} options={props.schema.options ?? []} onChange={props.onChange} class={props.class} label={props.label} compact={props.compact} />
       </Match>
       <Match when={props.schema.type === "list"}>
-        <MultiSelectEditor value={props.value} options={props.schema.options ?? []} onChange={props.onChange} class={props.class} />
+        <MultiSelectEditor value={props.value} options={props.schema.options ?? []} onChange={props.onChange} class={props.class} label={props.label} compact={props.compact} />
       </Match>
       <Match when={props.schema.type === "date"}>
         <input
           type="date"
+          aria-label={props.label ?? "Property value"}
           value={propertyToText(props.value).slice(0, 10)}
           onChange={(event) => commitText(event.currentTarget.value)}
           onKeyDown={stop}
-          class={cx(INPUT, "[color-scheme:dark]", props.class)}
+          class={cx(INPUT, "[color-scheme:dark]", props.compact && "h-8 w-full rounded-none text-[14px]", props.compact && !props.value && "[&:not(:focus)::-webkit-datetime-edit]:text-transparent [&:not(:focus)::-webkit-calendar-picker-indicator]:opacity-0", props.class)}
         />
       </Match>
       <Match when={props.schema.type === "number"}>
         <input
           type="number"
+          aria-label={props.label ?? "Property value"}
           value={propertyToText(props.value)}
-          placeholder="Empty"
+          placeholder={props.compact ? "" : "Empty"}
           onChange={(event) => commitText(event.currentTarget.value)}
           onKeyDown={stop}
-          class={cx(INPUT, props.class)}
+          class={cx(INPUT, props.compact && "h-8 w-full rounded-none text-[14px]", props.class)}
         />
       </Match>
       <Match when={true}>
         <input
           type="text"
+          aria-label={props.label ?? "Property value"}
           value={propertyToText(props.value)}
-          placeholder="Empty"
+          placeholder={props.compact ? "" : "Empty"}
           onChange={(event) => commitText(event.currentTarget.value)}
           onKeyDown={stop}
-          class={cx(INPUT, props.class)}
+          class={cx(INPUT, props.compact && "h-8 w-full rounded-none text-[14px]", props.class)}
         />
       </Match>
     </Switch>
   );
 }
 
-/** A select property: the current value on a button, the options in a menu. */
-function SelectValueEditor(props: { value: unknown; options: string[]; onChange: (value: unknown) => void; class?: string }) {
+/** A searchable select; custom values remain ordinary frontmatter strings. */
+function SelectValueEditor(props: { value: unknown; options: string[]; onChange: (value: unknown) => void; class?: string; label?: string; compact?: boolean }) {
   const current = () => propertyToText(props.value);
-  // The value as written, even when the schema does not list it, so it can be seen and kept.
-  const options = createMemo(() => (current() && !props.options.includes(current()) ? [current(), ...props.options] : props.options));
+  const [query, setQuery] = createSignal("");
+  const [open, setOpen] = createSignal(false);
+  const [highlighted, setHighlighted] = createSignal(0);
+  const listId = createUniqueId();
+  const options = createMemo(() => [...new Set([...props.options, ...(current() ? [current()] : [])])]);
+  const matches = createMemo(() => options().filter((option) => option.toLowerCase().includes(query().trim().toLowerCase())));
+  const canCreate = () => !!query().trim() && !options().some((option) => option.toLowerCase() === query().trim().toLowerCase());
+  const candidates = () => [...matches(), ...(canCreate() ? [query().trim()] : [])];
+  const active = () => Math.min(highlighted(), candidates().length - 1);
+  const choose = (value: string) => { props.onChange(value); setOpen(false); setQuery(""); setHighlighted(0); };
   return (
-    <DropdownMenu placement="bottom-start">
-      <DropdownMenuTrigger
-        as="button"
-        type="button"
-        aria-label="Value"
-        class={cx("inline-flex h-6 min-w-0 items-center gap-1 rounded-sm px-1.5 text-xs hover:bg-accent data-[expanded]:bg-accent", current() ? "text-foreground" : "text-muted-foreground/60", props.class)}
-      >
-        <span class="truncate">{current() || "Empty"}</span>
-        <Icon name="chevron-down" class="size-4 shrink-0 text-muted-foreground" />
-      </DropdownMenuTrigger>
-      <DropdownMenuPortal>
-        <DropdownMenuContent class="w-44">
-          <DropdownMenuItem onSelect={() => props.onChange("")}>
-            <span class="flex-1 text-muted-foreground">Empty</span>
-            <Show when={!current()}>
-              <Icon name="confirm-check" class="size-4" />
-            </Show>
-          </DropdownMenuItem>
-          <For each={options()}>
-            {(option) => (
-              <DropdownMenuItem onSelect={() => props.onChange(option)}>
-                <span class="flex-1">{option}</span>
-                <Show when={option === current()}>
-                  <Icon name="confirm-check" class="size-4" />
-                </Show>
-              </DropdownMenuItem>
-            )}
-          </For>
-        </DropdownMenuContent>
-      </DropdownMenuPortal>
-    </DropdownMenu>
+    <Popover placement="bottom-start" open={open()} onOpenChange={(value) => { setOpen(value); setQuery(""); setHighlighted(0); }}>
+      <PopoverTrigger as="button" type="button" aria-label={props.label ?? "Value"}
+        class={cx("inline-flex min-w-0 items-center gap-1 px-1.5 text-left text-xs hover:bg-accent data-[expanded]:bg-accent", props.compact ? "min-h-8 w-full flex-1 text-[14px]" : "h-7 rounded-sm", current() ? "text-foreground" : "text-muted-foreground/60", props.class)}>
+        <Show when={current()} fallback={!props.compact && <span>Empty</span>}>
+          <span class="truncate rounded-sm bg-accent px-1.5 py-0.5">{current()}</span>
+        </Show>
+        <Show when={!props.compact}><Icon name="chevron-down" class="size-4 shrink-0 text-muted-foreground" /></Show>
+      </PopoverTrigger>
+      <PopoverPortal>
+        <PopoverContent class="w-60 p-1.5">
+          <input type="text" role="combobox" aria-label="Search select options" aria-expanded={open()} aria-controls={listId} aria-autocomplete="list"
+            aria-activedescendant={active() >= 0 ? `${listId}-${active()}` : undefined} placeholder="Search or create an option"
+            ref={(element) => queueMicrotask(() => element.focus())}
+            onInput={(event) => { setQuery(event.currentTarget.value); setHighlighted(Math.max(0, candidates().findIndex((option) => option.toLowerCase() === query().trim().toLowerCase()))); }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Escape") { event.preventDefault(); setOpen(false); setQuery(""); }
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const count = candidates().length;
+                if (count) setHighlighted((active() + (event.key === "ArrowDown" ? 1 : -1) + count) % count);
+              }
+              if (event.key === "Enter") {
+                event.preventDefault();
+                const choice = candidates()[active()];
+                if (choice !== undefined) choose(choice);
+              }
+            }}
+            class="mb-1.5 h-8 w-full rounded-sm bg-input px-2 text-xs outline-none focus:ring-1 focus:ring-ring select-text" />
+          <button type="button" onClick={() => choose("")} class="w-full rounded-sm px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent">Clear value</button>
+          <div id={listId} role="listbox" aria-label={props.label ?? "Options"} class="flex max-h-60 flex-col overflow-auto">
+            <For each={candidates()}>{(option, index) => (
+              <button id={`${listId}-${index()}`} type="button" role="option" aria-selected={option === current()}
+                onMouseMove={() => setHighlighted(index())} onClick={() => choose(option)}
+                ref={(element) => createEffect(() => { if (index() === active()) queueMicrotask(() => element.scrollIntoView({ block: "nearest" })); })}
+                class={cx("flex items-center gap-2 rounded-sm px-2 py-2 text-left text-xs hover:bg-accent", active() === index() && "bg-accent")}>
+                <span class="min-w-0 flex-1 truncate">{canCreate() && index() === candidates().length - 1 ? `Create “${option}”` : option}</span>
+                <Show when={option === current()}><Icon name="confirm-check" class="size-4" /></Show>
+              </button>
+            )}</For>
+          </div>
+        </PopoverContent>
+      </PopoverPortal>
+    </Popover>
   );
 }
 
@@ -184,14 +206,20 @@ function listValues(value: unknown): string[] {
  * that opens the options to pick from, and a box to type a new one.
  * Options are the schema's plus whatever the value already holds.
  */
-function MultiSelectEditor(props: { value: unknown; options: string[]; onChange: (value: unknown) => void; class?: string }) {
+function MultiSelectEditor(props: { value: unknown; options: string[]; onChange: (value: unknown) => void; class?: string; label?: string; compact?: boolean }) {
   const values = createMemo(() => listValues(props.value));
   const [query, setQuery] = createSignal("");
+  const [open, setOpen] = createSignal(false);
+  const [highlighted, setHighlighted] = createSignal(0);
+  const listId = createUniqueId();
   const options = createMemo(() => {
     const all = [...new Set([...props.options, ...values()])];
     const needle = query().trim().toLowerCase();
     return needle ? all.filter((option) => option.toLowerCase().includes(needle)) : all;
   });
+  const canCreate = () => !!query().trim() && !options().some((option) => option.toLowerCase() === query().trim().toLowerCase());
+  const candidates = () => [...options(), ...(canCreate() ? [query().trim()] : [])];
+  const active = () => Math.min(highlighted(), candidates().length - 1);
   const toggle = (option: string) => {
     const current = values();
     props.onChange(current.includes(option) ? current.filter((item) => item !== option) : [...current, option]);
@@ -201,6 +229,7 @@ function MultiSelectEditor(props: { value: unknown; options: string[]; onChange:
   let box: HTMLInputElement | undefined;
   const clear = () => {
     setQuery("");
+    setHighlighted(0);
     if (box) box.value = "";
   };
   const addTyped = () => {
@@ -210,7 +239,8 @@ function MultiSelectEditor(props: { value: unknown; options: string[]; onChange:
     clear();
   };
   return (
-    <div class={cx("flex min-h-6 min-w-0 flex-1 flex-wrap items-center gap-1 px-1", props.class)}>
+    <div class={cx("flex min-w-0 flex-1 flex-wrap items-center", props.compact ? "min-h-8 w-full" : "min-h-6 gap-1 px-1", props.class)}>
+      <Show when={!props.compact}>
       <For each={values()}>
         {(item) => (
           <span class="inline-flex h-5 max-w-48 items-center gap-0.5 rounded-sm bg-accent pl-1.5 pr-0.5 text-xs text-foreground">
@@ -226,21 +256,27 @@ function MultiSelectEditor(props: { value: unknown; options: string[]; onChange:
           </span>
         )}
       </For>
-      <Popover placement="bottom-start" onOpenChange={(open) => !open && clear()}>
-        <PopoverTrigger
-          as="button"
-          type="button"
-          aria-label="Add a value"
-          class={cx(
-            "inline-flex h-5 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground/70 hover:bg-accent hover:text-foreground data-[expanded]:bg-accent",
-            values().length === 0 && "pl-0.5",
-          )}
-        >
-          <Icon name="plus-add-small" class="size-4" />
-          <Show when={values().length === 0}>
-            <span>Empty</span>
-          </Show>
-        </PopoverTrigger>
+      </Show>
+      <Popover placement="bottom-start" open={open()} onOpenChange={(value) => { setOpen(value); if (!value) clear(); }}>
+        <Show when={props.compact} fallback={
+          <PopoverTrigger
+            as="button"
+            type="button"
+            aria-label={props.label ? `Add ${props.label}` : "Add a value"}
+            class={cx(
+              "inline-flex h-5 items-center gap-0.5 rounded-sm px-1 text-xs text-muted-foreground/70 hover:bg-accent hover:text-foreground data-[expanded]:bg-accent",
+              values().length === 0 && "pl-0.5",
+            )}
+          >
+            <Icon name="plus-add-small" class="size-4" />
+            <Show when={values().length === 0}><span>Empty</span></Show>
+          </PopoverTrigger>
+        }>
+          <PopoverTrigger as="button" type="button" aria-label={props.label ?? "Multi-select value"}
+            class="flex min-h-8 w-full min-w-0 flex-1 flex-wrap items-center gap-1 px-1.5 py-1.5 text-left text-[14px] text-foreground hover:bg-accent data-[expanded]:bg-accent">
+            <For each={values()}>{(item) => <span class="inline-flex h-5 max-w-full items-center truncate rounded-sm bg-accent px-1.5">{item}</span>}</For>
+          </PopoverTrigger>
+        </Show>
         <PopoverPortal>
           <PopoverContent class="w-56 p-1">
             <input
@@ -250,28 +286,37 @@ function MultiSelectEditor(props: { value: unknown; options: string[]; onChange:
               }}
               type="text"
               placeholder="Search or type a new option"
-              aria-label="Option"
-              onInput={(event) => setQuery(event.currentTarget.value)}
+              role="combobox"
+              aria-label={props.label ? `Search ${props.label} options` : "Search options"}
+              aria-expanded={open()} aria-controls={listId} aria-autocomplete="list"
+              aria-activedescendant={active() >= 0 ? `${listId}-${active()}` : undefined}
+              onInput={(event) => { setQuery(event.currentTarget.value); setHighlighted(Math.max(0, candidates().findIndex((option) => option.toLowerCase() === query().trim().toLowerCase()))); }}
               onKeyDown={(event) => {
                 event.stopPropagation();
+                if (event.key === "Escape") { event.preventDefault(); setOpen(false); clear(); }
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  const count = candidates().length;
+                  if (count) setHighlighted((active() + (event.key === "ArrowDown" ? 1 : -1) + count) % count);
+                }
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  const exact = options().find((option) => option.toLowerCase() === query().trim().toLowerCase());
-                  if (exact) {
-                    toggle(exact);
-                    clear();
-                  } else addTyped();
+                  const choice = candidates()[active()];
+                  if (choice !== undefined) { toggle(choice); clear(); }
                 }
               }}
               class="mb-1 h-7 w-full rounded-md bg-input px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-ring select-text"
             />
-            <div class="flex max-h-56 flex-col overflow-y-auto">
+            <div id={listId} role="listbox" aria-label={props.label ?? "Options"} aria-multiselectable="true" class="flex max-h-56 flex-col overflow-y-auto">
               <For each={options()}>
-                {(option) => (
+                {(option, index) => (
                   <button
+                    id={`${listId}-${index()}`} role="option" aria-selected={values().includes(option)}
+                    ref={(element) => createEffect(() => { if (index() === active()) queueMicrotask(() => element.scrollIntoView({ block: "nearest" })); })}
+                    onMouseMove={() => setHighlighted(index())}
                     type="button"
                     onClick={() => toggle(option)}
-                    class="flex h-7 items-center gap-2 rounded-md px-2 text-left text-xs text-foreground hover:bg-accent"
+                    class={cx("flex h-7 items-center gap-2 rounded-md px-2 text-left text-xs text-foreground hover:bg-accent", active() === index() && "bg-accent")}
                   >
                     <span class="inline-flex h-5 max-w-full items-center truncate rounded-sm bg-accent px-1.5">{option}</span>
                     <span class="flex-1" />
@@ -281,11 +326,13 @@ function MultiSelectEditor(props: { value: unknown; options: string[]; onChange:
                   </button>
                 )}
               </For>
-              <Show when={query().trim() && !options().some((option) => option.toLowerCase() === query().trim().toLowerCase())}>
+              <Show when={canCreate()}>
                 <button
                   type="button"
+                  id={`${listId}-${options().length}`} role="option" aria-selected="false"
+                  onMouseMove={() => setHighlighted(options().length)}
                   onClick={addTyped}
-                  class="flex h-7 items-center gap-1 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  class={cx("flex h-7 items-center gap-1 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground", active() === options().length && "bg-accent")}
                 >
                   <span>Create</span>
                   <span class="inline-flex h-5 max-w-full items-center truncate rounded-sm bg-accent px-1.5 text-foreground">{query().trim()}</span>
@@ -309,9 +356,10 @@ type PanelProps = {
 };
 
 /** A fresh property name not yet in use. */
-function freeName(properties: Properties | null): string {
+function freeName(names: string[]): string {
+  const existing = new Set(names);
   let name = "Property";
-  for (let i = 2; properties && name in properties; i++) name = `Property ${i}`;
+  for (let i = 2; existing.has(name); i++) name = `Property ${i}`;
   return name;
 }
 
@@ -337,7 +385,7 @@ export function PropertiesPanel(props: PanelProps) {
   };
 
   const add = () => {
-    const name = freeName(props.properties);
+    const name = freeName(names());
     props.onChange({ ...(props.properties ?? {}), [name]: "" });
     setEditingName(name);
   };
@@ -365,6 +413,8 @@ export function PropertiesPanel(props: PanelProps) {
                   fallback={
                     <button
                       type="button"
+                      disabled={!!props.schema?.properties[name]}
+                      title={props.schema?.properties[name] ? "Database property" : "Rename property"}
                       onClick={() => setEditingName(name)}
                       class="h-6 min-w-0 flex-1 truncate rounded-sm px-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
@@ -380,17 +430,17 @@ export function PropertiesPanel(props: PanelProps) {
                     onKeyDown={(event) => {
                       event.stopPropagation();
                       if (event.key === "Enter") event.currentTarget.blur();
-                      if (event.key === "Escape") setEditingName(null);
+                      if (event.key === "Escape") { event.currentTarget.value = name; setEditingName(null); }
                     }}
                     class="h-6 min-w-0 flex-1 rounded-sm bg-input px-1 text-xs text-foreground outline-none ring-1 ring-ring select-text"
                   />
                 </Show>
               </div>
-              <PropertyValue value={props.properties?.[name]} schema={schema()} onChange={(value) => setValue(name, value)} />
+              <PropertyValue value={props.properties?.[name]} schema={schema()} label={name} onChange={(value) => setValue(name, value)} />
               <button
                 type="button"
-                title="Remove property"
-                aria-label={`Remove ${name}`}
+                title={props.schema?.properties[name] ? "Clear value" : "Remove property"}
+                aria-label={`${props.schema?.properties[name] ? "Clear" : "Remove"} ${name}`}
                 onClick={() => remove(name)}
                 class="grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
               >
