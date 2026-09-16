@@ -24,6 +24,7 @@ import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputForm
 import { createEffect, createRoot, createSignal, on, untrack } from 'solid-js';
 
 import { ElectronFileHandle } from '@/lib/electron-file-handle';
+import { chooseAudioCodec } from '@/utils/audio-codec';
 import { mainBridge } from '@/lib/ipc';
 
 import type { Asset, AssetFileHandle, AssetLibrary, AssetRecord, VideoAsset } from '@compound/assets';
@@ -159,11 +160,13 @@ async function makeProxy(library: AssetLibrary, asset: VideoAsset): Promise<void
 	const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
 	const width = Math.min(PROXY_MAX_WIDTH, Math.floor(asset.width / 2) * 2);
 	try {
+		// Linux Chromium has no AAC encoder; Opus is fine in MP4 and plays everywhere the app does.
+		const audioCodec = (await chooseAudioCodec('aac', { numberOfChannels: 2, sampleRate: 48000, bitrate: PROXY_AUDIO_BITRATE })) ?? 'opus';
 		const conversion = await Conversion.init({
 			input,
 			output,
 			video: { width, bitrate: PROXY_VIDEO_BITRATE, codec: 'avc' },
-			audio: { codec: 'aac', bitrate: PROXY_AUDIO_BITRATE },
+			audio: { codec: audioCodec, bitrate: PROXY_AUDIO_BITRATE },
 		});
 		if (!conversion.isValid || conversion.utilizedTracks.length === 0) throw new Error('The video has no track a proxy can be made from');
 		await conversion.execute();
