@@ -1,0 +1,326 @@
+import { test, expect, afterEach } from 'bun:test';
+import { convexTest } from 'convex-test';
+import { resolve } from 'node:path';
+import schema from '../convex/schema';
+import { api, internal, components } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
+
+// The Better Auth component is installed locally under convex/betterAuth.
+const componentDir = resolve(import.meta.dirname, '../convex/betterAuth');
+const componentSchema = (await import(`${componentDir}/schema.ts`)).default;
+function modules(dir: string, ignore: string[] = []) {
+  return Object.fromEntries(
+    [...new Bun.Glob('**/*.ts').scanSync(dir)]
+      .filter((path) => !ignore.some((prefix) => path.startsWith(prefix)))
+      .map((path) => [`${dir}/${path}`, () => import(`${dir}/${path}`)]),
+  );
+}
+function setup() {
+  const t = convexTest(schema, modules(resolve(import.meta.dirname, '../convex'), ['betterAuth/']));
+  t.registerComponent('betterAuth', componentSchema, modules(componentDir));
+  return t;
+}
+type T = ReturnType<typeof setup>;
+/** Inserts user and session rows directly; no personal organization is created this way. */
+async function identity(t: T, email: string) {
+  const now = Date.now();
+  const user = await t.mutation(components.betterAuth.adapter.create, {
+    input: {
+      model: 'user',
+      data: { name: 'Test', email, emailVerified: true, createdAt: now, updatedAt: now },
+    },
+  });
+  const session = await t.mutation(components.betterAuth.adapter.create, {
+    input: {
+      model: 'session',
+      data: {
+        userId: user!._id,
+        token: crypto.randomUUID(),
+        expiresAt: now + 60000,
+        createdAt: now,
+        updatedAt: now,
+      },
+    },
+  });
+  return { user: user!, as: t.withIdentity({ subject: user!._id, sessionId: session!._id }) };
+}
+/** A member with their personal organization and one project in it. */
+async function member(t: T, email: string) {
+  const who = await identity(t, email);
+  const { id: organizationId } = await who.as.mutation(api.organizations.ensurePersonal, {});
+  const { projectId } = await who.as.mutation(api.projects.create, { organizationId, name: 'Demo' });
+  return { ...who, organizationId, projectId };
+}
+async function sha256(text: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function file(path: string, text: string) {
+  return { path, text, hash: await sha256(text) };
+}
+
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+test('sign-up through email OTP creates a personal organization owned by the user', async () => {
+  process.env.CONVEX_SITE_URL = 'https://test.convex.site';
+  process.env.SITE_URL = 'http://localhost:5173';
+  process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
+  process.env.RESEND_API_KEY = 'test-resend-key';
+  process.env.RESEND_FROM_EMAIL = 'Compound <test@example.com>';
+  const t = setup();
+  let otp = '';
+  globalThis.fetch = (async (url, init) => {
+    if (String(url) !== 'https://api.resend.com/emails')
+      throw new Error('Unexpected network request in test');
+    otp = JSON.parse(String(init?.body)).text.match(/\d{6}/)[0];
+    return Response.json({ id: 'test-email' });
+  }) as typeof fetch;
+  const auth = (path: string, body?: unknown, token?: string) =>
+    t.fetch(`/api/auth/${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        Origin: 'compound://',
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  expect((await auth('email-otp/send-verification-otp', { email: 'fresh@example.com', type: 'sign-in' })).status).toBe(200);
+  const verified = await auth('sign-in/email-otp', { email: 'fresh@example.com', otp });
+  expect(verified.status).toBe(200);
+  const jwt = (await (await auth('convex/token', undefined, verified.headers.get('set-auth-token')!)).json()) as { token: string };
+  const claims = JSON.parse(Buffer.from(jwt.token.split('.')[1]!, 'base64url').toString());
+  const me = t.withIdentity({ subject: claims.sub, sessionId: claims.sessionId });
+  const mine = await me.query(api.organizations.listMine, {});
+  expect(mine).toEqual([
+    { id: expect.any(String), name: 'fresh', slug: `personal-${claims.sub}`, role: 'owner' },
+  ]);
+  // ensurePersonal is a no-op once an organization exists.
+  expect((await me.mutation(api.organizations.ensurePersonal, {})).id).toBe(mine[0]!.id);
+  expect((await me.query(api.organizations.listMine, {})).length).toBe(1);
+});
+
+test('ensurePersonal backfills accounts that predate organizations', async () => {
+  const t = setup();
+  const alice = await identity(t, 'alice@example.com');
+  expect(await alice.as.query(api.organizations.listMine, {})).toEqual([]);
+  const { id } = await alice.as.mutation(api.organizations.ensurePersonal, {});
+  expect(await alice.as.query(api.organizations.listMine, {})).toEqual([
+    { id, name: 'alice', slug: `personal-${alice.user._id}`, role: 'owner' },
+  ]);
+  expect((await alice.as.mutation(api.organizations.ensurePersonal, {})).id).toBe(id);
+  await expect(t.query(api.organizations.listMine, {})).rejects.toThrow('Unauthenticated');
+});
+
+test('organizations.create makes the caller owner of a new organization', async () => {
+  process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
+  const t = setup();
+  const alice = await identity(t, 'alice@example.com');
+  const { id } = await alice.as.action(api.organizations.create, { name: 'Acme Studio' });
+  const mine = await alice.as.query(api.organizations.listMine, {});
+  expect(mine).toEqual([{ id, name: 'Acme Studio', slug: expect.stringMatching(/^acme-studio-[0-9a-f]{8}$/), role: 'owner' }]);
+  await expect(alice.as.action(api.organizations.create, { name: '  ' })).rejects.toThrow('1-100');
+});
+
+test('non-members cannot list, get or write; members can', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const denied = 'Not a member of this organization';
+  await expect(bob.as.query(api.projects.list, { organizationId: alice.organizationId })).rejects.toThrow(denied);
+  await expect(bob.as.query(api.projects.get, { projectId: alice.projectId })).rejects.toThrow(denied);
+  await expect(bob.as.mutation(api.projects.create, { organizationId: alice.organizationId, name: 'X' })).rejects.toThrow(denied);
+  await expect(bob.as.query(api.files.list, { projectId: alice.projectId })).rejects.toThrow(denied);
+  await expect(
+    bob.as.mutation(api.files.write, { projectId: alice.projectId, expectedVersion: null, ...(await file('index.tsx', 'x')) }),
+  ).rejects.toThrow(denied);
+  await expect(
+    bob.as.mutation(api.files.writeMany, { projectId: alice.projectId, files: [await file('index.tsx', 'x')] }),
+  ).rejects.toThrow(denied);
+  await expect(bob.as.mutation(api.projects.rename, { projectId: alice.projectId, name: 'Y' })).rejects.toThrow(denied);
+  await expect(t.query(api.projects.list, { organizationId: alice.organizationId })).rejects.toThrow('Unauthenticated');
+
+  const projects = await alice.as.query(api.projects.list, { organizationId: alice.organizationId });
+  expect(projects.map((p) => p._id)).toEqual([alice.projectId]);
+  expect(projects[0]).toMatchObject({ name: 'Demo', entry: 'index.tsx', createdBy: alice.user._id });
+  expect((await alice.as.query(api.projects.get, { projectId: alice.projectId }))?._id).toBe(alice.projectId);
+  const written = await alice.as.mutation(api.files.write, {
+    projectId: alice.projectId,
+    expectedVersion: null,
+    ...(await file('index.tsx', 'export default 1')),
+  });
+  expect(written).toEqual({ status: 'ok', version: 1 });
+  await alice.as.mutation(api.projects.rename, { projectId: alice.projectId, name: 'Renamed' });
+  await alice.as.mutation(api.projects.archive, { projectId: alice.projectId });
+  expect(await alice.as.query(api.projects.list, { organizationId: alice.organizationId })).toEqual([]);
+  expect((await alice.as.query(api.projects.get, { projectId: alice.projectId }))?.name).toBe('Renamed');
+});
+
+test('create semantics: null expectedVersion conflicts on a live row and succeeds on a tombstone', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  const first = await file('a.tsx', 'one');
+  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...first })).toEqual({ status: 'ok', version: 1 });
+  const again = await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a.tsx', 'two')) });
+  expect(again).toEqual({
+    status: 'conflict',
+    current: { ...first, version: 1, deleted: false, updatedAt: expect.any(Number), updatedBy: alice.user._id },
+  });
+  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'a.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
+  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a.tsx', 'three')) })).toEqual({ status: 'ok', version: 3 });
+});
+
+test('version conflicts return the current row, or null when the file never existed', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  const v1 = await file('b.tsx', 'v1');
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...v1 });
+  const stale = await alice.as.mutation(api.files.write, { projectId, expectedVersion: 0, ...(await file('b.tsx', 'stale')) });
+  expect(stale.status).toBe('conflict');
+  expect(stale.status === 'conflict' && stale.current).toMatchObject({ ...v1, version: 1, deleted: false });
+  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: 1, ...(await file('b.tsx', 'v2')) })).toEqual({ status: 'ok', version: 2 });
+  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: 3, ...(await file('missing.tsx', 'x')) })).toEqual({ status: 'conflict', current: null });
+  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'missing.tsx', expectedVersion: 1 })).toEqual({ status: 'conflict', current: null });
+  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'b.tsx', expectedVersion: 1 })).toMatchObject({ status: 'conflict', current: { version: 2 } });
+});
+
+test('remove creates a tombstone with a bumped version and list includes it', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('z.tsx', 'z')) });
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('a/b.tsx', 'ab')) });
+  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'z.tsx', expectedVersion: 1 })).toEqual({ status: 'ok', version: 2 });
+  const listed = await alice.as.query(api.files.list, { projectId });
+  expect(listed.map((f) => [f.path, f.version, f.deleted])).toEqual([
+    ['a/b.tsx', 1, false],
+    ['z.tsx', 2, true],
+  ]);
+  expect('text' in listed[0]!).toBe(false);
+  expect(listed[1]!.hash).toBe(await sha256(''));
+  expect(await alice.as.query(api.files.get, { projectId, path: 'a/b.tsx' })).toMatchObject({ path: 'a/b.tsx', text: 'ab', version: 1 });
+  expect(await alice.as.query(api.files.get, { projectId, path: 'z.tsx' })).toMatchObject({ deleted: true, text: '' });
+  expect(await alice.as.query(api.files.get, { projectId, path: 'never.tsx' })).toBeNull();
+  // Removing a tombstone again is a no-op success.
+  expect(await alice.as.mutation(api.files.remove, { projectId, path: 'z.tsx', expectedVersion: 2 })).toEqual({ status: 'ok', version: 2 });
+});
+
+test('writeMany forces writes, bumps versions and enforces limits', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'old')) });
+  await alice.as.mutation(api.files.writeMany, {
+    projectId,
+    files: [await file('index.tsx', 'new'), await file('package.json', '{}')],
+  });
+  const listed = await alice.as.query(api.files.list, { projectId });
+  expect(listed.map((f) => [f.path, f.version, f.deleted])).toEqual([
+    ['index.tsx', 2, false],
+    ['package.json', 1, false],
+  ]);
+  expect((await alice.as.query(api.files.get, { projectId, path: 'index.tsx' }))?.text).toBe('new');
+  const many = await Promise.all(Array.from({ length: 65 }, (_, i) => file(`f${i}.tsx`, 'x')));
+  await expect(alice.as.mutation(api.files.writeMany, { projectId, files: many })).rejects.toThrow('At most 64');
+  await expect(
+    alice.as.mutation(api.files.writeMany, { projectId, files: [await file('a.tsx', 'x'), await file('a.tsx', 'y')] }),
+  ).rejects.toThrow('Duplicate');
+  const big = 'x'.repeat(512 * 1024 + 1);
+  await expect(alice.as.mutation(api.files.writeMany, { projectId, files: [await file('big.tsx', big)] })).rejects.toThrow('512 KiB');
+});
+
+test('write validates paths, text and hashes', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  const ok = await file('ok.tsx', 'ok');
+  for (const path of ['/abs.tsx', '../up.tsx', 'a/../b.tsx', 'a\\b.tsx', 'a\0b', '', 'a//b.tsx', 'x'.repeat(513)])
+    await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, path })).rejects.toThrow();
+  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, hash: 'deadbeef' })).rejects.toThrow('64 lowercase hex');
+  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...ok, hash: await sha256('other') })).rejects.toThrow('does not match');
+  await expect(alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('nul.tsx', 'a\0b')) })).rejects.toThrow('NUL');
+  expect(await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('deep/dir/.hidden', '')) })).toEqual({ status: 'ok', version: 1 });
+});
+
+test('assets.register is idempotent per organization and sample, and markReady flips state', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const args = { projectId: alice.projectId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const first = await alice.as.mutation(api.assets.register, args);
+  expect(first).toEqual({ assetId: expect.any(String), state: 'uploading', uploadNeeded: true });
+  const second = await alice.as.mutation(api.assets.register, { ...args, name: 'renamed.mp4' });
+  expect(second).toEqual({ assetId: first.assetId, state: 'uploading', uploadNeeded: true });
+  // Another project in the same organization shares the asset.
+  const { projectId: other } = await alice.as.mutation(api.projects.create, { organizationId: alice.organizationId, name: 'Other' });
+  expect((await alice.as.mutation(api.assets.register, { ...args, projectId: other })).assetId).toBe(first.assetId);
+  await expect(bob.as.mutation(api.assets.register, args)).rejects.toThrow('Not a member');
+  await expect(bob.as.query(api.assets.get, { projectId: alice.projectId, sampleId: args.sampleId })).rejects.toThrow('Not a member');
+  await expect(alice.as.mutation(api.assets.register, { ...args, sampleId: 'nope' })).rejects.toThrow('16 hex');
+  expect(await alice.as.query(api.assets.get, { projectId: alice.projectId, sampleId: 'ffffffffffffffff' })).toBeNull();
+
+  await t.mutation(internal.assets.markReady, { assetId: first.assetId as Id<'assets'>, originalKey: `assets/${alice.organizationId}/${args.sampleId}/clip.mp4` });
+  expect(await alice.as.mutation(api.assets.register, args)).toEqual({ assetId: first.assetId, state: 'ready', uploadNeeded: false });
+  const asset = await alice.as.query(api.assets.get, { projectId: alice.projectId, sampleId: args.sampleId });
+  expect(asset).toMatchObject({ organizationId: alice.organizationId, name: 'clip.mp4', originalState: 'ready', uploadedBy: alice.user._id });
+});
+
+test('assets.describe and assets.finish are for members only, and finish binds the key to the asset', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const args = { projectId: alice.projectId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const { assetId } = await alice.as.mutation(api.assets.register, args);
+  const id = assetId as Id<'assets'>;
+  const key = `assets/${alice.organizationId}/${args.sampleId}/clip.mp4`;
+  expect(await alice.as.query(api.assets.describe, { assetId: id })).toMatchObject({ organizationId: alice.organizationId, sampleId: args.sampleId, name: 'clip.mp4', originalState: 'uploading' });
+  await expect(bob.as.query(api.assets.describe, { assetId: id })).rejects.toThrow('Not a member');
+  await expect(bob.as.mutation(api.assets.finish, { assetId: id, originalKey: key })).rejects.toThrow('Not a member');
+  await expect(alice.as.mutation(api.assets.finish, { assetId: id, originalKey: `assets/${alice.organizationId}/${args.sampleId}/other.mp4` })).rejects.toThrow('does not match');
+  await alice.as.mutation(api.assets.finish, { assetId: id, originalKey: key });
+  expect(await alice.as.query(api.assets.describe, { assetId: id })).toMatchObject({ originalKey: key, originalState: 'ready' });
+  // Finishing twice is harmless.
+  await alice.as.mutation(api.assets.finish, { assetId: id, originalKey: key });
+});
+
+test('addMemberByEmail requires owner/admin and an existing account, then grants access', async () => {
+  process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const carol = await identity(t, 'carol@example.com');
+  const org = alice.organizationId;
+  await expect(bob.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'carol@example.com' })).rejects.toThrow('Not a member');
+  await expect(alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'nobody@example.com' })).rejects.toThrow('No account');
+  await alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'Bob@example.com' });
+  expect(await bob.as.query(api.organizations.listMine, {})).toEqual([{ id: org, name: 'alice', slug: `personal-${alice.user._id}`, role: 'member' }]);
+  expect((await bob.as.query(api.projects.list, { organizationId: org })).map((p) => p._id)).toEqual([alice.projectId]);
+  // A plain member cannot add others; an admin can.
+  await expect(bob.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'carol@example.com' })).rejects.toThrow('owners and admins');
+  await expect(alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'bob@example.com' })).rejects.toThrow();
+  await alice.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'carol@example.com', role: 'admin' });
+  await expect(carol.as.action(api.organizations.addMemberByEmail, { organizationId: org, email: 'dave@example.com' })).rejects.toThrow('No account');
+  expect((await carol.as.query(api.organizations.listMine, {}))[0]?.role).toBe('admin');
+});
+
+test('a create that differs from an existing path only by case is refused', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const projectId = alice.projectId;
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('Index.tsx', 'a')) });
+  await expect(
+    alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'b')) }),
+  ).rejects.toThrow('differing only in case');
+  await expect(
+    alice.as.mutation(api.files.writeMany, { projectId, files: [await file('INDEX.tsx', 'c')] }),
+  ).rejects.toThrow('differing only in case');
+  // The same path again is not a collision with itself, and a tombstone frees the name.
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: 1, ...(await file('Index.tsx', 'a2')) });
+  await alice.as.mutation(api.files.remove, { projectId, path: 'Index.tsx', expectedVersion: 2 });
+  await alice.as.mutation(api.files.write, { projectId, expectedVersion: null, ...(await file('index.tsx', 'b')) });
+});

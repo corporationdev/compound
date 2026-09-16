@@ -70,6 +70,14 @@ export const MAIN_CHANNELS = {
   PROJECTS_FS_STAT: "projects:fs-stat",
   PROJECTS_FS_REMOVE: "projects:fs-remove",
   PROJECTS_FS_REAL_PATH: "projects:fs-real-path",
+  SYNC_START: "sync:start",
+  SYNC_STOP: "sync:stop",
+  SYNC_STATUS_GET: "sync:status-get",
+  SYNC_PUBLISH: "sync:publish",
+  SYNC_MATERIALIZE: "sync:materialize",
+  SYNC_SESSION: "sync:session",
+  CLOUD_ASSET_UPLOAD: "cloud:asset-upload",
+  CLOUD_ASSET_FETCH: "cloud:asset-fetch",
   HEADLESS_GET_MODE: "headless:get-mode",
   MCP_STATUS: "mcp:status",
   CLI_STATUS: "cli:status",
@@ -79,6 +87,8 @@ export const MAIN_CHANNELS = {
   // Main→Renderer events
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
   PROJECTS_CHANGED: "projects:changed",
+  SYNC_STATUS: "sync:status",
+  SYNC_CONFLICT: "sync:conflict",
 } as const;
 
 /**
@@ -105,7 +115,15 @@ export type ProjectInfo = {
   modifiedAt: string;
   /** birthtime of the folder, ISO string. */
   createdAt: string;
+  /**
+   * package.json `cloudProjectId`: the Convex project this folder is a
+   * checkout of, once it has been published or materialized. Undefined for a
+   * local-only folder.
+   */
+  cloudProjectId?: string;
 };
+
+export type { SyncStatus } from "./sync/project-sync";
 
 export type CompileResult =
   { ok: true; code: string } | { ok: false; error: string };
@@ -273,6 +291,33 @@ export type MainRequestMap = {
     request: { dir: string; path: string };
     response: void;
   };
+  [MAIN_CHANNELS.SYNC_START]: {
+    request: { dir: string; projectId: string; sessionToken: string };
+    response: import("./sync/project-sync").SyncStatus;
+  };
+  [MAIN_CHANNELS.SYNC_STOP]: { request: { dir: string }; response: void };
+  [MAIN_CHANNELS.SYNC_STATUS_GET]: { request: { dir: string }; response: import("./sync/project-sync").SyncStatus | null };
+  [MAIN_CHANNELS.SYNC_PUBLISH]: {
+    request: { dir: string; projectId: string; sessionToken: string };
+    response: { files: number; status: import("./sync/project-sync").SyncStatus };
+  };
+  [MAIN_CHANNELS.SYNC_MATERIALIZE]: {
+    request: { root: string; projectId: string; name: string; sessionToken: string };
+    response: ProjectInfo;
+  };
+  // The renderer's signed native session changed; null on sign-out stops every sync.
+  [MAIN_CHANNELS.SYNC_SESSION]: { request: { sessionToken: string | null }; response: void };
+  // Registers a library asset's original with the project's organization and streams
+  // the file at `source` (absolute path) to R2 unless the cloud already has it.
+  [MAIN_CHANNELS.CLOUD_ASSET_UPLOAD]: {
+    request: { dir: string; projectId: string; sampleId: string; source: string; mimeType: string; name: string; token: string | null };
+    response: { assetId: string; state: "uploading" | "ready" };
+  };
+  // Brings an original this machine lacks into `<dir>/cache/originals/`; null when the cloud has none.
+  [MAIN_CHANNELS.CLOUD_ASSET_FETCH]: {
+    request: { dir: string; projectId: string; sampleId: string; token: string | null };
+    response: { path: string; name: string; mimeType: string } | null;
+  };
   [MAIN_CHANNELS.PROJECTS_FS_REAL_PATH]: {
     request: { dir: string; source: string };
     response: string | null;
@@ -304,6 +349,9 @@ export type MainEventMap = {
   [MAIN_CHANNELS.WINDOW_FULLSCREEN_CHANGE]: { fullscreen: boolean };
   // A file inside a watched project folder changed (path relative to `dir`).
   [MAIN_CHANNELS.PROJECTS_CHANGED]: { dir: string; path: string };
+  [MAIN_CHANNELS.SYNC_STATUS]: { dir: string; status: import("./sync/project-sync").SyncStatus };
+  // A merge had to choose between two edits to the same lines; the cloud's text was kept at `keptCopy`.
+  [MAIN_CHANNELS.SYNC_CONFLICT]: { dir: string; path: string; keptCopy: string };
 };
 export type MainEventChannel = keyof MainEventMap;
 

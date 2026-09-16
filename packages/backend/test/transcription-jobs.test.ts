@@ -6,17 +6,23 @@ import schema from '../convex/schema';
 import { api, internal, components } from '../convex/_generated/api';
 import { internalAction } from '../convex/_generated/server';
 
-function modules(dir: string) {
+function modules(dir: string, ignore: string[] = []) {
   return Object.fromEntries(
-    [...new Bun.Glob('**/*.ts').scanSync(dir)].map((path) => [
-      `${dir}/${path}`,
-      () => import(`${dir}/${path}`),
-    ]),
+    [...new Bun.Glob('**/*.ts').scanSync(dir)]
+      .filter((path) => !ignore.some((prefix) => path.startsWith(prefix)))
+      .map((path) => [`${dir}/${path}`, () => import(`${dir}/${path}`)]),
   );
 }
-const registry = await Promise.all(
+// The Better Auth component is installed locally under convex/betterAuth.
+const localAuthDir = resolve(import.meta.dirname, '../convex/betterAuth');
+const registry = [
+  {
+    name: 'betterAuth',
+    schema: (await import(`${localAuthDir}/schema.ts`)).default,
+    modules: modules(localAuthDir),
+  },
+  ...(await Promise.all(
   [
-    ['betterAuth', '@convex-dev/better-auth'],
     ['workflow', '@convex-dev/workflow'],
     ['workflow/workpool', '@convex-dev/workpool'],
     ['workflow/workpool/batchWorker', '@convex-dev/batch-worker'],
@@ -33,7 +39,8 @@ const registry = await Promise.all(
       modules: modules(dir),
     };
   }),
-);
+  )),
+];
 function setup() {
   jest.useFakeTimers();
   const dir = resolve(import.meta.dirname, '../convex');
@@ -80,7 +87,7 @@ function setup() {
     }),
   };
   const t = convexTest(schema, {
-    ...modules(dir),
+    ...modules(dir, ['betterAuth/']),
     [`${dir}/asset_transcription.ts`]: async () => fake,
   });
   for (const c of registry) t.registerComponent(c.name, c.schema, c.modules);

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { toast } from "somoto";
-import { For, createMemo, createResource, createSignal } from "solid-js";
+import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 
 import {
@@ -24,6 +24,10 @@ import {
 } from "./shared";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
+import { DashboardCloudProjectCard } from "./cloud-project-card";
+import { cloudProjects, cloudProjectsError, matchCloudToLocal, type CloudProject } from "@/lib/cloud-projects";
+import { activeOrganization, cloudReady } from "@/lib/organizations";
+import { openCloudProject } from "@/projects/sync";
 import { parseTimestamp } from "./utils";
 import { DashboardSearchPanel } from "./search-bar";
 import { DashboardProjectsFolderBar } from "./projects-folder-bar";
@@ -84,6 +88,33 @@ export function DashboardProjectsView() {
     if (!found) return;
     track('project_opened');
     navigate(projectRoute(projectKey(found)));
+  };
+
+  // The active organization's projects, shown once signed in. Each pairs with
+  // the folder here that carries its id, if any; the search filters both lists.
+  const showCloud = () => cloudReady() && (cloudProjects() !== null || cloudProjectsError() !== null);
+  const localByCloudId = createMemo(() => matchCloudToLocal(cloudProjects() ?? [], projects() ?? []));
+  const filteredCloudProjects = createMemo(() => {
+    const query = normalizedSearch();
+    const entries = cloudProjects() ?? [];
+    if (!query) return entries;
+    return entries.filter((project) => project.name.toLowerCase().includes(query));
+  });
+  const [openingCloud, setOpeningCloud] = createSignal<string | null>(null);
+
+  const openCloud = async (project: CloudProject) => {
+    if (openingCloud()) return;
+    setOpeningCloud(project._id);
+    try {
+      // A folder here already, or one brought in now; then the local path.
+      const info = await openCloudProject(project);
+      refetchProjects();
+      await openProject(info);
+    } catch (e) {
+      toast.error(`Failed to open ${project.name}`, { description: (e as Error).message });
+    } finally {
+      setOpeningCloud(null);
+    }
   };
 
   const handleDeleted = (project: ProjectInfo) => {
@@ -168,6 +199,33 @@ export function DashboardProjectsView() {
             />
           )}
         </For>
+        <Show when={showCloud()}>
+          <div class="col-span-full flex items-baseline gap-2 px-2 pt-4">
+            <h2 class="text-sm text-foreground">Cloud</h2>
+            <span class="min-w-0 truncate text-xs text-muted-foreground">{activeOrganization()?.name}</span>
+          </div>
+          <Show when={cloudProjectsError()}>
+            <p class="col-span-full px-2 text-xs text-destructive">{cloudProjectsError()}</p>
+          </Show>
+          <Show when={!cloudProjectsError() && filteredCloudProjects().length === 0}>
+            <p class="col-span-full px-2 text-xs text-muted-foreground">
+              No cloud projects yet. Publish one from its menu, or create a project.
+            </p>
+          </Show>
+          <For each={filteredCloudProjects()}>
+            {(project) => (
+              <DashboardCloudProjectCard
+                project={project}
+                local={localByCloudId().get(project._id)}
+                active={selectedProject() === project._id}
+                opening={openingCloud() === project._id}
+                onSelect={() => setSelectedProject(project._id)}
+                onDeselect={() => setSelectedProject(null)}
+                onOpen={() => openCloud(project)}
+              />
+            )}
+          </For>
+        </Show>
       </DashboardViewSection>
       <DashboardProjectsFolderBar />
 

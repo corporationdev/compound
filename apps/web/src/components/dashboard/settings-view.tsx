@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { pickProjectsRoot, projectsRoot } from "@/projects";
 import { usePermissionState, type PermissionState } from "@/hooks/use-permission";
 
+import { DashboardOrganizationSection } from "./organization-section";
 import {
   DashboardDividedStack,
   DashboardInfoActionRow,
@@ -195,6 +196,7 @@ export function DashboardSettingsView() {
   return (
     <DashboardScrollView>
       <DashboardProjectsFolderSection />
+      <DashboardOrganizationSection />
       <DashboardPermissionsSection />
     </DashboardScrollView>
   );

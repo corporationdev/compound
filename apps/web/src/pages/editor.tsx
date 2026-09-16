@@ -22,10 +22,16 @@ import { attachLibrary, isLibraryFile } from '@/engine/library';
 import { attachAi } from '@/utils/gen-ai';
 import { attachProjectConfig, isProjectConfigFile } from '@/engine/project-config';
 import { loadProjectBundle, rememberProjectBundle } from '@/lib/db';
+import { createViewStore, VIEW_PROPS } from '@/engine/view-state';
 import { isCacheFile } from '@compound/assets';
 import { createEditWriter } from '@/projects/edits';
 import { compileProject, refreshProject, watchProject } from '@/projects/host';
 import { captureProjectCover } from '@/projects/cover';
+import { startProjectSync, stopProjectSync } from '@/projects/sync';
+import { attachCloudAssets } from '@/engine/cloud-assets';
+import { cloudUserId } from '@/lib/organizations';
+import { getToken } from '@/lib/auth-client';
+import { Library } from '@compound/runtime';
 import { useProject } from "@/context/project";
 import { useEngineContext } from "@/engine";
 
@@ -74,6 +80,10 @@ export function EditorPage() {
     attachAi(world, library, dir);
     // The project's own settings (package.json `compound`), next to the scene.
     const config = attachProjectConfig(world, dir);
+    // Where the editor was looking last time: playhead, selection, camera,
+    // timeline, expanded rows. Kept here rather than in the file, and put
+    // back on the stage after every mount.
+    const view = createViewStore(untrack(project.id), world);
 
     const unmount = (): void => {
       // Before the entities go: what the editor changed is still owed to the
@@ -102,7 +112,18 @@ export function EditorPage() {
       // from here on an edit in the editor can find its way back.
       writer = createEditWriter(dir, world);
       const editor = getDocumentEditor(world);
-      unlisten = editor.onEdit((edit) => writer?.push(edit));
+      // Pointing and viewing stay local; everything else is the file's.
+      unlisten = editor.onEdit((edit) => {
+        if (edit.kind === 'prop' && VIEW_PROPS.has(edit.name)) view.push(edit);
+        else writer?.push(edit);
+      });
+      // The file's values are the defaults; what this editor did with them
+      // since goes back on top — once the record has been read, and only if
+      // this is still the mount it was meant for.
+      const current = mounted;
+      view.ready.then(() => {
+        if (!disposed && mounted === current) view.applyToWorld();
+      });
       // A mount comes from the file: edits recorded against the document it
       // replaced cannot be replayed against this one.
       getEditHistory(world).reset();
@@ -193,8 +214,33 @@ export function EditorPage() {
       refreshProject(dir);
       unwatch();
       unmount();
+      view.dispose();
       config.dispose();
       library.dispose();
+    });
+  });
+
+  // Cloud sync for a checkout, keyed on the folder like the mount above: it
+  // runs while a signed-in user has the project open, and stops when the
+  // project closes, moves, or the user signs out (main stops it on sign-out
+  // too; stopping twice is harmless).
+  createEffect(() => {
+    const dir = project.dir();
+    const cloudProjectId = project.cloudProjectId();
+    if (!dir || !cloudProjectId || !cloudUserId()) return;
+
+    startProjectSync(dir, cloudProjectId).catch((error) => {
+      console.error('[sync] could not start:', error);
+      toast.error('Cloud sync failed to start', { description: (error as Error).message });
+    });
+    // The originals alongside the text: the library the mount effect above
+    // attached (it runs first) sends this machine's bytes up and fetches a
+    // teammate's on first use.
+    const library = untrack(() => world.get(Library));
+    const detachAssets = library ? attachCloudAssets(library, { dir, projectId: cloudProjectId, getToken }) : undefined;
+    onCleanup(() => {
+      detachAssets?.();
+      stopProjectSync(dir).catch((error) => console.warn('[sync] could not stop:', error));
     });
   });
 

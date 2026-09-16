@@ -13,9 +13,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Badge } from "@/components/ui/badge";
 import { TextField, TextFieldInput } from "@/components/ui/text-field";
 import { track } from "@/lib/analytics";
+import { cloudReady } from "@/lib/organizations";
 import { duplicateProject, renameProject, type ProjectRecord } from "@/projects";
+import { publishProject } from "@/projects/sync";
 
 import { DashboardCardButton, DashboardCardPreview, DashboardProjectThumbnail } from "./shared";
 import { formatEditedAt } from "./utils";
@@ -76,6 +79,24 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       props.onChanged();
     } catch (e) {
       toast.error("Failed to duplicate project", { description: (e as Error).message });
+    }
+  };
+
+  const [publishing, setPublishing] = createSignal(false);
+  const canPublish = () => !props.project.cloudProjectId && cloudReady();
+
+  const handlePublish = async () => {
+    if (publishing()) return;
+    setPublishing(true);
+    try {
+      await publishProject(props.project);
+      track("project_published");
+      toast.success(`Published ${props.project.displayName} to the cloud`);
+      props.onChanged();
+    } catch (e) {
+      toast.error("Failed to publish project", { description: (e as Error).message });
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -147,6 +168,11 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
         >
           <DashboardCardPreview>
             <DashboardProjectThumbnail cover={props.project.cover} />
+            <Show when={props.project.cloudProjectId}>
+              <Badge variant="base" class="absolute right-1.5 top-1.5" title="Synced with the cloud">
+                Cloud
+              </Badge>
+            </Show>
           </DashboardCardPreview>
           <div class="flex flex-col gap-1 px-2">
             <div class="relative h-4 w-full">
@@ -186,6 +212,11 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
           <ContextMenuSeparator class="my-2" />
           <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
           <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
+          <Show when={canPublish()}>
+            <ContextMenuItem onSelect={handlePublish} disabled={publishing()}>
+              {publishing() ? "Publishing…" : "Publish to cloud"}
+            </ContextMenuItem>
+          </Show>
           <ContextMenuSeparator class="my-2" />
           <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
         </ContextMenuContent>

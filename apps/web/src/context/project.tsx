@@ -22,6 +22,8 @@ export type ProjectContextValue = {
 	dir: Accessor<string>;
 	/** package.json `displayName`: what the user calls it. */
 	name: Accessor<string>;
+	/** package.json `cloudProjectId`: the cloud project this folder is a checkout of; undefined for a local-only one. */
+	cloudProjectId: Accessor<string | undefined>;
 	/** Renames the project — the record, and the folder with it. */
 	rename: (displayName: string) => Promise<void>;
 	/** Re-reads the record, for when something else wrote it. */
@@ -40,6 +42,7 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 	const id = createMemo(() => info().id);
 	const dir = createMemo(() => info().dir);
 	const name = createMemo(() => info().displayName);
+	const cloudProjectId = createMemo(() => info().cloudProjectId);
 
 	const rename = async (displayName: string): Promise<void> => {
 		setInfo(await renameProject(dir(), displayName));
@@ -51,7 +54,7 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 	};
 
 	return (
-		<ProjectContext.Provider value={{ id, dir, name, rename, refresh }}>
+		<ProjectContext.Provider value={{ id, dir, name, cloudProjectId, rename, refresh }}>
 			{props.children}
 		</ProjectContext.Provider>
 	);

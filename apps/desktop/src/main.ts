@@ -36,6 +36,7 @@ import {
   unwatchAll,
   listEntries,
   realPathEntry,
+  recordCloudProjectId,
   noteContent,
   noteRenamed,
   readConfig,
@@ -48,6 +49,8 @@ import {
   writeManifest,
   writeProject,
 } from "./projects";
+import { syncManager } from "./sync/manager";
+import { fetchAssetOriginal, uploadAssetOriginal } from "./assets-cloud";
 import type { LogEntry } from "@compound/dapi";
 
 const DEV_URL = "http://localhost:5173";
@@ -172,6 +175,7 @@ function createWindow(show = true) {
   });
 
   captureConsole(mainWindow);
+  syncManager.attach(mainWindow);
 
   applyCornerRadius(MACOS_CORNER_RADIUS);
   applyBackdrop();
@@ -298,6 +302,28 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_STAT, ({ dir, source }) => statEntry(dir, source));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_REMOVE, ({ dir, path }) => removeEntry(dir, path));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_REAL_PATH, ({ dir, source }) => realPathEntry(dir, source));
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSET_UPLOAD, (data, event) => { trustedRenderer(event); return uploadAssetOriginal(data); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSET_FETCH, (data, event) => { trustedRenderer(event); return fetchAssetOriginal(data); });
+  mainBridge.handle(MAIN_CHANNELS.SYNC_START, (data, event) => { trustedRenderer(event); return syncManager.start(data); });
+  mainBridge.handle(MAIN_CHANNELS.SYNC_STOP, ({ dir }) => syncManager.stop(dir));
+  mainBridge.handle(MAIN_CHANNELS.SYNC_STATUS_GET, ({ dir }) => syncManager.status(dir));
+  mainBridge.handle(MAIN_CHANNELS.SYNC_SESSION, ({ sessionToken }, event) => { trustedRenderer(event); return syncManager.setSession(sessionToken); });
+  mainBridge.handle(MAIN_CHANNELS.SYNC_PUBLISH, async (data, event) => {
+    trustedRenderer(event);
+    // The record first: a checkout that knows its cloud id syncs it up with everything else.
+    await recordCloudProjectId(data.dir, data.projectId);
+    return syncManager.publish(data);
+  });
+  mainBridge.handle(MAIN_CHANNELS.SYNC_MATERIALIZE, async (data, event) => {
+    trustedRenderer(event);
+    const dir = await syncManager.materialize(data);
+    // A project published from another machine carries its record in the
+    // synced package.json; one created empty in the cloud gets one here,
+    // which then syncs up like any other file.
+    const project = (await getProject(dir)) ?? (await initProject(mainWindow, dir));
+    await recordCloudProjectId(dir, data.projectId);
+    return (await getProject(dir)) ?? project;
+  });
   mainBridge.handle(MAIN_CHANNELS.FILE_TRANSFER, ({ selector, absolutePath }) =>
     setFileInputFiles(selector, absolutePath),
   );
@@ -384,7 +410,9 @@ if (app.requestSingleInstanceLock()) {
   app.on("before-quit", (event) => {
     if (!chatStopped) {
       event.preventDefault();
-      void chat.stop().finally(() => {
+      // Pending pushes land before the app goes; a checkout closed mid-write
+      // would only catch up on the next launch.
+      void Promise.allSettled([chat.stop(), syncManager.stopAll()]).finally(() => {
         chatStopped = true;
         // The renderer is not consulted again: the chat is down and the
         // watchers are gone, so nothing it could say would change the outcome,

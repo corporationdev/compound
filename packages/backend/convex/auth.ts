@@ -1,16 +1,36 @@
-import { createClient, type GenericCtx } from '@convex-dev/better-auth';
+import { createClient, type AuthFunctions, type GenericCtx } from '@convex-dev/better-auth';
 import { convex, crossDomain } from '@convex-dev/better-auth/plugins';
-import { betterAuth } from 'better-auth/minimal';
+import { betterAuth, type BetterAuthOptions } from 'better-auth/minimal';
 import { bearer, emailOTP } from 'better-auth/plugins';
+import { organization } from 'better-auth/plugins/organization';
 import { components, internal } from './_generated/api';
 import type { DataModel } from './_generated/dataModel';
 import { query } from './_generated/server';
 import authConfig from './auth.config';
+import authSchema from './betterAuth/schema';
+import { createPersonalOrganization } from './lib/organizations';
 
-export const authComponent = createClient<DataModel>(components.betterAuth);
-export function createAuth(ctx: GenericCtx<DataModel>) {
+// Typed up front to break the type cycle between this module and the generated api.
+const authFunctions: AuthFunctions = internal.auth;
+export const authComponent = createClient<DataModel, typeof authSchema>(components.betterAuth, {
+  local: { schema: authSchema },
+  authFunctions,
+  triggers: {
+    user: {
+      // Runs inside the component's create mutation, so the user, their
+      // personal organization and the owner membership commit together.
+      onCreate: async (ctx, user) => {
+        await createPersonalOrganization(ctx, user);
+      },
+    },
+  },
+});
+export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
+
+/** Options only; the local component's adapter uses these to derive Better Auth's table set. */
+export function createAuthOptions(ctx: GenericCtx<DataModel>) {
   const siteUrl = process.env.SITE_URL ?? 'http://localhost:5173';
-  return betterAuth({
+  return {
     baseURL: process.env.CONVEX_SITE_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [siteUrl, 'compound://'],
@@ -23,6 +43,10 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
             throw new Error('Account cleanup requires an action context');
           await ctx.runMutation(internal.uploads.removeForUser, { ownerId: user.id });
           await ctx.runMutation(internal.catalog.removeForUser, { ownerId: user.id });
+          await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+            input: { model: 'member', where: [{ field: 'userId', value: user.id }] },
+            paginationOpts: { numItems: 200, cursor: null },
+          });
         },
       },
     },
@@ -51,10 +75,14 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
           if (!response.ok) throw new Error('Could not send verification email');
         },
       }),
+      organization({ allowUserToCreateOrganization: true }),
       crossDomain({ siteUrl }),
       convex({ authConfig }),
     ],
-  });
+  } satisfies BetterAuthOptions;
+}
+export function createAuth(ctx: GenericCtx<DataModel>) {
+  return betterAuth(createAuthOptions(ctx));
 }
 export const getCurrentUser = query({
   args: {},

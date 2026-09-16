@@ -17,6 +17,8 @@ import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
 import { isTempPath, TEMP_PREFIX, writeFileAtomic } from "./atomic";
+import { withProjectLock } from "./sync/locks";
+import { SYNC_DIR } from "./sync/state";
 import { cloudConfig } from "./cloud";
 import { isHeadless } from "./headless";
 import { mainBridge } from "./main-manager";
@@ -72,6 +74,7 @@ async function exists(path: string): Promise<boolean> {
 type PackageJson = {
   name?: string;
   projectId?: string;
+  cloudProjectId?: string;
   displayName?: string;
   main?: string;
 } & Record<string, unknown>;
@@ -152,10 +155,24 @@ async function describe(dir: string): Promise<ProjectInfo | null> {
     entry,
     modifiedAt: file.mtime.toISOString(),
     createdAt: folder.birthtime.toISOString(),
+    ...(typeof pkg?.cloudProjectId === "string" && pkg.cloudProjectId ? { cloudProjectId: pkg.cloudProjectId } : {}),
   };
 }
 
 export const getProject = (dir: string): Promise<ProjectInfo | null> => describe(dir);
+
+/**
+ * Records which cloud project a folder is a checkout of. In package.json
+ * because that file syncs: every checkout of the project learns its cloud
+ * id from the same record, and a folder copied by hand keeps it.
+ */
+export function recordCloudProjectId(dir: string, cloudProjectId: string): Promise<void> {
+  return withProjectLock(dir, async () => {
+    const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
+    if (pkg.cloudProjectId === cloudProjectId) return;
+    await writePackage(dir, { ...pkg, cloudProjectId });
+  });
+}
 
 /**
  * The folder projects go in when the user has not picked one. `~/Movies` on
@@ -881,12 +898,16 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
   // answering to one id is the thing the id exists to prevent. The folder is
   // already named for the copy, so the record is written here rather than
   // through `renameProject` (which would move it again).
-  const pkg = await readPackage(target);
+  const { cloudProjectId: _cloud, ...pkg } = (await readPackage(target)) ?? packageJson(basename(target), source.displayName);
   await writePackage(target, {
-    ...(pkg ?? packageJson(basename(target), source.displayName)),
+    ...pkg,
     projectId: nanoid(),
     displayName: `${source.displayName} (Copy)`,
   });
+  // A copy is a new project, not another checkout of the original: it must
+  // not carry the cloud binding, or edits in the copy would land in the
+  // original's rows, nor the sync state that goes with it.
+  await rm(join(target, ...SYNC_DIR.split("/")), { recursive: true, force: true });
   const project = await describe(target);
   if (!project) throw new Error("Failed to duplicate the project.");
   return project;
@@ -967,13 +988,17 @@ export async function compileProject(dir: string): Promise<CompileResult> {
   const entry = await findEntry(dir);
   if (!entry) return { ok: false, error: noEntryError() };
 
-  // Fills in the package.json record for folders that predate it; the rest
-  // of the scaffold is the dashboard's (see `initProject`).
-  await ensureRecord(dir);
+  // Both of these may write into the folder, so they take the folder's lock:
+  // cloud sync writes there too, and neither may land on the other's text.
+  await withProjectLock(dir, async () => {
+    // Fills in the package.json record for folders that predate it; the rest
+    // of the scaffold is the dashboard's (see `initProject`).
+    await ensureRecord(dir);
 
-  // Names every element before it is numbered, so the ids this compile hands
-  // the canvas are durable ones. A fully keyed project is not written to.
-  await stampProject(sourceContext(dir));
+    // Names every element before it is numbered, so the ids this compile hands
+    // the canvas are durable ones. A fully keyed project is not written to.
+    await stampProject(sourceContext(dir));
+  });
 
   // esbuild resolves symlinks, so the loader has to match on real paths.
   const root = await realpath(dir);
@@ -1013,7 +1038,9 @@ export async function compileProject(dir: string): Promise<CompileResult> {
  */
 export async function writeProject(dir: string, edits: SourceEdit[]): Promise<WriteResult> {
   try {
-    return await applyEdits(sourceContext(dir), edits);
+    // The read, the edit and the write are one step under the folder's lock:
+    // a cloud change landing between them would be written over.
+    return await withProjectLock(dir, () => applyEdits(sourceContext(dir), edits));
   } catch (error) {
     return { skipped: edits.map(editLabel), error: error instanceof Error ? error.message : String(error) };
   }
@@ -1053,12 +1080,14 @@ export async function readManifest(dir: string): Promise<unknown> {
  * mid-write leaves the old manifest and no reader ever sees half of one, and
  * claimed first so the watcher does not hand it back as a change.
  */
-export async function writeManifest(dir: string, manifest: unknown): Promise<void> {
-  const path = join(dir, MANIFEST_FILE);
-  const text = `# Compound asset library. Edited by the app; hand edits are read on the next load.
+export function writeManifest(dir: string, manifest: unknown): Promise<void> {
+  return withProjectLock(dir, async () => {
+    const path = join(dir, MANIFEST_FILE);
+    const text = `# Compound asset library. Edited by the app; hand edits are read on the next load.
 ${stringifyYaml(manifest, { lineWidth: 0 })}`;
-  noteContent(path, text);
-  await writeFileAtomic(path, text);
+    noteContent(path, text);
+    await writeFileAtomic(path, text);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,14 +1107,16 @@ export async function readConfig(dir: string): Promise<unknown> {
  * null), leaving the rest of the record alone. The watcher is told to keep
  * quiet about it, like the manifest: the app already shows these values.
  */
-export async function writeConfig(dir: string, config: unknown): Promise<void> {
-  const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
-  const next: PackageJson = { ...pkg };
-  // Migrate on save so an old export setting cannot reappear after clearing it.
-  delete next.diffusion;
-  if (config === null || config === undefined) delete next[CONFIG_FIELD];
-  else next[CONFIG_FIELD] = config;
-  await writePackage(dir, next);
+export function writeConfig(dir: string, config: unknown): Promise<void> {
+  return withProjectLock(dir, async () => {
+    const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
+    const next: PackageJson = { ...pkg };
+    // Migrate on save so an old export setting cannot reappear after clearing it.
+    delete next.diffusion;
+    if (config === null || config === undefined) delete next[CONFIG_FIELD];
+    else next[CONFIG_FIELD] = config;
+    await writePackage(dir, next);
+  });
 }
 
 /** Entries of a directory; [] when it is missing or not a directory. */

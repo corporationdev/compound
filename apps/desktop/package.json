@@ -41,14 +41,17 @@
   "dependencies": {
     "@babel/core": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
+    "@compound/backend": "workspace:*",
     "@compound/chat": "workspace:*",
     "@compound/config": "workspace:*",
     "@compound/dapi": "workspace:*",
     "@compound/jsx": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "babel-preset-solid": "^1.9.12",
+    "convex": "^1.33.1",
     "esbuild": "^0.28.1",
     "nanoid": "^6.0.1",
+    "node-diff3": "3.2.1",
     "ts-morph": "^28.0.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"

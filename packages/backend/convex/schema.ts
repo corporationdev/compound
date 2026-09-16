@@ -83,4 +83,37 @@ export default defineSchema({
   })
     .index('by_owner', ['ownerId', 'expiresAt'])
     .index('by_expiry', ['expiresAt']),
+  projects: defineTable({
+    organizationId: v.string(),
+    name: v.string(),
+    entry: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archivedAt: v.optional(v.number()),
+  }).index('by_org', ['organizationId']),
+  projectFiles: defineTable({
+    projectId: v.id('projects'),
+    path: v.string(),
+    text: v.string(),
+    hash: v.string(),
+    version: v.number(),
+    deleted: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index('by_project_path', ['projectId', 'path'])
+    .index('by_project', ['projectId']),
+  assets: defineTable({
+    organizationId: v.string(),
+    sampleId: v.string(),
+    size: v.number(),
+    mimeType: v.string(),
+    name: v.string(),
+    originalKey: v.optional(v.string()),
+    originalState: v.union(v.literal('uploading'), v.literal('ready')),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_org_sample', ['organizationId', 'sampleId']),
 });

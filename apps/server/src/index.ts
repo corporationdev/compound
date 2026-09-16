@@ -1,6 +1,7 @@
 import { DEEPGRAM_MODEL, GEMINI_MODEL } from '@compound/config/models';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@compound/backend/convex/_generated/api';
+import { originalKeyFor } from '@compound/backend/assets-key';
 import { ConvexError } from 'convex/values';
 import type { Id } from '@compound/backend/convex/_generated/dataModel';
 import { AwsClient } from 'aws4fetch';
@@ -19,6 +20,24 @@ export interface Env {
   GOOGLE_GENERATIVE_AI_API_KEY: string;
 }
 const MAX_BYTES = 100 * 1024 * 1024;
+// Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
+const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
+const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url'] as const;
+const projectId = z.string().min(1).max(100).transform((id) => id as Id<'projects'>);
+const sampleId = z.string().regex(/^[0-9a-f]{16}$/);
+const assetRegisterSchema = z
+  .object({
+    projectId,
+    sampleId,
+    size: z.number().int().min(1).max(MAX_ASSET_BYTES),
+    mimeType: z.string().regex(/^[\w.+-]+\/[\w.+-]+$/),
+    name: z.string().min(1).max(255).refine((name) => !/[/\\\0]/.test(name)),
+  })
+  .strict();
+const assetFinishSchema = z
+  .object({ assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>) })
+  .strict();
+const assetLookupSchema = z.object({ projectId, sampleId }).strict();
 const uploadSchema = z
   .object({
     size: z.number().int().min(1).max(MAX_BYTES),
@@ -124,7 +143,7 @@ export default {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(request.url).pathname;
       if (path === '/health' && request.method === 'GET') return json({ ok: true });
-      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
+      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`), ...ASSET_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
         throw new HttpError(404, 'Not found');
       if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -139,6 +158,41 @@ export default {
           if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid library request');
           throw error;
         }
+      }
+      if (path === '/media/asset-upload-url') {
+        const input = parseInput(assetRegisterSchema, body);
+        const registered = await client.mutation(api.assets.register, input);
+        if (registered.state === 'ready') return json({ assetId: registered.assetId, uploadUrl: null });
+        // The key is the asset's identity (organization, sample, name) as the
+        // backend recorded it, never the caller's spelling of it.
+        const asset = await client.query(api.assets.describe, { assetId: registered.assetId });
+        return json({
+          assetId: asset._id,
+          uploadUrl: await signedUrl(env, originalKeyFor(asset), 'PUT', asset.mimeType, asset.size),
+        });
+      }
+      if (path === '/media/asset-upload-finish') {
+        const { assetId } = parseInput(assetFinishSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        const key = originalKeyFor(asset);
+        if (asset.originalState !== 'ready') {
+          const object = await env.MEDIA.head(key);
+          if (!object || object.size !== asset.size)
+            throw new HttpError(400, 'Upload is incomplete or does not match its declared size');
+          await client.mutation(api.assets.finish, { assetId, originalKey: key });
+        }
+        return json({ ok: true });
+      }
+      if (path === '/media/asset-download-url') {
+        const asset = await client.query(api.assets.get, parseInput(assetLookupSchema, body));
+        if (!asset || asset.originalState !== 'ready' || !asset.originalKey)
+          throw new HttpError(404, 'Original not available');
+        return json({
+          url: await signedUrl(env, asset.originalKey, 'GET'),
+          size: asset.size,
+          mimeType: asset.mimeType,
+          name: asset.name,
+        });
       }
       if (path === '/media/upload-url') {
         const upload = await client.mutation(api.uploads.create, parseInput(uploadSchema, body));
@@ -227,6 +281,10 @@ export default {
       }
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
+      if (error instanceof ConvexError && error.data === 'Not a member of this organization')
+        return json({ error: error.data }, 403);
+      if (error instanceof ConvexError && (error.data === 'Project not found' || error.data === 'Asset not found'))
+        return json({ error: error.data }, 404);
       if (
         error instanceof ConvexError &&
         (error.data === 'Media request limit reached' ||
