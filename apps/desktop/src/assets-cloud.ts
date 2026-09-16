@@ -64,6 +64,15 @@ export function originalCachePath(dir: string, sampleId: string, name: string): 
   return join(dir, ORIGINALS_DIR, `${sampleId}${extensionOf(name)}`);
 }
 
+/**
+ * A media type without its parameters, lower-cased: the library probes
+ * `video/mp4; codecs="avc1.64001f, mp4a.40.2"`, the cloud records and signs
+ * for `video/mp4`. The PUT must carry exactly what was signed.
+ */
+export function mediaEssence(mimeType: string): string {
+  return mimeType.split(";")[0]!.trim().toLowerCase();
+}
+
 const inflightUploads = new Map<string, Promise<UploadResponse>>();
 const inflightFetches = new Map<string, Promise<FetchResponse>>();
 
@@ -91,20 +100,21 @@ async function upload(request: UploadRequest): Promise<UploadResponse> {
   if (!info?.isFile()) throw new Error(`No such file: ${request.source}`);
   if (info.size < 1 || info.size > MAX_ASSET_BYTES) throw new Error("Originals must be between 1 byte and 4 GiB");
 
+  const mimeType = mediaEssence(request.mimeType);
   const registered = (await mediaRequest(
     "asset-upload-url",
-    { organizationId: request.organizationId, sampleId: request.sampleId, size: info.size, mimeType: request.mimeType, name: request.name },
+    { organizationId: request.organizationId, sampleId: request.sampleId, size: info.size, mimeType, name: request.name },
     request.token,
   )) as { assetId: string; uploadUrl: string | null };
   if (!registered.uploadUrl) return { assetId: registered.assetId, state: "ready" };
 
   // A lazy Blob: the size is known up front (the signed URL binds
   // Content-Length to it) and the bytes are read from disk as they are sent.
-  const blob = await openAsBlob(request.source, { type: request.mimeType });
+  const blob = await openAsBlob(request.source, { type: mimeType });
   if (blob.size !== info.size) throw new Error("The file changed while it was being uploaded");
   const response = await fetch(registered.uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": request.mimeType },
+    headers: { "Content-Type": mimeType },
     body: blob,
   });
   await response.body?.cancel().catch(() => {});

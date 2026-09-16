@@ -67,6 +67,16 @@ test('asset-upload-url signs a PUT at the asset key bound to declared type and s
   expect(calls.find((call) => call.path === 'assets:register')?.args).toEqual(register);
 });
 
+test('asset-upload-url registers a probed type with codecs as its bare media type', async () => {
+  const calls = backend({
+    'assets:register': { assetId: 'asset-1', state: 'uploading', uploadNeeded: true },
+    'assets:describe': asset,
+  });
+  const probed = { ...register, mimeType: 'Video/MP4; codecs="avc1.64001f, mp4a.40.2"' };
+  expect((await worker.fetch(request('asset-upload-url', probed), env)).status).toBe(200);
+  expect(calls.find((call) => call.path === 'assets:register')?.args).toEqual(register);
+});
+
 test('asset-upload-url returns no URL for an original that is already in the cloud', async () => {
   backend({ 'assets:register': { assetId: 'asset-1', state: 'ready', uploadNeeded: false } });
   const response = await worker.fetch(request('asset-upload-url', register), env);

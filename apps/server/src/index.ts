@@ -30,7 +30,12 @@ const assetRegisterSchema = z
     organizationId,
     sampleId,
     size: z.number().int().min(1).max(MAX_ASSET_BYTES),
-    mimeType: z.string().regex(/^[\w.+-]+\/[\w.+-]+$/),
+    // Parameters (`; codecs="…"`) are dropped: the object is signed and
+    // served by its type alone.
+    mimeType: z
+      .string()
+      .transform((type) => type.split(';')[0]!.trim().toLowerCase())
+      .pipe(z.string().regex(/^[\w.+-]+\/[\w.+-]+$/)),
     name: z.string().min(1).max(255).refine((name) => !/[/\\\0]/.test(name)),
   })
   .strict();
@@ -63,7 +68,10 @@ class HttpError extends Error {
 }
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new HttpError(400, 'Invalid request');
+  if (!result.success) {
+    const fields = [...new Set(result.error.issues.map((issue) => issue.path.join('.') || 'body'))];
+    throw new HttpError(400, `Invalid request: ${fields.join(', ')}`);
+  }
   return result.data;
 }
 async function signedUrl(
@@ -177,8 +185,9 @@ export default {
         const key = originalKeyFor(asset);
         if (asset.originalState !== 'ready') {
           const object = await env.MEDIA.head(key);
-          if (!object || object.size !== asset.size)
-            throw new HttpError(400, 'Upload is incomplete or does not match its declared size');
+          if (!object) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+          if (object.size !== asset.size)
+            throw new HttpError(400, `Upload is ${object.size} bytes but the asset was declared as ${asset.size}`);
           await client.mutation(api.assets.finish, { assetId, originalKey: key });
         }
         return json({ ok: true });

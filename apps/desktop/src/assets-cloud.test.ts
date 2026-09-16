@@ -16,7 +16,7 @@ vi.mock("electron", () => ({
   ipcMain: { on: () => { } },
 }));
 
-const { extensionOf, originalCachePath, uploadAssetOriginal, fetchAssetOriginal, validSampleId } = await import("./assets-cloud");
+const { extensionOf, mediaEssence, originalCachePath, uploadAssetOriginal, fetchAssetOriginal, validSampleId } = await import("./assets-cloud");
 
 describe("originals cache paths", () => {
   it("keeps the cloud name's extension and names the file by its sample id", () => {
@@ -29,6 +29,12 @@ describe("originals cache paths", () => {
     expect(validSampleId("../0123456789abcd")).toBe(false);
     expect(validSampleId("0123456789ABCDEF")).toBe(false);
     expect(() => originalCachePath("/p", "../../etc", "x.mp4")).toThrow("Invalid asset id");
+  });
+
+  it("sends the cloud a media type without the codecs the probe reports", () => {
+    expect(mediaEssence('video/mp4; codecs="avc1.64001f, mp4a.40.2"')).toBe("video/mp4");
+    expect(mediaEssence("Audio/MPEG ")).toBe("audio/mpeg");
+    expect(mediaEssence("image/png")).toBe("image/png");
   });
 
   it("reads an extension only when it looks like one", () => {
