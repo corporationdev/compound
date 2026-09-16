@@ -18,6 +18,8 @@ type ExportProgressProps = {
   open: boolean;
   progress: number;
   remaining?: { minutes: number; seconds: number };
+  /** Originals of cloud assets still coming down before the encode starts. */
+  downloading?: { done: number; total: number };
   config?: ExportConfig;
   width: number;
   height: number;
@@ -82,9 +84,13 @@ export function ExportProgress(props: ExportProgressProps) {
 
               <div>
                 <div class="mt-2 mb-2 flex w-full justify-between text-sm">
-                  <p class="text-muted-foreground">Progress</p>
+                  <p class="text-muted-foreground">
+                    {props.downloading ? "Downloading originals" : "Progress"}
+                  </p>
                   <p>
-                    {props.progress}%
+                    <Show when={props.downloading} fallback={<>{props.progress}%</>}>
+                      {(d) => <>{d().done} of {d().total}</>}
+                    </Show>
                     <Show when={props.remaining}>
                       {(r) => (
                         <span>
@@ -98,7 +104,7 @@ export function ExportProgress(props: ExportProgressProps) {
                 <div class="relative h-2 w-full overflow-hidden rounded-full bg-foreground/20">
                   <div
                     class="h-full bg-foreground rounded-full transition-all"
-                    style={{ width: `${props.progress}%` }}
+                    style={{ width: `${props.downloading ? Math.round((props.downloading.done / Math.max(1, props.downloading.total)) * 100) : props.progress}%` }}
                   />
                 </div>
               </div>

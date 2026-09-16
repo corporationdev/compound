@@ -7,6 +7,8 @@ import { toast } from "somoto";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Switch as ToggleSwitch, SwitchControl, SwitchInput, SwitchThumb } from "@/components/ui/switch";
+import { eagerOriginals, setEagerOriginals } from "@/engine/cloud-assets";
 import { revealPath } from "@/lib/shell";
 import { pickWorkspaceRoot, workspaceDir, workspaceRoot } from "@/lib/workspace";
 import { usePermissionState, type PermissionState } from "@/hooks/use-permission";
@@ -61,6 +63,18 @@ function DashboardWorkspaceFolderSection() {
           <Button variant="secondary" onClick={handleChange}>
             Change...
           </Button>
+        }
+      />
+      <DashboardInfoActionRow
+        title="Download originals in the background"
+        description="Media imported on another machine plays from a smaller proxy here; the full-size original comes down when you export. Turn this on to fetch originals as soon as the proxies are in, on a fast connection with disk to spare."
+        action={
+          <ToggleSwitch checked={eagerOriginals()} onChange={setEagerOriginals} class="flex items-center">
+            <SwitchInput />
+            <SwitchControl>
+              <SwitchThumb />
+            </SwitchControl>
+          </ToggleSwitch>
         }
       />
     </DashboardSurfaceSection>

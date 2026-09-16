@@ -30,7 +30,6 @@ import { captureProjectCover } from '@/projects/cover';
 import { attachCloudAssets } from '@/engine/cloud-assets';
 import { cloudUserId } from '@/lib/organizations';
 import { isInWorkspace, workspace } from '@/lib/workspace';
-import { getToken } from '@/lib/auth-client';
 import { Library } from '@compound/runtime';
 import { useProject } from "@/context/project";
 import { useEngineContext } from "@/engine";
@@ -229,7 +228,7 @@ export function EditorPage() {
     const current = workspace();
     if (!dir || !current || !cloudUserId() || !isInWorkspace(dir)) return;
     const library = untrack(() => world.get(Library));
-    const detachAssets = library ? attachCloudAssets(library, { dir, organizationId: current.organizationId, getToken }) : undefined;
+    const detachAssets = library ? attachCloudAssets(library, { dir, organizationId: current.organizationId }) : undefined;
     onCleanup(() => detachAssets?.());
   });
 

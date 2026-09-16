@@ -188,6 +188,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
         open={!!renderOverlay()}
         progress={renderOverlay()?.progress ?? 0}
         remaining={renderOverlay()?.remaining}
+        downloading={renderOverlay()?.downloading}
         config={renderOverlay()?.config as ExportConfig | undefined}
         width={renderOverlay()?.width ?? 0}
         height={renderOverlay()?.height ?? 0}

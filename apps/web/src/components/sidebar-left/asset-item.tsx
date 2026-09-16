@@ -18,7 +18,9 @@ import {
 } from "../ui/context-menu";
 import { AssetThumbnail } from "../ui/asset-thumbnail";
 import { formatAssetDuration } from "@/utils";
+import { isRemoteAsset } from "@/engine/cloud-assets";
 import { useLibrary } from "@/engine/library";
+import { badgeLabel } from "./cloud-assets-pill";
 import { ASSET_DRAG_TYPE } from "./folder-item";
 
 import type { Asset } from "@compound/assets";
@@ -39,6 +41,14 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
   const [isVisible, setIsVisible] = createSignal(false);
   const [isRenaming, setIsRenaming] = createSignal(false);
   const assetDuration = createMemo(() => formatAssetDuration(props.asset));
+  // Where the bytes are: moving, waiting, failed, or only in the cloud.
+  const cloudBadge = createMemo(() => {
+    const badge = badgeLabel(props.asset.id);
+    if (badge) return badge;
+    const lib = library();
+    if (lib && isRemoteAsset(lib, props.asset)) return { text: "☁", title: "In the cloud; downloads when first used", tone: "remote" as const };
+    return null;
+  });
   const name = () => assetName(props.asset);
 
   let ref: HTMLDivElement | undefined;
@@ -124,6 +134,19 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
               <div class="absolute left-1 top-1 z-20 flex h-4 items-center justify-center rounded bg-overlay px-1">
                 <span class="text-xxs text-primary-foreground">
                   {duration()}
+                </span>
+              </div>
+            )}
+          </Show>
+          <Show when={cloudBadge()}>
+            {(badge) => (
+              <div
+                class="absolute bottom-1 right-1 z-20 flex h-4 items-center justify-center rounded bg-overlay px-1"
+                classList={{ "text-destructive": badge().tone === "failed" }}
+                title={badge().title}
+              >
+                <span class="text-xxs text-primary-foreground" classList={{ "text-destructive": badge().tone === "failed" }}>
+                  {badge().text}
                 </span>
               </div>
             )}

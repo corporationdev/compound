@@ -148,6 +148,13 @@ function prefixSums(x: Float32Array): { sum: Float64Array; sumSq: Float64Array }
 
 const offsetCache = new Map<string, Promise<AudioSyncResult>>();
 
+/** Drops every remembered offset involving one asset, for one that now hands out different bytes. */
+export function forgetAudioSync(assetId: string): void {
+  for (const key of [...offsetCache.keys()]) {
+    if (key.split(':').includes(assetId)) offsetCache.delete(key);
+  }
+}
+
 export function computeAudioSyncOffsetCached(a: Asset, b: Asset): Promise<AudioSyncResult> {
   const key = `${a.id}:${b.id}`;
   const cached = offsetCache.get(key);

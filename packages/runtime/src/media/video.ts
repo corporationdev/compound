@@ -691,6 +691,11 @@ export function clearVideoTrackCache() {
 	videoTrackCache.clear();
 }
 
+/** Drops the remembered track of one asset, for one that now hands out different bytes. */
+export function forgetVideoTrack(assetId: string) {
+	videoTrackCache.delete(assetId);
+}
+
 export function getVideoTrack(source: VideoAsset) {
 	let promise = videoTrackCache.get(source.id);
 	if (promise) {
