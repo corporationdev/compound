@@ -99,6 +99,17 @@ function conflictSource(path: string): string | null {
   return stampAt > 0 ? inner.slice(0, stampAt) : null;
 }
 
+/** The folders holding a live `package.json` among `files`. */
+export function projectRootsOf(files: readonly RemoteFileMeta[]): Set<string> {
+  const roots = new Set<string>();
+  for (const { path, deleted } of files) {
+    if (deleted) continue;
+    if (path === "package.json") roots.add("");
+    else if (path.endsWith("/package.json")) roots.add(path.slice(0, -"/package.json".length));
+  }
+  return roots;
+}
+
 export class WorkspaceSync {
   readonly dir: string;
   readonly organizationId: string;
@@ -116,6 +127,7 @@ export class WorkspaceSync {
 
   private latestSnapshot: RemoteFileMeta[] | null = null;
   private readonly latestMeta = new Map<string, RemoteFileMeta>();
+  private roots: ReadonlySet<string> = new Set();
   private snapshotQueued = false;
 
   private readonly coalesce = new Map<string, ReturnType<typeof setTimeout>>();
@@ -213,6 +225,16 @@ export class WorkspaceSync {
     await this.store.flush();
   }
 
+  /**
+   * Every folder the cloud holds a `package.json` in, workspace-relative
+   * (`''` for the workspace itself). Known from the snapshot, before any of
+   * the folder's files are written here — so a listing can treat the folder
+   * as a project from its first file, not once enough of it has landed.
+   */
+  get projectRoots(): ReadonlySet<string> {
+    return this.roots;
+  }
+
   get status(): SyncStatus {
     const skipped = [...this.skipped].sort();
     if (this.fatal) return { state: "error", pending: this.pending.size, skipped, error: this.fatal };
@@ -275,6 +297,7 @@ export class WorkspaceSync {
       const snapshot = this.latestSnapshot ?? [];
       this.latestMeta.clear();
       for (const meta of snapshot) this.latestMeta.set(meta.path, meta);
+      this.roots = projectRootsOf(snapshot);
       for (const meta of snapshot) await this.applyRemote(meta);
       if (this.initialized) return;
       await this.scanLocal();

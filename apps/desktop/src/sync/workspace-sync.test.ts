@@ -68,6 +68,30 @@ async function folderText(dir: string): Promise<Record<string, string>> {
   return Object.fromEntries(files.map((file) => [file.path, file.text]));
 }
 
+describe("project roots", () => {
+  it("names every folder the cloud holds a package.json in, from the first snapshot", async () => {
+    const backend = new FakeBackend();
+    await backend.writeMany(PROJECT, [
+      { path: "projects/film/package.json", text: "{}\n", hash: "h1" },
+      { path: "projects/film/index.tsx", text: "a\n", hash: "h2" },
+      { path: "clients/acme/package.json", text: "{}\n", hash: "h3" },
+      { path: "notes.md", text: "n\n", hash: "h4" },
+    ]);
+    const a = await checkout("a", backend);
+    expect([...a.projectRoots].sort()).toEqual(["clients/acme", "projects/film"]);
+  });
+
+  it("forgets a folder whose package.json the cloud dropped", async () => {
+    const backend = new FakeBackend();
+    await backend.writeMany(PROJECT, [{ path: "projects/film/package.json", text: "{}\n", hash: "h1" }]);
+    const a = await checkout("a", backend);
+    expect(a.projectRoots.has("projects/film")).toBe(true);
+    await remove(a, "projects/film/package.json");
+    await settle(a);
+    expect(a.projectRoots.has("projects/film")).toBe(false);
+  });
+});
+
 describe("one checkout", () => {
   it("materializes an empty folder from the cloud and pushes new local files", async () => {
     const backend = new FakeBackend();

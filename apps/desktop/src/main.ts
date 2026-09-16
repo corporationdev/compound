@@ -321,7 +321,7 @@ if (app.requestSingleInstanceLock()) {
   // The workspace channels act on the disk under a folder the renderer names;
   // only the app's own page may, and only for a folder `openWorkspace` gave out.
   mainBridge.handle(MAIN_CHANNELS.WORKSPACE_OPEN, (data, event) => { trustedRenderer(event); return openWorkspace(data); });
-  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_LIST, ({ dir }, event) => { trustedRenderer(event); return listWorkspace(dir); });
+  mainBridge.handle(MAIN_CHANNELS.WORKSPACE_LIST, ({ dir }, event) => { trustedRenderer(event); return listWorkspace(dir, syncManager.projectRoots(dir)); });
   mainBridge.handle(MAIN_CHANNELS.WORKSPACE_PROJECTS, ({ dir }, event) => { trustedRenderer(event); return findProjects(dir); });
   mainBridge.handle(MAIN_CHANNELS.WORKSPACE_READ, ({ dir, path }, event) => { trustedRenderer(event); return readWorkspaceFile(dir, path); });
   mainBridge.handle(MAIN_CHANNELS.WORKSPACE_WRITE, ({ dir, path, text, base }, event) => { trustedRenderer(event); return writeWorkspaceFile(dir, path, text, base); });

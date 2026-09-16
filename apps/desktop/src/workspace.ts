@@ -175,8 +175,13 @@ export function isVisiblePath(path: string): boolean {
  * Folders come with whether they are a project, which the tree marks and
  * the dashboard lists; the ignored names (installs, caches, media, the
  * app's own folder) and dotfiles are left out.
+ *
+ * `knownProjects` are folders the cloud says hold a project (see the sync
+ * engine's `projectRoots`). A folder sync is still writing may not yet have
+ * the package or entry file on disk; naming it here keeps it marked as a
+ * project from its first file, so the tree never shows it and then hides it.
  */
-export async function listWorkspace(dir: string): Promise<WorkspaceEntry[]> {
+export async function listWorkspace(dir: string, knownProjects: ReadonlySet<string> | null = null): Promise<WorkspaceEntry[]> {
   assertOpened(dir);
   const entries: WorkspaceEntry[] = [];
   const walk = async (parent: string, depth: number): Promise<void> => {
@@ -190,7 +195,7 @@ export async function listWorkspace(dir: string): Promise<WorkspaceEntry[]> {
       const info = await stat(join(absolute, child.name)).catch(() => null);
       if (!info) continue;
       if (info.isDirectory()) {
-        const project = !!(await getProject(join(absolute, child.name)));
+        const project = knownProjects?.has(path) || !!(await getProject(join(absolute, child.name)));
         entries.push({ path, name: child.name, kind: "directory", size: 0, mtime: info.mtimeMs, project });
         await walk(path, depth + 1);
       } else if (info.isFile()) {

@@ -116,6 +116,19 @@ describe("listWorkspace and findProjects", () => {
     await initProject(null, join(dir, "projects", "top"));
     expect((await findProjects(dir)).map((project) => project.name).sort()).toEqual(["launch", "top"]);
   });
+
+  it("marks a folder the cloud calls a project before its files have landed", async () => {
+    const { dir } = await openWorkspace({ ...ORG, root });
+    await mkdir(join(dir, "projects", "film", "scenes"), { recursive: true });
+    await writeFile(join(dir, "projects", "film", "scenes", "a.tsx"), "a\n");
+
+    const plain = await listWorkspace(dir);
+    expect(plain.find((entry) => entry.path === "projects/film")?.project).toBe(false);
+
+    const known = await listWorkspace(dir, new Set(["projects/film"]));
+    expect(known.find((entry) => entry.path === "projects/film")?.project).toBe(true);
+    expect(known.find((entry) => entry.path === "projects")?.project).toBe(false);
+  });
 });
 
 describe("paths", () => {

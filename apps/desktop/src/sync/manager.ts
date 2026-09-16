@@ -66,6 +66,11 @@ export class SyncManager {
     return this.syncs.get(dir)?.status ?? null;
   }
 
+  /** The project folders the cloud knows under `dir`, or null when it is not syncing. */
+  projectRoots(dir: string): ReadonlySet<string> | null {
+    return this.syncs.get(dir)?.projectRoots ?? null;
+  }
+
   /**
    * Starts keeping `dir` in step with the organization's workspace; a folder
    * already syncing it is left alone. A folder with files and no sync
