@@ -13,13 +13,13 @@ import { DashboardHomeView } from "@/components/dashboard/home-view";
 import { DashboardMcpView } from "@/components/dashboard/mcp-view";
 import { DashboardProjectsView } from "@/components/dashboard/projects-view";
 import { DashboardSettingsView } from "@/components/dashboard/settings-view";
+import { DashboardSidebarUser } from "@/components/dashboard/sidebar-user-menu";
 import {
   DashboardSidebarHeader,
   DashboardSidebarItem,
   DashboardSidebarNav,
   DashboardSidebarSection,
   DashboardSidebarTopSpacer,
-  DashboardSidebarUser,
 } from "@/components/dashboard/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { WorkspaceFileTree } from "@/components/workspace/file-tree";
@@ -166,9 +166,14 @@ export function DashboardPage() {
             </DashboardSidebarSection>
           </Show>
         </DashboardSidebarNav>
-        <Show when={!settingsNavOpen()}>
-          <DashboardSidebarUser onClick={openProfile} />
-        </Show>
+        <DashboardSidebarUser
+          onAccount={openProfile}
+          onSwitch={() => {
+            // File paths belong to the previous organization. Start at home
+            // instead of opening the same path in the newly selected workspace.
+            if (onWorkspaceRoute()) setView("home");
+          }}
+        />
       </aside>
 
       <Separator orientation="vertical" class="bg-border-strong" />

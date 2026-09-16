@@ -299,6 +299,41 @@ test('addMemberByEmail requires owner/admin and an existing account, then grants
   expect((await carol.as.query(api.organizations.listMine, {}))[0]?.role).toBe('admin');
 });
 
+test('member directory and removal enforce membership, protect owners, and revoke workspace access', async () => {
+  process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const carol = await identity(t, 'carol@example.com');
+  const outsider = await member(t, 'outsider@example.com');
+  const organizationId = alice.organizationId;
+  await expect(bob.as.query(api.organizations.listMembers, { organizationId })).rejects.toThrow('Not a member');
+  await alice.as.action(api.organizations.addMemberByEmail, { organizationId, email: 'bob@example.com' });
+  await alice.as.action(api.organizations.addMemberByEmail, { organizationId, email: 'carol@example.com', role: 'admin' });
+  const members = await bob.as.query(api.organizations.listMembers, { organizationId });
+  expect(members.map((m) => m.email).sort()).toEqual(['alice@example.com', 'bob@example.com', 'carol@example.com']);
+  const owner = members.find((m) => m.userId === alice.user._id)!;
+  const regular = members.find((m) => m.userId === bob.user._id)!;
+  const admin = members.find((m) => m.userId === carol.user._id)!;
+  const remove = (memberId: string) => ({ organizationId, memberId });
+
+  await expect(outsider.as.mutation(api.organizations.removeMember, remove(regular.id))).rejects.toThrow('Not a member');
+  await expect(bob.as.mutation(api.organizations.removeMember, remove(admin.id))).rejects.toThrow('owners and admins');
+  await expect(carol.as.mutation(api.organizations.removeMember, remove(owner.id))).rejects.toThrow('owners cannot be removed');
+  await expect(alice.as.mutation(api.organizations.removeMember, remove(owner.id))).rejects.toThrow('owners cannot be removed');
+  await expect(carol.as.mutation(api.organizations.removeMember, remove(admin.id))).rejects.toThrow('cannot remove yourself');
+  const [foreignMember] = await outsider.as.query(api.organizations.listMembers, { organizationId: outsider.organizationId });
+  await expect(alice.as.mutation(api.organizations.removeMember, remove(foreignMember!.id))).rejects.toThrow('Member not found');
+
+  await carol.as.mutation(api.organizations.removeMember, remove(regular.id));
+  expect(await bob.as.query(api.organizations.listMine, {})).toEqual([]);
+  await expect(bob.as.query(api.files.list, { organizationId })).rejects.toThrow('Not a member');
+  await expect(bob.as.query(api.organizations.listMembers, { organizationId })).rejects.toThrow('Not a member');
+  await expect(carol.as.mutation(api.organizations.removeMember, remove(regular.id))).rejects.toThrow('Member not found');
+  await alice.as.mutation(api.organizations.removeMember, remove(admin.id));
+  expect(await alice.as.query(api.organizations.listMembers, { organizationId })).toHaveLength(1);
+});
+
 test('a create that differs from an existing path only by case is refused', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');

@@ -94,3 +94,44 @@ export const addMemberByEmail = action({
     });
   },
 });
+
+/** Live member directory for the current organization. */
+export const listMembers = query({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    await requireMember(ctx, organizationId);
+    const members = await listAll<Member>(ctx, 'member', [{ field: 'organizationId', value: organizationId }]);
+    return Promise.all(members.map(async (member) => {
+      const user = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+        model: 'user',
+        where: [{ field: '_id', value: member.userId }],
+      });
+      return {
+        id: member._id,
+        userId: member.userId,
+        role: member.role,
+        name: user?.name ?? 'Unknown member',
+        email: user?.email ?? '',
+      };
+    }));
+  },
+});
+
+export const removeMember = mutation({
+  args: { organizationId: v.string(), memberId: v.string() },
+  handler: async (ctx, { organizationId, memberId }) => {
+    const { member } = await requireMember(ctx, organizationId);
+    if (!hasRole(member, ['owner', 'admin']))
+      throw new ConvexError('Only owners and admins can remove members');
+    const target = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: 'member',
+      where: [{ field: '_id', value: memberId }, { field: 'organizationId', value: organizationId }],
+    }) as Member | null;
+    if (!target) throw new ConvexError('Member not found in this organization');
+    if (hasRole(target, ['owner'])) throw new ConvexError('Organization owners cannot be removed');
+    if (target.userId === member.userId) throw new ConvexError('You cannot remove yourself');
+    await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
+      input: { model: 'member', where: [{ field: '_id', value: target._id }] },
+    });
+  },
+});
