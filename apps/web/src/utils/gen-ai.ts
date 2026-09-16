@@ -24,6 +24,7 @@ import { createEncoder } from '@compound/encoder';
 import { createCapture } from '@/engine/capture';
 import { assetName, GENERATED_DIR, isPartialAsset } from '@compound/assets';
 import { assert } from '@/utils';
+import { awaitGenerationElsewhere } from '@/utils/generation-elsewhere';
 import { uploadBlob } from '@/lib/uploads';
 import { transcribe } from '@/lib/media-api';
 import { toast } from 'somoto';
@@ -106,6 +107,15 @@ export class EditorGenAi extends GenAi {
 
     const running = this.inflight.get(key);
     if (running) return await running;
+
+    // Pending and not ours: another machine's app is on it (the manifest is
+    // shared). Wait for its answer rather than paying for the same run and
+    // fighting it over the manifest; take over only once it looks abandoned.
+    if (known?.state === 'pending') {
+      const outcome = await awaitGenerationElsewhere(this.library, key);
+      if (outcome.kind === 'asset') return outcome.asset;
+      if (outcome.kind === 'error') throw new ReportedError(outcome.error);
+    }
 
     const promise = this.library
       .reserve({ key, folder: GENERATED_DIR, ...describe() })
