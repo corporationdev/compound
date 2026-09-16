@@ -36,6 +36,19 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+describe("asset list subscriptions", () => {
+  it("wait for the connection a sync start brings, instead of failing for good", async () => {
+    const snapshots: unknown[] = [];
+    const errors: string[] = [];
+    const fresh = new SyncManager();
+    const unsubscribe = fresh.subscribeAssets(ORG, (assets) => snapshots.push(assets), (error) => errors.push(error.message));
+    expect(errors).toEqual([]);
+    expect(snapshots).toEqual([]);
+    unsubscribe();
+    await fresh.stopAll();
+  });
+});
+
 async function settled(dir: string): Promise<void> {
   for (let round = 0; round < 100; round++) {
     if (manager.status(dir)?.state === "synced") return;

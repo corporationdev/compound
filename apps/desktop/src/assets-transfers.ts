@@ -70,6 +70,8 @@ export type AssetsSnapshot = {
   /** What the cloud holds for each sample this project knows, by sample id. */
   cloud: Record<string, { original: "none" | "uploading" | "ready"; proxy: "none" | "uploading" | "ready" }>;
   summary: { uploading: number; downloading: number; waiting: number; failed: number; bytesLeft: number };
+  /** Why the cloud's asset list is not available, while it is not. */
+  error?: string;
 };
 
 export type AttachRequest = { dir: string; organizationId: string; local: LocalAssetInfo[]; eagerOriginals: boolean };
@@ -97,6 +99,7 @@ const RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 300_000];
 /** How long a fetch waits for another machine to finish sending before it gives up. */
 const WAIT_LIMIT_MS = 15 * 60_000;
 const EMIT_DELAY_MS = 150;
+const FEED_RETRY_MS = 5_000;
 
 type Transfer = AssetTransfer & {
   done: Promise<FetchResponse | void>;
@@ -120,6 +123,8 @@ export type ProjectAssetsOptions = {
   onChange: (snapshot: AssetsSnapshot) => void;
   /** Retry delays, for tests. */
   retryDelays?: number[];
+  /** How long to wait before asking for a failed feed again, for tests. */
+  feedRetryMs?: number;
 };
 
 /** The transfers of one project folder. */
@@ -140,6 +145,7 @@ export class ProjectAssets {
   private emitTimer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
   private feedError: string | undefined;
+  private feedRetry: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: ProjectAssetsOptions) {
     this.options = options;
@@ -148,6 +154,13 @@ export class ProjectAssets {
   }
 
   start(): void {
+    this.subscribeFeed();
+  }
+
+  /** Follows the organization's asset list; a feed that fails (signed out, not connected yet) is asked for again after a pause. */
+  private subscribeFeed(): void {
+    if (this.stopped) return;
+    this.unsubscribe?.();
     this.unsubscribe = this.options.feed(
       this.organizationId,
       (assets) => {
@@ -159,7 +172,13 @@ export class ProjectAssets {
       },
       (error) => {
         this.feedError = error.message;
+        console.warn(`[assets] ${this.dir}: asset list unavailable (${error.message}); retrying`);
         this.emitSoon();
+        if (this.feedRetry) clearTimeout(this.feedRetry);
+        this.feedRetry = setTimeout(() => {
+          this.feedRetry = undefined;
+          this.subscribeFeed();
+        }, this.options.feedRetryMs ?? FEED_RETRY_MS);
       },
     );
   }
@@ -425,7 +444,7 @@ export class ProjectAssets {
       const meta = this.cloud.get(sampleId);
       cloud[sampleId] = { original: meta?.originalState ?? "none", proxy: meta?.proxyState ?? "none" };
     }
-    return { dir: this.dir, transfers, proxyWanted: [...this.proxyWanted], cloud, summary };
+    return { dir: this.dir, transfers, proxyWanted: [...this.proxyWanted], cloud, summary, error: this.feedError };
   }
 
   private emitSoon(): void {
@@ -444,6 +463,7 @@ export class ProjectAssets {
   stop(): void {
     this.stopped = true;
     this.unsubscribe?.();
+    if (this.feedRetry) clearTimeout(this.feedRetry);
     if (this.emitTimer) clearTimeout(this.emitTimer);
     for (const transfer of this.transfers.values()) {
       if (transfer.retryTimer) clearTimeout(transfer.retryTimer);

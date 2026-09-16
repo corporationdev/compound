@@ -135,6 +135,33 @@ describe("uploads", () => {
   });
 });
 
+describe("feed", () => {
+  it("asks for the asset list again after it fails, and only then starts work", async () => {
+    let attempts = 0;
+    const assets = new ProjectAssets({
+      dir, organizationId: ORG, cloud: fakeCloud,
+      feed: (_organizationId, onSnapshot, onError) => {
+        attempts++;
+        if (attempts === 1) { onError(new Error("Not connected to the cloud")); return () => {}; }
+        feeds.push(onSnapshot); onSnapshot(cloud); return () => {};
+      },
+      getToken: async () => "jwt",
+      onChange: (snapshot) => snapshots.push(snapshot),
+      retryDelays: [10], feedRetryMs: 20,
+    });
+    assets.start();
+    assets.setLocal([{ sampleId: AUDIO, source: join(dir, "b.wav"), mimeType: "audio/wav", name: "b.wav", type: "AUDIO" }], false);
+    await sleep(10);
+    expect(assets.snapshot().error).toBe("Not connected to the cloud");
+    expect(calls).toEqual([]);
+    const snapshot = await settled(assets);
+    expect(attempts).toBe(2);
+    expect(snapshot.error).toBeUndefined();
+    expect(calls).toEqual([`up:original:${AUDIO}`]);
+    assets.stop();
+  });
+});
+
 describe("downloads", () => {
   it("brings ready proxies down unasked, and originals only when opted in", async () => {
     publish([meta(VIDEO, { originalState: "ready", proxyState: "ready", proxySize: 3 }), meta(AUDIO, { originalState: "ready", mimeType: "audio/wav", name: "b.wav" })]);

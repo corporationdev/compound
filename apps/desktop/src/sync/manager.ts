@@ -29,6 +29,8 @@ export class SyncManager {
   private sessionToken: string | null = null;
   private readonly syncs = new Map<string, WorkspaceSync>();
   private window: BrowserWindow | null = null;
+  /** Asset list subscriptions asked for before the Convex connection existed. */
+  private readonly pendingAssetSubscriptions = new Set<() => void>();
 
   /** Tests hand in their own backend; the app builds a Convex one on first use. */
   constructor(backend?: SyncBackend) {
@@ -53,6 +55,10 @@ export class SyncManager {
     if (!this.backend) {
       const config = await cloudConfig();
       this.backend = new ConvexSyncBackend(config.convexUrl, () => this.fetchToken());
+      for (const pending of [...this.pendingAssetSubscriptions]) {
+        this.pendingAssetSubscriptions.delete(pending);
+        pending();
+      }
     }
     return this.backend;
   }
@@ -75,11 +81,26 @@ export class SyncManager {
    */
   subscribeAssets(organizationId: string, onSnapshot: (assets: CloudAssetMeta[]) => void, onError: (error: Error) => void): () => void {
     const backend = this.backend;
-    if (!backend?.subscribeAssets) {
-      onError(new Error("Not connected to the cloud"));
+    if (backend?.subscribeAssets) return backend.subscribeAssets(organizationId, onSnapshot, onError);
+    if (backend) {
+      onError(new Error("This backend has no asset list"));
       return () => {};
     }
-    return backend.subscribeAssets(organizationId, onSnapshot, onError);
+    // The renderer attaches a project's assets and starts its sync at the
+    // same moment; whichever lands first, the subscription waits for the
+    // connection the sync brings rather than failing for good.
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    const pending = () => {
+      if (cancelled) return;
+      unsubscribe = this.subscribeAssets(organizationId, onSnapshot, onError);
+    };
+    this.pendingAssetSubscriptions.add(pending);
+    return () => {
+      cancelled = true;
+      this.pendingAssetSubscriptions.delete(pending);
+      unsubscribe?.();
+    };
   }
 
   status(dir: string): SyncStatus | null {
