@@ -99,7 +99,10 @@ describe("folders that appear with files already in them", () => {
     await writeFile(join(a.dir, "projects", "fresh", "package.json"), "{}\n");
     await writeFile(join(a.dir, "projects", "fresh", "index.tsx"), "x\n");
     const writesBefore = backend.writes;
+    // The watcher reports the folder and each file in it, in whatever order.
+    a.noteChange("projects/fresh/index.tsx");
     a.noteChange("projects/fresh");
+    a.noteChange("projects/fresh/package.json");
     await settle(a);
     expect(backend.text(PROJECT, "projects/fresh/package.json")).toBe("{}\n");
     expect(backend.text(PROJECT, "projects/fresh/index.tsx")).toBe("x\n");
@@ -120,6 +123,22 @@ describe("folders that appear with files already in them", () => {
     a.noteChange("projects/moved");
     await settle(a);
     expect(backend.text(PROJECT, "projects/moved/deep/note.md")).toBe("moved\n");
+  });
+});
+
+describe("status", () => {
+  it("says synced once the engine has stayed quiet, not between every file of a burst", async () => {
+    const backend = new FakeBackend();
+    const statuses: string[] = [];
+    const a = await checkout("a", backend, { statusSettleMs: 60, onStatus: (status) => statuses.push(status.state) });
+    for (let i = 0; i < 5; i++) {
+      await edit(a, `note-${i}.md`, `${i}\n`);
+      await sleep(10);
+    }
+    await settle(a);
+    await sleep(120);
+    expect(statuses[statuses.length - 1]).toBe("synced");
+    expect(statuses.filter((state) => state === "synced").length).toBe(1);
   });
 });
 

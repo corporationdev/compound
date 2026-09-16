@@ -64,6 +64,8 @@ const PREFETCH_BATCH = 64;
 const SWEEP_DELAY_MS = 250;
 /** How long the engine stays quiet before the status says synced. */
 const STATUS_SETTLE_MS = 700;
+/** How long a file neither side has seen waits for others to go up with. */
+const FRESH_WINDOW_MS = 300;
 /** What the app makes beside a project's files and never syncs; a folder left with only these is as good as empty. */
 const DERIVED_NAMES: ReadonlySet<string> = new Set(["cache", ".DS_Store"]);
 /** Files per batch when a folder's new files go up together; the backend's cap. */
@@ -79,6 +81,8 @@ export type WorkspaceSyncOptions = {
   sweepDelayMs?: number;
   /** For tests: how long the engine must be quiet before it reports synced. */
   statusSettleMs?: number;
+  /** For tests: how long a file neither side has seen waits for others before going up. */
+  freshWindowMs?: number;
   /** Watch the folder for changes; off in tests that drive `noteChange` themselves. */
   watch?: boolean;
   onStatus?: (status: SyncStatus) => void;
@@ -148,6 +152,9 @@ export class WorkspaceSync {
   private fatal: string | undefined;
   private lastStatus = "";
   private statusTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Files neither side has seen, waiting to go up together. */
+  private readonly fresh = new Set<string>();
+  private freshTimer: ReturnType<typeof setTimeout> | undefined;
 
   private unsubscribe: (() => void) | undefined;
   private watcher: TreeWatcher | undefined;
@@ -226,32 +233,24 @@ export class WorkspaceSync {
     if (!info?.isDirectory()) return;
     await new Promise((resolve) => setTimeout(resolve, this.options.sweepDelayMs ?? SWEEP_DELAY_MS));
     if (this.stopped) return;
-    const fresh: string[] = [];
     const walk = async (parent: string): Promise<void> => {
       const entries = await readdir(this.absolute(parent), { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
         if (!shouldDescend(entry.name)) continue;
         const child = `${parent}/${entry.name}`;
         if (entry.isDirectory()) await walk(child);
-        else if (entry.isFile() && isSyncablePath(child)) {
-          if (this.store.get(child) || this.latestMeta.has(child)) this.noteChange(child);
-          else fresh.push(child);
-        }
+        else if (entry.isFile() && isSyncablePath(child)) this.noteChange(child);
       }
     };
     await walk(path);
-    // Files the cloud has never seen go up together, in one write: another
-    // machine then learns of the whole folder at once — its package.json
-    // with the rest — rather than file by file, and can tell a project from
-    // a folder from the first snapshot it sees.
-    if (fresh.length) void this.enqueue(() => this.pushFresh(fresh));
   }
 
+  /** Sends files neither side has seen, together. Ones the cloud has learned of meanwhile take the usual route. */
   private async pushFresh(paths: string[]): Promise<void> {
     if (this.stopped) return;
     const files: { path: string; text: string; hash: string }[] = [];
     for (const path of paths) {
-      if (this.store.get(path) || this.latestMeta.has(path)) { this.noteChange(path); continue; }
+      if (this.store.get(path) || this.latestMeta.has(path)) { void this.enqueue(() => this.reconcile(path)); continue; }
       const local = await this.readLocal(path);
       if (local) files.push({ path, text: local.text, hash: local.hash });
     }
@@ -287,6 +286,7 @@ export class WorkspaceSync {
 
   async stop(): Promise<void> {
     if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
+    if (this.freshTimer) { clearTimeout(this.freshTimer); this.freshTimer = undefined; }
     this.stopped = true;
     // A start still waiting on its first snapshot must not wait forever.
     this.rejectStarted?.(new Error("Sync stopped before it started"));
@@ -313,9 +313,9 @@ export class WorkspaceSync {
     const skipped = [...this.skipped].sort();
     if (this.fatal) return { state: "error", pending: this.pending.size, skipped, error: this.fatal };
     if (!this.initialized) return { state: "starting", pending: 0, skipped };
-    const pending = this.pending.size + this.coalesce.size;
+    const pending = this.pending.size + this.coalesce.size + this.fresh.size;
     if (this.offline) return { state: "offline", pending, skipped };
-    if (this.busy > 0 || this.coalesce.size > 0 || this.snapshotQueued || this.pending.size > 0)
+    if (this.busy > 0 || this.coalesce.size > 0 || this.fresh.size > 0 || this.snapshotQueued || this.pending.size > 0)
       return { state: "syncing", pending, skipped };
     return { state: "synced", pending: 0, skipped };
   }
@@ -342,18 +342,19 @@ export class WorkspaceSync {
    * back through the watcher as a change to look at, so a checkout of seven
    * files would otherwise flip syncing and synced seven times over.
    */
-  private emitStatus(): void {
+  private emitStatus(settled = false): void {
     const status = this.status;
     const key = JSON.stringify(status);
     if (key === this.lastStatus) {
       if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
       return;
     }
-    if (status.state === "synced" && !this.stopped) {
+    if (status.state === "synced" && !settled && !this.stopped) {
+      // Quiet now; say so once it has stayed quiet.
       if (this.statusTimer) return;
       this.statusTimer = setTimeout(() => {
         this.statusTimer = undefined;
-        this.emitStatus();
+        this.emitStatus(true);
       }, this.options.statusSettleMs ?? STATUS_SETTLE_MS);
       return;
     }
@@ -373,7 +374,26 @@ export class WorkspaceSync {
     const meta = this.latestMeta.get(path);
     const known = this.store.get(path);
     if (meta && (!known || known.version < meta.version)) await this.applyRemote(meta);
+    else if (!known && !meta) this.holdFresh(path);
     else await this.pushLocal(path);
+  }
+
+  /**
+   * A file neither side has seen waits a moment for company: a scaffold or
+   * a folder renamed in arrives as a burst of such files, and they go up in
+   * one write so another machine's first snapshot has the whole folder —
+   * its package.json with the rest — rather than a file at a time.
+   */
+  private holdFresh(path: string): void {
+    this.fresh.add(path);
+    if (this.freshTimer) clearTimeout(this.freshTimer);
+    this.freshTimer = setTimeout(() => {
+      this.freshTimer = undefined;
+      const paths = [...this.fresh];
+      this.fresh.clear();
+      void this.enqueue(() => this.pushFresh(paths));
+    }, this.options.freshWindowMs ?? FRESH_WINDOW_MS);
+    this.emitStatus();
   }
 
   // -------------------------------------------------------------------------
