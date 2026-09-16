@@ -261,6 +261,28 @@ test('assets.register is idempotent per organization and sample, and markReady f
   expect(asset).toMatchObject({ organizationId: alice.organizationId, name: 'clip.mp4', originalState: 'ready', uploadedBy: alice.user._id });
 });
 
+test('assets.list shows every asset of the organization to members, and proxies register and finish at their own key', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const args = { organizationId: alice.organizationId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const { assetId } = await alice.as.mutation(api.assets.register, args);
+  const id = assetId as Id<'assets'>;
+  await expect(bob.as.query(api.assets.list, { organizationId: alice.organizationId })).rejects.toThrow('Not a member');
+  expect(await alice.as.query(api.assets.list, { organizationId: alice.organizationId })).toEqual([
+    { sampleId: args.sampleId, name: 'clip.mp4', mimeType: 'video/mp4', size: 1234, originalState: 'uploading', proxyState: null, proxySize: null, updatedAt: expect.any(Number) },
+  ]);
+
+  await expect(bob.as.mutation(api.assets.registerProxy, { assetId: id, size: 100 })).rejects.toThrow('Not a member');
+  expect(await alice.as.mutation(api.assets.registerProxy, { assetId: id, size: 100 })).toEqual({ state: 'uploading', uploadNeeded: true });
+  await expect(alice.as.mutation(api.assets.finishProxy, { assetId: id, proxyKey: 'assets/elsewhere/proxy.mp4' })).rejects.toThrow('does not match');
+  await alice.as.mutation(api.assets.finishProxy, { assetId: id, proxyKey: `assets/${alice.organizationId}/${args.sampleId}/proxy.mp4` });
+  expect(await alice.as.mutation(api.assets.registerProxy, { assetId: id, size: 100 })).toEqual({ state: 'ready', uploadNeeded: false });
+  const [listed] = await alice.as.query(api.assets.list, { organizationId: alice.organizationId });
+  expect(listed).toMatchObject({ proxyState: 'ready', proxySize: 100 });
+  await expect(alice.as.mutation(api.assets.finishProxy, { assetId: id, proxyKey: `assets/${alice.organizationId}/${args.sampleId}/proxy.mp4` })).rejects.toThrow('No proxy upload');
+});
+
 test('assets.describe and assets.finish are for members only, and finish binds the key to the asset', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');

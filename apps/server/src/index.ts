@@ -1,7 +1,7 @@
 import { DEEPGRAM_MODEL, GEMINI_MODEL } from '@compound/config/models';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@compound/backend/convex/_generated/api';
-import { originalKeyFor } from '@compound/backend/assets-key';
+import { originalKeyFor, proxyKeyFor, PROXY_MIME_TYPE } from '@compound/backend/assets-key';
 import { ConvexError } from 'convex/values';
 import type { Id } from '@compound/backend/convex/_generated/dataModel';
 import { AwsClient } from 'aws4fetch';
@@ -22,7 +22,7 @@ export interface Env {
 const MAX_BYTES = 100 * 1024 * 1024;
 // Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
 const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
-const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url'] as const;
+const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish'] as const;
 const organizationId = z.string().min(1).max(100);
 const sampleId = z.string().regex(/^[0-9a-f]{16}$/);
 const assetRegisterSchema = z
@@ -42,7 +42,15 @@ const assetRegisterSchema = z
 const assetFinishSchema = z
   .object({ assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>) })
   .strict();
-const assetLookupSchema = z.object({ organizationId, sampleId }).strict();
+const assetLookupSchema = z
+  .object({ organizationId, sampleId, variant: z.enum(['original', 'proxy']).default('original') })
+  .strict();
+const proxyRegisterSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    size: z.number().int().min(1).max(MAX_ASSET_BYTES),
+  })
+  .strict();
 const uploadSchema = z
   .object({
     size: z.number().int().min(1).max(MAX_BYTES),
@@ -192,9 +200,41 @@ export default {
         }
         return json({ ok: true });
       }
+      if (path === '/media/asset-proxy-upload-url') {
+        const input = parseInput(proxyRegisterSchema, body);
+        const registered = await client.mutation(api.assets.registerProxy, input);
+        if (registered.state === 'ready') return json({ uploadUrl: null });
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        return json({ uploadUrl: await signedUrl(env, proxyKeyFor(asset), 'PUT', PROXY_MIME_TYPE, input.size) });
+      }
+      if (path === '/media/asset-proxy-upload-finish') {
+        const { assetId } = parseInput(assetFinishSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        if (asset.proxyState !== 'ready') {
+          const key = proxyKeyFor(asset);
+          const object = await env.MEDIA.head(key);
+          if (!object) throw new HttpError(400, `Proxy upload not found in the bucket at ${key}`);
+          if (object.size !== asset.proxySize)
+            throw new HttpError(400, `Proxy upload is ${object.size} bytes but was declared as ${asset.proxySize}`);
+          await client.mutation(api.assets.finishProxy, { assetId, proxyKey: key });
+        }
+        return json({ ok: true });
+      }
       if (path === '/media/asset-download-url') {
-        const asset = await client.query(api.assets.get, parseInput(assetLookupSchema, body));
-        if (!asset || asset.originalState !== 'ready' || !asset.originalKey)
+        const { variant, ...lookup } = parseInput(assetLookupSchema, body);
+        const asset = await client.query(api.assets.get, lookup);
+        if (!asset) throw new HttpError(404, 'Original not available');
+        if (variant === 'proxy') {
+          if (asset.proxyState !== 'ready' || !asset.proxyKey || !asset.proxySize)
+            throw new HttpError(404, 'Proxy not available');
+          return json({
+            url: await signedUrl(env, asset.proxyKey, 'GET'),
+            size: asset.proxySize,
+            mimeType: PROXY_MIME_TYPE,
+            name: `${asset.sampleId}.mp4`,
+          });
+        }
+        if (asset.originalState !== 'ready' || !asset.originalKey)
           throw new HttpError(404, 'Original not available');
         return json({
           url: await signedUrl(env, asset.originalKey, 'GET'),

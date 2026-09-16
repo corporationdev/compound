@@ -128,6 +128,12 @@ export default defineSchema({
     name: v.string(),
     originalKey: v.optional(v.string()),
     originalState: v.union(v.literal('uploading'), v.literal('ready')),
+    // A 720p MP4 made beside the original so another machine can start
+    // playing before the original has come down. Absent for assets that
+    // have none (audio, images) and for originals registered before proxies.
+    proxyKey: v.optional(v.string()),
+    proxySize: v.optional(v.number()),
+    proxyState: v.optional(v.union(v.literal('uploading'), v.literal('ready'))),
     uploadedBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),

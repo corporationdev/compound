@@ -150,3 +150,34 @@ test('asset-download-url signs a GET for a ready original and 404s otherwise', a
   backend({ 'assets:get': { status: 'error', errorMessage: 'Asset not found', errorData: 'Asset not found' } });
   expect((await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env)).status).toBe(404);
 });
+
+test('proxy upload signs a PUT at the proxy key, finish checks its size, and download serves the proxy variant', async () => {
+  const PROXY_KEY = 'assets/org-1/0123456789abcdef/proxy.mp4';
+  const calls = backend({ 'assets:registerProxy': { state: 'uploading', uploadNeeded: true }, 'assets:describe': asset });
+  const response = await worker.fetch(request('asset-proxy-upload-url', { assetId: 'asset-1', size: 100 }), env);
+  expect(response.status).toBe(200);
+  const signed = new URL(((await response.json()) as { uploadUrl: string }).uploadUrl);
+  expect(signed.pathname).toBe(`/compound-media-dev/${PROXY_KEY}`);
+  expect(calls.find((call) => call.path === 'assets:registerProxy')?.args).toEqual({ assetId: 'asset-1', size: 100 });
+
+  backend({ 'assets:registerProxy': { state: 'ready', uploadNeeded: false } });
+  expect((await (await worker.fetch(request('asset-proxy-upload-url', { assetId: 'asset-1', size: 100 }), env)).json()) as unknown).toEqual({ uploadUrl: null });
+
+  const uploading = { ...asset, proxyState: 'uploading', proxySize: 100 };
+  const finished = backend({ 'assets:describe': uploading, 'assets:finishProxy': null });
+  const ok = await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: { head: async () => ({ size: 100 }) } as unknown as R2Bucket });
+  expect((await ok.json()) as unknown).toEqual({ ok: true });
+  expect(finished.find((call) => call.path === 'assets:finishProxy')?.args).toEqual({ assetId: 'asset-1', proxyKey: PROXY_KEY });
+  backend({ 'assets:describe': uploading, 'assets:finishProxy': null });
+  expect((await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: { head: async () => ({ size: 99 }) } as unknown as R2Bucket })).status).toBe(400);
+
+  const lookup = { organizationId: 'org-1', sampleId: asset.sampleId, variant: 'proxy' };
+  backend({ 'assets:get': { ...asset, proxyState: 'ready', proxyKey: PROXY_KEY, proxySize: 100 } });
+  const download = await worker.fetch(request('asset-download-url', lookup), env);
+  expect(download.status).toBe(200);
+  const data = (await download.json()) as { url: string; size: number; mimeType: string; name: string };
+  expect(data).toMatchObject({ size: 100, mimeType: 'video/mp4', name: '0123456789abcdef.mp4' });
+  expect(new URL(data.url).pathname).toBe(`/compound-media-dev/${PROXY_KEY}`);
+  backend({ 'assets:get': { ...asset, originalState: 'ready', originalKey: KEY } });
+  expect((await worker.fetch(request('asset-download-url', lookup), env)).status).toBe(404);
+});

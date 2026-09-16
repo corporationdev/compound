@@ -1,7 +1,7 @@
 import { ConvexError, v } from 'convex/values';
 import { internalMutation, mutation, query } from './_generated/server';
 import { requireMember } from './lib/membership';
-import { originalKeyFor } from '../assets-key';
+import { originalKeyFor, proxyKeyFor } from '../assets-key';
 
 export const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
 
@@ -51,6 +51,64 @@ export const register = mutation({
       updatedAt: now,
     });
     return { assetId, state: 'uploading' as const, uploadNeeded: true };
+  },
+});
+
+/**
+ * Every asset of an organization, without keys: what a machine subscribes to
+ * so it learns when an original or proxy it is waiting on becomes ready, and
+ * which of its own originals still need sending.
+ */
+export const list = query({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    await requireMember(ctx, organizationId);
+    const assets = await ctx.db
+      .query('assets')
+      .withIndex('by_org_sample', (q) => q.eq('organizationId', organizationId))
+      .collect();
+    return assets.map((asset) => ({
+      sampleId: asset.sampleId,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      size: asset.size,
+      originalState: asset.originalState,
+      proxyState: asset.proxyState ?? null,
+      proxySize: asset.proxySize ?? null,
+      updatedAt: asset.updatedAt,
+    }));
+  },
+});
+
+/**
+ * Registers a proxy for an asset whose original this member owns or shares.
+ * Idempotent like `register`: a ready proxy needs no upload. The proxy is
+ * re-registered (size replaced) only while it is still uploading.
+ */
+export const registerProxy = mutation({
+  args: { assetId: v.id('assets'), size: v.number() },
+  handler: async (ctx, { assetId, size }) => {
+    const asset = await ctx.db.get(assetId);
+    if (!asset) throw new ConvexError('Asset not found');
+    await requireMember(ctx, asset.organizationId);
+    if (!Number.isSafeInteger(size) || size < 1 || size > MAX_ASSET_BYTES)
+      throw new ConvexError('Proxy size must be between 1 byte and 4 GiB');
+    if (asset.proxyState === 'ready') return { state: 'ready' as const, uploadNeeded: false };
+    await ctx.db.patch(assetId, { proxySize: size, proxyState: 'uploading', updatedAt: Date.now() });
+    return { state: 'uploading' as const, uploadNeeded: true };
+  },
+});
+
+/** Marks the proxy ready once the Worker has seen it in R2, at the key the asset implies. */
+export const finishProxy = mutation({
+  args: { assetId: v.id('assets'), proxyKey: v.string() },
+  handler: async (ctx, { assetId, proxyKey }) => {
+    const asset = await ctx.db.get(assetId);
+    if (!asset) throw new ConvexError('Asset not found');
+    await requireMember(ctx, asset.organizationId);
+    if (proxyKey !== proxyKeyFor(asset)) throw new ConvexError('Proxy key does not match the asset');
+    if (asset.proxyState !== 'uploading') throw new ConvexError('No proxy upload is in progress');
+    await ctx.db.patch(assetId, { proxyKey, proxyState: 'ready', updatedAt: Date.now() });
   },
 });
 
