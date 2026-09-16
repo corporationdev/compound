@@ -40,6 +40,15 @@ export { projectsRoot };
 // renamed, copied, or deleted — so a view listing them can refetch on it.
 const [projectsRevision, setProjectsRevision] = createSignal(1);
 
+/**
+ * What a list of projects follows: the records here (a create, a forget),
+ * and the workspace's own scan of its folders, which moves when a project
+ * lands from another machine or when a folder made here is seen by the
+ * watcher. A view keyed on the records alone refetched too early after a
+ * create, read the stale scan, and never asked again.
+ */
+export const projectsListKey = () => ({ revision: projectsRevision(), workspace: workspaceProjects() });
+
 /** Changes whenever the list `listProjects` answers with would; a source for `createResource`. */
 export { projectsRevision };
 
@@ -104,7 +113,8 @@ export async function ensureProjectsRoot(): Promise<string | null> {
 export async function listProjects(): Promise<ProjectRecord[]> {
 	if (!isDesktop()) return [];
 	const records = await listProjectRecords();
-	const found = workspaceProjects() ?? (workspace() ? await mainBridge.call(MAIN_CHANNELS.WORKSPACE_PROJECTS, { dir: workspace()!.dir }) : []);
+	// The folders as they are now, not the last scan: a project made a moment ago is on disk before the watcher says so.
+	const found = workspace() ? await mainBridge.call(MAIN_CHANNELS.WORKSPACE_PROJECTS, { dir: workspace()!.dir }) : [];
 	const byDir = new Map(records.map((record) => [record.dir, record] as const));
 	const now = new Date().toISOString();
 	const list: ProjectRecord[] = found.map((project) => {

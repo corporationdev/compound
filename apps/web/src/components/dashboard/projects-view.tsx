@@ -33,7 +33,7 @@ import { track } from "@/lib/analytics";
 import {
   listProjects,
   projectKey,
-  projectsRevision,
+  projectsListKey,
   type ProjectInfo,
 } from "@/projects";
 
@@ -43,7 +43,7 @@ export function DashboardProjectsView() {
   const navigate = useNavigate();
   const [search, setSearch] = createSignal("");
   const [sort, setSort] = createSignal<ProjectSortOption>("last-viewed");
-  const [projects, { refetch: refetchProjects }] = createResource(projectsRevision, () => listProjects());
+  const [projects, { refetch: refetchProjects }] = createResource(projectsListKey, () => listProjects());
   const [selectedProject, setSelectedProject] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
   const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo | null>(null);
