@@ -6,9 +6,9 @@ import { dirname, join, delimiter, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Writable } from 'node:stream';
 import { T3Rpc, rpcError } from '@compound/chat/rpc';
-import { CONTEXT_END, CONTEXT_START, isWorking, reduceThread, t3ProjectId } from '@compound/chat';
+import { CONTEXT_END, CONTEXT_START, FULL_ACCESS, RESTRICTED, isWorking, reduceThread, t3ProjectId, turnRefusedBypass } from '@compound/chat';
 import type { ChatProject, ChatReply, ChatRequest, ChatState } from '@compound/chat';
-import type { OrchestrationShellSnapshot, OrchestrationShellStreamItem, OrchestrationThreadDetailSnapshot, OrchestrationThreadStreamItem, ServerConfig, ServerSettings, ServerProviderUpdatedPayload } from '@compound/chat/types';
+import type { OrchestrationShellSnapshot, OrchestrationShellStreamItem, OrchestrationThreadDetailSnapshot, OrchestrationThreadStreamItem, RuntimeMode, ServerConfig, ServerSettings, ServerProviderUpdatedPayload } from '@compound/chat/types';
 
 const supported = new Set(['codex', 'claudeAgent']);
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -49,6 +49,9 @@ export class ChatServer {
   private mcpProjects = new Set<string>();
   private mcpProviders = new Set<string>();
   private stderr = '';
+  /** Every chat's permissions: full access, until a managed policy refuses it once (then lower for the app's lifetime). */
+  private policy: RuntimeMode = FULL_ACCESS;
+  private retriedTurns = new Set<string>();
   private options: ChatServerOptions;
 
   constructor(options: ChatServerOptions) { this.options = options; }
@@ -277,8 +280,28 @@ export class ChatServer {
     if (generation !== this.watchGeneration) return;
     this.publish({ detail: snapshot });
     this.unwatch = this.rpc!.subscribe<OrchestrationThreadStreamItem>('orchestration.subscribeThread', { threadId, afterSequence: snapshot.snapshotSequence }, item => {
-      if (generation === this.watchGeneration) this.publish({ detail: reduceThread(this.state.detail, item) });
+      if (generation !== this.watchGeneration) return;
+      const detail = reduceThread(this.state.detail, item);
+      this.publish({ detail });
+      if (turnRefusedBypass(detail?.thread)) void this.stepDown(detail!.thread);
     }, error => this.publish({ error: error.message }));
+  }
+
+  /**
+   * The CLI refused to run with full access (a managed policy forbids it):
+   * lower this chat and every later one, and retry the same turn once.
+   */
+  private async stepDown(thread: OrchestrationThreadDetailSnapshot['thread']) {
+    const turnId = thread.latestTurn?.turnId;
+    const message = [...thread.messages].reverse().find(m => m.role === 'user');
+    if (!turnId || !message || this.retriedTurns.has(turnId)) return;
+    this.retriedTurns.add(turnId);
+    this.policy = RESTRICTED;
+    console.warn('[chat-server] full access refused by policy; continuing with restricted permissions');
+    try {
+      await this.dispatch({ type: 'thread.runtime-mode.set', threadId: thread.id, runtimeMode: RESTRICTED });
+      await this.dispatch({ type: 'thread.turn.start', threadId: thread.id, message: { messageId: randomUUID(), role: 'user', text: message.text, attachments: message.attachments ?? [] }, modelSelection: thread.modelSelection, runtimeMode: RESTRICTED, interactionMode: 'default' });
+    } catch (error) { this.publish({ error: rpcError(error).message }); }
   }
 
   async request(request: ChatRequest): Promise<ChatReply> {
@@ -308,10 +331,9 @@ export class ChatServer {
         const projectId = await this.ensureProject(request.project);
         await this.attachMcp(request.project.dir, request.provider);
         threadId = randomUUID();
-        await this.dispatch({ type: 'thread.create', threadId, projectId, title: 'New chat', modelSelection: { instanceId: request.provider, model: request.model, options: request.modelOptions }, runtimeMode: request.runtimeMode ?? 'approval-required', interactionMode: 'default', branch: null, worktreePath: null });
+        await this.dispatch({ type: 'thread.create', threadId, projectId, title: 'New chat', modelSelection: { instanceId: request.provider, model: request.model }, runtimeMode: this.policy, interactionMode: 'default', branch: null, worktreePath: null });
         break;
       }
-      case 'permissions': await this.dispatch({ type: 'thread.runtime-mode.set', threadId: request.threadId, runtimeMode: request.runtimeMode }); break;
       case 'watch': await this.watch(request.threadId); break;
       case 'older': {
         const current = this.state.detail;
@@ -332,7 +354,7 @@ export class ChatServer {
           if (!supported.has(thread.modelSelection.instanceId)) throw new Error('Unsupported chat provider');
           await this.attachMcp(request.project.dir, thread.modelSelection.instanceId);
           const context = request.context + MCP_INSTRUCTIONS;
-          await this.dispatch({ type: 'thread.turn.start', commandId: request.messageId, threadId: request.threadId, message: { messageId: request.messageId, role: 'user', text: request.text + CONTEXT_START + context + CONTEXT_END, attachments: request.attachments }, modelSelection: { ...thread.modelSelection, model: request.model, options: request.modelOptions ?? thread.modelSelection.options }, runtimeMode: thread.runtimeMode, interactionMode: 'default', titleSeed: request.text.slice(0, 160) || 'Image attachment' });
+          await this.dispatch({ type: 'thread.turn.start', commandId: request.messageId, threadId: request.threadId, message: { messageId: request.messageId, role: 'user', text: request.text + CONTEXT_START + context + CONTEXT_END, attachments: request.attachments }, modelSelection: { ...thread.modelSelection, model: request.model }, runtimeMode: thread.runtimeMode, interactionMode: 'default', titleSeed: request.text.slice(0, 160) || 'Image attachment' });
         } finally { this.sending.delete(request.threadId); }
         break;
       }

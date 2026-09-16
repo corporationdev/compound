@@ -14,12 +14,10 @@ import { For, Show, createEffect } from "solid-js";
 
 import { Icon } from "@/components/ui/icon";
 
-import type { ProviderOptionChoice, RuntimeMode, SelectProviderOptionDescriptor, UploadChatAttachment } from "@compound/chat/types";
+import type { UploadChatAttachment } from "@compound/chat/types";
 
 import { AttachmentTile, DropOverlay, createDropZone, mergeAttachments, type Attachment } from "./attachments";
 import { ModelPicker } from "./model-picker";
-import { PermissionPicker } from "./permissions";
-import { ThinkingPicker } from "./thinking-picker";
 import type { ModelRef } from "./store";
 
 const MAX_HEIGHT_PX = 160;
@@ -40,11 +38,6 @@ type ComposerProps = {
   blocked: string | null;
   model: ModelRef | null;
   onModel(ref: ModelRef): void;
-  permissions: RuntimeMode;
-  onPermissions(value: RuntimeMode): void;
-  thinking?: SelectProviderOptionDescriptor;
-  thinkingValue?: ProviderOptionChoice;
-  onThinking(value: string): void;
   onSend(): void;
   onStop(): void;
 };
@@ -137,17 +130,6 @@ export function Composer(props: ComposerProps) {
 
       <div class="flex min-h-4 items-center gap-0.5">
         <ModelPicker value={props.model} onSelect={props.onModel} class="min-w-0" />
-        <Show when={props.thinking}>
-          {(descriptor) => (
-            <ThinkingPicker
-              descriptor={descriptor()}
-              value={props.thinkingValue}
-              disabled={props.running}
-              onSelect={props.onThinking}
-            />
-          )}
-        </Show>
-        <PermissionPicker value={props.permissions} disabled={props.blocked !== null} onSelect={props.onPermissions} />
 
         <span class="ml-auto" />
         <input

@@ -53,7 +53,6 @@ import {
   loadOlder,
   openChat,
   pendingOf,
-  permissionMode,
   ready,
   reconnect,
   respond,
@@ -64,12 +63,8 @@ import {
   setDraftAttachments,
   setDraftImages,
   setDraftText,
-  setPermissionMode,
   setStoredModel,
-  setThinking,
   summaryOf,
-  thinkingChoice,
-  thinkingOptions,
   useProjectDir,
   type ModelRef,
 } from "./store";
@@ -113,7 +108,6 @@ export function ChatPanel() {
     const chat = summary();
     return chat ? { harness: chat.harness, model: chat.model } : currentModel();
   });
-  const thinking = createMemo(() => thinkingOptions(model()));
 
   const [sendCount, setSendCount] = createSignal(0);
 
@@ -286,14 +280,6 @@ export function ChatPanel() {
         blocked={blockedReason()}
         model={model()}
         onModel={handleModel}
-        permissions={permissionMode(project.id(), chatId())}
-        onPermissions={(value) => void setPermissionMode(project.id(), chatId(), value)}
-        thinking={thinking()}
-        thinkingValue={thinkingChoice(model())}
-        onThinking={(value) => {
-          const ref = model();
-          if (ref) setThinking(ref, value);
-        }}
         onSend={handleSend}
         onStop={handleStop}
       />

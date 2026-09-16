@@ -8,8 +8,8 @@
 // over `MAIN_CHANNELS.CHAT_STATE`, and the UI sends `CHAT_REQUEST` commands
 // back. Everything T3 owns (chats, transcripts, questions, approvals) is a
 // view here; what is ours alone is the draft per chat, which tab is up, which
-// chat each project shows, and the model / permission / thinking choices a
-// new chat starts with.
+// chat each project shows, and the model a new chat starts with. Permissions
+// are not a choice: every chat runs with full access, as upstream's host does.
 
 import { createRoot } from "solid-js";
 import { createStore, produce } from "solid-js/store";
@@ -18,14 +18,10 @@ import { toast } from "somoto";
 import {
   buildItems,
   classifyAuthFailure,
-  compatibleModelOptions,
   isWorking,
   pendingThreadRequests,
-  setThinkingValue,
   t3ProjectId,
   threadAuthFailure,
-  thinkingDescriptor,
-  thinkingValue,
   type ChatAuthFailure,
   type ChatProject,
   type ChatRequest,
@@ -35,10 +31,7 @@ import {
 import type {
   OrchestrationThreadDetailSnapshot,
   ProviderApprovalDecision,
-  ProviderOptionSelections,
-  RuntimeMode,
   ServerProvider,
-  ServerProviderModel,
   UploadChatAttachment,
 } from "@compound/chat/types";
 import { MAIN_CHANNELS } from "@desktop/main-channels";
@@ -102,7 +95,6 @@ type State = {
   /** Sign-in re-check in progress, and what it reported. */
   checkingLogin: boolean;
   loginError: string;
-  changingPermissions: boolean;
 };
 
 const [state, setState] = createStore<State>({
@@ -112,7 +104,6 @@ const [state, setState] = createStore<State>({
   sending: {},
   checkingLogin: false,
   loginError: "",
-  changingPermissions: false,
 });
 
 export { state as chatState };
@@ -123,9 +114,7 @@ const root = createRoot(() => {
   const [tab, setTab] = createStoredSignal(settings.define<SidebarTab>("rightSidebar.tab", "editor"));
   const [model, setModel] = createStoredSignal(settings.define<ModelRef | null>("agentChat.model", null));
   const [active, setActive] = createStoredSignal(settings.define<Record<string, string>>("agentChat.active", {}));
-  const [modes, setModes] = createStoredSignal(settings.define<Record<string, RuntimeMode>>("agentChat.permissions", {}));
-  const [efforts, setEfforts] = createStoredSignal(settings.define<Record<string, string>>("agentChat.thinking", {}));
-  return { tab, setTab, model, setModel, active, setActive, modes, setModes, efforts, setEfforts };
+  return { tab, setTab, model, setModel, active, setActive };
 });
 
 /** Which tab the right sidebar shows; persists across sessions. */
@@ -263,62 +252,6 @@ export function currentModel(): ModelRef | null {
 export function modelLabel(ref: ModelRef | null): string {
   if (!ref) return "No agent available";
   return harnesses().find((entry) => entry.id === ref.harness)?.models.find((model) => model.id === ref.model)?.label ?? ref.model;
-}
-
-const modelOf = (ref: ModelRef | null): ServerProviderModel | undefined =>
-  ref ? providerOf(ref.harness)?.models.find((model) => model.slug === ref.model) : undefined;
-
-// --- thinking (reasoning effort) ----------------------------------------
-
-const effortKey = (ref: ModelRef) => `${ref.harness}:${ref.model}`;
-
-/** The levels this model advertises, or nothing when it has none to offer. */
-export const thinkingOptions = (ref: ModelRef | null) => thinkingDescriptor(modelOf(ref));
-
-/** The level a send will use: the chat's own, else what this model last used. */
-export function thinkingChoice(ref: ModelRef | null) {
-  const descriptor = thinkingOptions(ref);
-  if (!descriptor || !ref) return undefined;
-  const remembered = root.efforts()[effortKey(ref)];
-  return thinkingValue(descriptor, remembered ? [{ id: descriptor.id, value: remembered }] : []);
-}
-
-export function setThinking(ref: ModelRef, value: string): void {
-  root.setEfforts({ ...root.efforts(), [effortKey(ref)]: value });
-}
-
-function modelOptions(ref: ModelRef): ProviderOptionSelections {
-  const base = compatibleModelOptions(modelOf(ref), []);
-  const descriptor = thinkingOptions(ref);
-  const choice = thinkingChoice(ref);
-  return descriptor && choice ? setThinkingValue(base, descriptor.id, choice.id) : base;
-}
-
-// --- permissions ---------------------------------------------------------
-
-const RUNTIME_MODES: RuntimeMode[] = ["approval-required", "auto-accept-edits", "auto", "full-access"];
-
-/** The chat's mode when it has one, else the project's remembered new-chat mode. */
-export function permissionMode(projectId: string, chatId: string | null): RuntimeMode {
-  const thread = chatId ? threadsOf(projectId).find((entry) => entry.id === chatId) : undefined;
-  if (thread) return thread.runtimeMode;
-  const remembered = root.modes()[projectId];
-  return remembered && RUNTIME_MODES.includes(remembered) ? remembered : "approval-required";
-}
-
-export async function setPermissionMode(projectId: string, chatId: string | null, runtimeMode: RuntimeMode): Promise<void> {
-  if (!chatId) {
-    root.setModes({ ...root.modes(), [projectId]: runtimeMode });
-    return;
-  }
-  setState("changingPermissions", true);
-  try {
-    await action({ operation: "permissions", threadId: chatId, runtimeMode });
-  } catch {
-    // `action` reports it; T3's current mode stays authoritative.
-  } finally {
-    setState("changingPermissions", false);
-  }
 }
 
 // --- the open chat -------------------------------------------------------
@@ -464,7 +397,6 @@ export type SendOptions = {
   model: ModelRef;
   /** The editor context appended to this one message. */
   context: string;
-  runtimeMode?: RuntimeMode;
 };
 
 /**
@@ -493,8 +425,6 @@ export async function send(options: SendOptions): Promise<string> {
         project: options.project,
         provider: options.model.harness,
         model: options.model.model,
-        modelOptions: modelOptions(options.model),
-        runtimeMode: options.runtimeMode ?? permissionMode(options.project.id, null),
       });
       chatId = created.threadId!;
       setActiveChat(options.project.id, chatId);
@@ -508,7 +438,6 @@ export async function send(options: SendOptions): Promise<string> {
       text: body,
       context: options.context,
       model: options.model.model,
-      modelOptions: modelOptions(options.model),
       attachments: options.images,
     });
     setState("sending", key, null);
@@ -642,7 +571,6 @@ export function blockedReason(): string | null {
     const detail = probes.map((harness) => harness.detail).find(Boolean);
     return detail ? `No agent is ready. ${detail}.` : "Install Claude Code or Codex to chat.";
   }
-  if (state.changingPermissions) return "Updating permissions…";
   if (state.checkingLogin) return "Checking your login…";
   return null;
 }

@@ -1,11 +1,11 @@
-import type { OrchestrationShellSnapshot, OrchestrationThreadDetailSnapshot, OrchestrationThreadStreamItem, ServerProvider, UploadChatAttachment, ProviderApprovalDecision, RuntimeMode, ProviderOptionSelections } from './upstream/contracts/index';
+import type { OrchestrationShellSnapshot, OrchestrationThreadDetailSnapshot, OrchestrationThreadStreamItem, ServerProvider, UploadChatAttachment, ProviderApprovalDecision } from './upstream/contracts/index';
 import { applyThreadDetailEvent } from './upstream/threadReducer';
 import { derivePendingRequests } from './upstream/pendingRequests';
 export { derivePendingRequests } from './upstream/pendingRequests';
 export type { PendingApproval, PendingUserInput } from './upstream/pendingRequests';
 export { classifyAuthFailure, threadAuthFailure } from './auth';
 export type { ChatAuthFailure } from './auth';
-export { thinkingDescriptor, thinkingValue, setThinkingValue, compatibleModelOptions } from './thinking';
+export { FULL_ACCESS, RESTRICTED, isBypassRefused, turnRefusedBypass } from './policy';
 export { buildItems } from './presentation';
 export type { Item, ItemKind, ItemAsset, ItemQuestion, ToolStatus, ToolImage } from './presentation';
 export { CONTEXT_START, CONTEXT_END, splitContext } from './context';
@@ -21,10 +21,9 @@ export type ChatState = {
 export type ChatRequest =
   | { operation: 'state' | 'restart' | 'unwatch' }
   | { operation: 'project'; project: ChatProject }
-  | { operation: 'create'; project: ChatProject; provider: 'codex' | 'claudeAgent'; model: string; modelOptions?: ProviderOptionSelections; runtimeMode?: RuntimeMode }
-  | { operation: 'permissions'; threadId: string; runtimeMode: RuntimeMode }
+  | { operation: 'create'; project: ChatProject; provider: 'codex' | 'claudeAgent'; model: string }
   | { operation: 'watch' | 'older'; threadId: string }
-  | { operation: 'send'; threadId: string; project: ChatProject; messageId: string; text: string; context: string; model: string; modelOptions?: ProviderOptionSelections; attachments: UploadChatAttachment[] }
+  | { operation: 'send'; threadId: string; project: ChatProject; messageId: string; text: string; context: string; model: string; attachments: UploadChatAttachment[] }
   | { operation: 'stop' | 'archive'; threadId: string }
   | { operation: 'rename'; threadId: string; title: string }
   | { operation: 'approve'; threadId: string; requestId: string; decision: ProviderApprovalDecision }

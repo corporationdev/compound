@@ -15,8 +15,7 @@ it; widths are remembered and the Editor and Chat tabs share the right width.
 
 The composer is docked at the bottom in every state. Enter sends,
 shift+Enter breaks the line, and while a turn runs the send button becomes
-**Stop**. Its row carries the model picker, the thinking picker when the model
-has levels to offer, and the permission picker.
+**Stop**. Its row carries the model picker.
 
 - **Model.** One dropdown for both agents: Claude Code's models, then Codex's,
   fed by T3's provider probes. An agent that is not ready is one disabled row
@@ -24,12 +23,11 @@ has levels to offer, and the permission picker.
   model it started with; choosing another starts a new draft and carries the
   typed text across. The dashboard's composer shares the same picker and the
   same remembered choice.
-- **Thinking.** Reasoning effort, when the model advertises levels. The choice
-  is remembered per model.
-- **Permissions.** **Supervised**, **Auto-accept edits**, **Auto** and **Full
-  access**, following T3's runtime modes. New projects default to Supervised and
-  a chosen new-chat mode is remembered for that project; an existing chat
-  changes mode live, including its running provider session.
+- **Permissions.** Not a choice. Every chat runs with full access, as the
+  reference editor's host does, so nothing waits on an approval and thinking
+  stays at each model's default. If a managed policy refuses full access, the
+  chat steps down to T3's Auto mode once, retries the same turn, and every
+  later chat starts there; approvals that mode asks for appear as cards.
 - **Attachments.** Drop files or folders onto the composer and the agent reads
   them where they are — nothing is copied, and the paths ride in the message.
   Images pasted or picked with the paperclip are uploaded with the message

@@ -102,22 +102,16 @@ test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('packaged T3 authent
     const settingsRpc = server as unknown as { rpc: { call<T>(tag: string, payload: unknown): Promise<T> } };
     expect((await settingsRpc.rpc.call<{ enableLegacyTokenStreaming: boolean }>('server.getSettings', {})).enableLegacyTokenStreaming).toBe(true);
     expect(server.state.providers.map(p => p.instanceId).sort()).toEqual(['claudeAgent', 'codex']);
-    const reply = await server.request({ operation: 'create', project, provider: 'codex', model: 'gpt-5.6-sol', modelOptions: [{ id: 'reasoningEffort', value: 'high' }] });
+    const reply = await server.request({ operation: 'create', project, provider: 'codex', model: 'gpt-5.6-sol' });
     const threadId = reply.threadId!;
     await server.request({ operation: 'watch', threadId });
     expect(server.state.detail?.thread.projectId).toBe('compound-test-project');
-    expect(server.state.detail?.thread.runtimeMode).toBe('approval-required');
-    expect(server.state.detail?.thread.modelSelection.options).toEqual([{ id: 'reasoningEffort', value: 'high' }]);
-    for (const runtimeMode of ['auto-accept-edits', 'auto', 'full-access', 'approval-required'] as const) {
-      await server.request({ operation: 'permissions', threadId, runtimeMode });
-      const deadline = Date.now() + 5000;
-      while (server.state.detail?.thread.runtimeMode !== runtimeMode && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
-      expect(server.state.detail?.thread.runtimeMode).toBe(runtimeMode);
-    }
-    const custom = await server.request({ operation: 'create', project, provider: 'claudeAgent', model: 'claude-sonnet-4-6', runtimeMode: 'auto-accept-edits', modelOptions: [{ id: 'effort', value: 'low' }] });
+    // Every chat runs with full access; there is no picker and no per-chat option.
+    expect(server.state.detail?.thread.runtimeMode).toBe('full-access');
+    expect(server.state.detail?.thread.modelSelection.options).toBeUndefined();
+    const custom = await server.request({ operation: 'create', project, provider: 'claudeAgent', model: 'claude-sonnet-4-6' });
     await server.request({ operation: 'watch', threadId: custom.threadId! });
-    expect(server.state.detail?.thread.runtimeMode).toBe('auto-accept-edits');
-    expect(server.state.detail?.thread.modelSelection.options).toEqual([{ id: 'effort', value: 'low' }]);
+    expect(server.state.detail?.thread.runtimeMode).toBe('full-access');
     await server.request({ operation: 'watch', threadId });
     await server.request({ operation: 'rename', threadId, title: 'Saved chat' });
     const deadline = Date.now() + 5000;
@@ -143,6 +137,6 @@ test.skipIf(process.env.COMPOUND_TEST_CHAT_RUNTIME !== '1')('packaged T3 authent
     await server.request({ operation: 'watch', threadId });
     expect(server.state.detail?.thread.title).toBe('Saved chat');
     expect(server.state.detail?.thread.messages).toHaveLength(0);
-    expect(server.state.detail?.thread.modelSelection.options).toEqual([{ id: 'reasoningEffort', value: 'high' }]);
+    expect(server.state.detail?.thread.runtimeMode).toBe('full-access');
   } finally { await server.stop(); await rm(dir, { recursive: true, force: true }); }
 }, 120_000);
