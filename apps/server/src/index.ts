@@ -112,9 +112,23 @@ function s3Client(env: Env) {
   });
 }
 function s3Url(env: Env, key: string, query: Record<string, string> = {}) {
-  const url = new URL(`https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${key}`);
+  // Each segment encoded by hand: a name can hold anything but a slash, and the URL parser would leave `?`, `#` and `&` to mean something else.
+  const path = key.split('/').map(encodeURIComponent).join('/');
+  const url = new URL(`https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${path}`);
   for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
   return url;
+}
+/**
+ * The size of the object at `key`, or null when there is none. Asked of the
+ * S3 API rather than the binding: the binding's `head` answers nothing for
+ * keys with characters outside ASCII (an em dash in a song's name) in the
+ * environments this runs in, and the S3 API is what the bytes arrived by.
+ */
+async function objectSize(env: Env, key: string): Promise<number | null> {
+  const response = await s3Client(env).fetch(s3Url(env, key).toString(), { method: 'HEAD' });
+  await response.body?.cancel().catch(() => {});
+  if (!response.ok) return null;
+  return Number(response.headers.get('content-length') ?? 'NaN');
 }
 /** A signed request to the bucket's S3 API, for the multipart calls the binding does not cover in every environment. */
 async function s3(env: Env, method: 'GET' | 'POST' | 'DELETE', key: string, query: Record<string, string>, body?: string) {
@@ -147,9 +161,7 @@ async function signedUrl(
     service: 's3',
     region: 'auto',
   });
-  const url = new URL(
-    `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${key}`,
-  );
+  const url = s3Url(env, key);
   url.searchParams.set('X-Amz-Expires', method === 'PUT' ? '900' : '600');
   return (
     await signer.sign(url, {
@@ -244,10 +256,10 @@ export default {
         const asset = await client.query(api.assets.describe, { assetId });
         const key = originalKeyFor(asset);
         if (asset.originalState !== 'ready') {
-          const object = await env.MEDIA.head(key);
-          if (!object) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
-          if (object.size !== asset.size)
-            throw new HttpError(400, `Upload is ${object.size} bytes but the asset was declared as ${asset.size}`);
+          const size = await objectSize(env, key);
+          if (size === null) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+          if (size !== asset.size)
+            throw new HttpError(400, `Upload is ${size} bytes but the asset was declared as ${asset.size}`);
           await client.mutation(api.assets.finish, { assetId, originalKey: key });
         }
         return json({ ok: true });
@@ -292,10 +304,10 @@ export default {
         const completed = await s3(env, 'POST', key, { uploadId: input.uploadId }, xml);
         if (!completed.ok || /<Error>/.test(completed.text))
           throw new HttpError(400, `Could not complete the upload: ${xmlValue(completed.text, 'Message') ?? completed.status}`);
-        const object = await env.MEDIA.head(key);
-        if (!object) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
-        if (object.size !== asset.size)
-          throw new HttpError(400, `Upload is ${object.size} bytes but the asset was declared as ${asset.size}`);
+        const size = await objectSize(env, key);
+        if (size === null) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+        if (size !== asset.size)
+          throw new HttpError(400, `Upload is ${size} bytes but the asset was declared as ${asset.size}`);
         await client.mutation(api.assets.finish, { assetId: input.assetId, originalKey: key });
         return json({ ok: true });
       }
@@ -311,10 +323,10 @@ export default {
         const asset = await client.query(api.assets.describe, { assetId });
         if (asset.proxyState !== 'ready') {
           const key = proxyKeyFor(asset);
-          const object = await env.MEDIA.head(key);
-          if (!object) throw new HttpError(400, `Proxy upload not found in the bucket at ${key}`);
-          if (object.size !== asset.proxySize)
-            throw new HttpError(400, `Proxy upload is ${object.size} bytes but was declared as ${asset.proxySize}`);
+          const size = await objectSize(env, key);
+          if (size === null) throw new HttpError(400, `Proxy upload not found in the bucket at ${key}`);
+          if (size !== asset.proxySize)
+            throw new HttpError(400, `Proxy upload is ${size} bytes but was declared as ${asset.proxySize}`);
           await client.mutation(api.assets.finishProxy, { assetId, proxyKey: key });
         }
         return json({ ok: true });

@@ -35,9 +35,11 @@ const asset = {
 };
 const KEY = 'assets/org-1/0123456789abcdef/clip.mp4';
 type Handlers = Record<string, unknown | (() => unknown)>;
-type S3Handler = (request: { method: string; url: URL; body: string }) => { status?: number; body?: string };
+type S3Handler = (request: { method: string; url: URL; body: string }) => { status?: number; body?: string; size?: number };
 const s3Calls: { method: string; url: URL; body: string }[] = [];
 let s3Handler: S3Handler = () => ({ status: 500, body: '<Error><Message>no S3 fake</Message></Error>' });
+/** An S3 fake that answers HEAD with `size` (null: no such object). */
+const objectOf = (size: number | null): S3Handler => ({ method }) => method === 'HEAD' ? (size === null ? { status: 404 } : { size }) : { status: 500 };
 function backend(handlers: Handlers, s3?: S3Handler) {
   const calls: { path: string; args: unknown }[] = [];
   s3Calls.length = 0;
@@ -49,7 +51,7 @@ function backend(handlers: Handlers, s3?: S3Handler) {
       const request = { method: (init?.method ?? (_url instanceof Request ? _url.method : 'GET')).toUpperCase(), url, body };
       s3Calls.push(request);
       const reply = s3Handler(request);
-      return new Response(reply.body ?? '', { status: reply.status ?? 200 });
+      return new Response(reply.body ?? '', { status: reply.status ?? 200, headers: reply.size === undefined ? {} : { 'content-length': String(reply.size) } });
     }
     const input = JSON.parse(String(init?.body));
     calls.push({ path: input.path, args: Array.isArray(input.args) ? input.args[0] : input.args });
@@ -105,28 +107,34 @@ test('asset-upload-url validates its input and refuses non-members', async () =>
   expect((await worker.fetch(request('asset-upload-url', { ...register, extra: true }), env)).status).toBe(400);
 });
 
-test('asset-upload-finish checks the object size in R2 before marking the asset ready', async () => {
-  const heads: string[] = [];
-  const media = (size: number) =>
-    ({ head: async (key: string) => { heads.push(key); return { size }; } }) as unknown as R2Bucket;
-  const calls = backend({ 'assets:describe': asset, 'assets:finish': null });
-  const ok = await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: media(asset.size) });
+test('asset-upload-finish checks the object size through the S3 API before marking the asset ready', async () => {
+  const calls = backend({ 'assets:describe': asset, 'assets:finish': null }, objectOf(asset.size));
+  const ok = await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), env);
   expect((await ok.json()) as unknown).toEqual({ ok: true });
-  expect(heads).toEqual([KEY]);
+  expect(s3Calls.map((call) => [call.method, decodeURIComponent(call.url.pathname)])).toEqual([['HEAD', `/compound-media-dev/${KEY}`]]);
   expect(calls.find((call) => call.path === 'assets:finish')?.args).toEqual({ assetId: 'asset-1', originalKey: KEY });
 
-  const short = backend({ 'assets:describe': asset, 'assets:finish': null });
-  const bad = await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: media(asset.size - 1) });
-  expect(bad.status).toBe(400);
+  const short = backend({ 'assets:describe': asset, 'assets:finish': null }, objectOf(asset.size - 1));
+  expect((await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), env)).status).toBe(400);
   expect(short.some((call) => call.path === 'assets:finish')).toBe(false);
 
-  const missing = backend({ 'assets:describe': asset });
-  const gone = await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), {
-    ...env,
-    MEDIA: { head: async () => null } as unknown as R2Bucket,
-  });
-  expect(gone.status).toBe(400);
+  const missing = backend({ 'assets:describe': asset }, objectOf(null));
+  expect((await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), env)).status).toBe(400);
   expect(missing.some((call) => call.path === 'assets:finish')).toBe(false);
+});
+
+test('names with spaces, dashes and ampersands are signed and checked at the key the backend recorded', async () => {
+  const song = { ...asset, name: 'In Motion — Trent & Atticus.m4a', mimeType: 'audio/mp4' };
+  const songKey = `assets/org-1/${asset.sampleId}/In Motion — Trent & Atticus.m4a`;
+  backend({ 'assets:register': { assetId: 'asset-1', state: 'uploading', uploadNeeded: true }, 'assets:describe': song });
+  const signed = (await (await worker.fetch(request('asset-upload-url', { ...register, name: song.name, mimeType: song.mimeType }), env)).json()) as { uploadUrl: string };
+  const url = new URL(signed.uploadUrl);
+  expect(decodeURIComponent(url.pathname)).toBe(`/compound-media-dev/${songKey}`);
+  expect(url.pathname).not.toContain('&');
+  const calls = backend({ 'assets:describe': song, 'assets:finish': null }, objectOf(song.size));
+  expect((await (await worker.fetch(request('asset-upload-finish', { assetId: 'asset-1' }), env)).json()) as unknown).toEqual({ ok: true });
+  expect(decodeURIComponent(s3Calls[0]!.url.pathname)).toBe(`/compound-media-dev/${songKey}`);
+  expect(calls.find((call) => call.path === 'assets:finish')?.args).toEqual({ assetId: 'asset-1', originalKey: songKey });
 });
 
 test('asset-upload-finish is idempotent for a ready asset and refuses non-members', async () => {
@@ -177,12 +185,12 @@ test('proxy upload signs a PUT at the proxy key, finish checks its size, and dow
   expect((await (await worker.fetch(request('asset-proxy-upload-url', { assetId: 'asset-1', size: 100 }), env)).json()) as unknown).toEqual({ uploadUrl: null });
 
   const uploading = { ...asset, proxyState: 'uploading', proxySize: 100 };
-  const finished = backend({ 'assets:describe': uploading, 'assets:finishProxy': null });
-  const ok = await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: { head: async () => ({ size: 100 }) } as unknown as R2Bucket });
+  const finished = backend({ 'assets:describe': uploading, 'assets:finishProxy': null }, objectOf(100));
+  const ok = await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), env);
   expect((await ok.json()) as unknown).toEqual({ ok: true });
   expect(finished.find((call) => call.path === 'assets:finishProxy')?.args).toEqual({ assetId: 'asset-1', proxyKey: PROXY_KEY });
-  backend({ 'assets:describe': uploading, 'assets:finishProxy': null });
-  expect((await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), { ...env, MEDIA: { head: async () => ({ size: 99 }) } as unknown as R2Bucket })).status).toBe(400);
+  backend({ 'assets:describe': uploading, 'assets:finishProxy': null }, objectOf(99));
+  expect((await worker.fetch(request('asset-proxy-upload-finish', { assetId: 'asset-1' }), env)).status).toBe(400);
 
   const lookup = { organizationId: 'org-1', sampleId: asset.sampleId, variant: 'proxy' };
   backend({ 'assets:get': { ...asset, proxyState: 'ready', proxyKey: PROXY_KEY, proxySize: 100 } });
@@ -233,15 +241,16 @@ test('multipart: start creates or resumes an upload, part URLs are signed per pa
 
   // Complete sends the parts in order, then the object is checked and the asset finished.
   calls = backend({ 'assets:describe': inFlight, 'assets:finish': null }, ({ method, url, body }) =>
-    method === 'POST' && url.searchParams.get('uploadId') === 'up-1' && body.includes('<PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag>')
+    method === 'HEAD' ? { size: asset.size }
+      : method === 'POST' && url.searchParams.get('uploadId') === 'up-1' && body.includes('<PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag>')
       ? { body: '<CompleteMultipartUploadResult><ETag>"final"</ETag></CompleteMultipartUploadResult>' } : { status: 500 });
-  response = await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 2, etag: '"e2"' }, { partNumber: 1, etag: '"e1"' }] }), { ...env, MEDIA: { head: async () => ({ size: asset.size }) } as unknown as R2Bucket });
+  response = await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 2, etag: '"e2"' }, { partNumber: 1, etag: '"e1"' }] }), env);
   expect((await response.json()) as unknown).toEqual({ ok: true });
   expect(s3Calls[0]?.body.indexOf('<PartNumber>1</PartNumber>')).toBeLessThan(s3Calls[0]!.body.indexOf('<PartNumber>2</PartNumber>'));
   expect(calls.find((call) => call.path === 'assets:finish')?.args).toEqual({ assetId: 'asset-1', originalKey: KEY });
 
   // A size that does not match what was declared never finishes the asset.
-  calls = backend({ 'assets:describe': inFlight, 'assets:finish': null }, () => ({ body: '<CompleteMultipartUploadResult/>' }));
-  expect((await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 1, etag: '"e1"' }] }), { ...env, MEDIA: { head: async () => ({ size: 1 }) } as unknown as R2Bucket })).status).toBe(400);
+  calls = backend({ 'assets:describe': inFlight, 'assets:finish': null }, ({ method }) => method === 'HEAD' ? { size: 1 } : { body: '<CompleteMultipartUploadResult/>' });
+  expect((await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 1, etag: '"e1"' }] }), env)).status).toBe(400);
   expect(calls.some((call) => call.path === 'assets:finish')).toBe(false);
 });
