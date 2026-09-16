@@ -18,6 +18,7 @@ import { mainBridge } from "../main-manager";
 import { ConvexSyncBackend } from "./convex-backend";
 import { WorkspaceSync } from "./workspace-sync";
 
+import type { CloudAssetMeta } from "../assets-transfers";
 import type { SyncStatus } from "./workspace-sync";
 import type { SyncBackend } from "./backend";
 
@@ -60,6 +61,25 @@ export class SyncManager {
   async setSession(sessionToken: string | null): Promise<void> {
     this.sessionToken = sessionToken;
     if (!sessionToken) await this.stopAll();
+  }
+
+  /** A Convex JWT for the signed-in user, minted from the session the renderer handed over; null when signed out. */
+  token(): Promise<string | null> {
+    return this.fetchToken();
+  }
+
+  /**
+   * The organization's asset list, for the transfer manager: rides the same
+   * Convex connection. Errors until a workspace has started syncing, since
+   * that is what brings the session here.
+   */
+  subscribeAssets(organizationId: string, onSnapshot: (assets: CloudAssetMeta[]) => void, onError: (error: Error) => void): () => void {
+    const backend = this.backend;
+    if (!backend?.subscribeAssets) {
+      onError(new Error("Not connected to the cloud"));
+      return () => {};
+    }
+    return backend.subscribeAssets(organizationId, onSnapshot, onError);
   }
 
   status(dir: string): SyncStatus | null {

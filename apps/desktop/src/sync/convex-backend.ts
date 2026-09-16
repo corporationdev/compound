@@ -10,6 +10,7 @@
 import { ConvexClient } from "convex/browser";
 import { api } from "@compound/backend/convex/_generated/api";
 
+import type { CloudAssetMeta } from "../assets-transfers";
 import type { RemoteFile, RemoteFileMeta, SyncBackend, WriteOutcome } from "./backend";
 
 export type TokenFetcher = (args: { forceRefreshToken: boolean }) => Promise<string | null>;
@@ -27,6 +28,17 @@ export class ConvexSyncBackend implements SyncBackend {
       api.files.list,
       { organizationId },
       (files) => onSnapshot(files as RemoteFileMeta[]),
+      onError,
+    );
+    return () => unsubscribe();
+  }
+
+  /** The organization's asset list, now and on every change; for the transfer manager. */
+  subscribeAssets(organizationId: string, onSnapshot: (assets: CloudAssetMeta[]) => void, onError: (error: Error) => void): () => void {
+    const unsubscribe = this.client.onUpdate(
+      api.assets.list,
+      { organizationId },
+      (assets) => onSnapshot(assets as CloudAssetMeta[]),
       onError,
     );
     return () => unsubscribe();

@@ -36,6 +36,15 @@ export type WriteOutcome =
 
 export interface SyncBackend {
   /**
+   * The organization's asset list, now and on every change; what the asset
+   * transfer manager watches. Optional: a test backend may leave it out.
+   */
+  subscribeAssets?(
+    organizationId: string,
+    onSnapshot: (assets: import("../assets-transfers").CloudAssetMeta[]) => void,
+    onError: (error: Error) => void,
+  ): () => void;
+  /**
    * Delivers the full list of an organization's files (tombstones included, no
    * text) now and on every change, until the returned function is called.
    * Errors that end the subscription (signed out, no access) go to `onError`.

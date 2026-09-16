@@ -61,7 +61,7 @@ import {
   watchWorkspace,
   writeWorkspaceFile,
 } from "./workspace";
-import { fetchAssetOriginal, uploadAssetOriginal } from "./assets-cloud";
+import { AssetTransferManager, realAssetCloud } from "./assets-transfers";
 import type { LogEntry } from "@compound/dapi";
 
 const DEV_URL = "http://localhost:5173";
@@ -104,6 +104,17 @@ function applyBackdrop() {
 const openWrites = new Map<string, { handle: FileHandle; path: string; temp: string; reserved: boolean }>();
 
 let mainWindow: BrowserWindow | null = null;
+let assetsWindow: BrowserWindow | null = null;
+// Every project's asset uploads and downloads; state goes to the window as events.
+const assetTransfers = new AssetTransferManager({
+  cloud: realAssetCloud,
+  feed: (organizationId, onSnapshot, onError) => syncManager.subscribeAssets(organizationId, onSnapshot, onError),
+  getToken: () => syncManager.token(),
+  onChange: (snapshot) => {
+    if (!assetsWindow || assetsWindow.isDestroyed()) return;
+    mainBridge.emit(assetsWindow, MAIN_CHANNELS.CLOUD_ASSETS_STATE, snapshot);
+  },
+});
 
 
 // Renderer console mirror, served to the CLI via LOGS_GET. Lives in main so
@@ -187,6 +198,7 @@ function createWindow(show = true) {
 
   captureConsole(mainWindow);
   syncManager.attach(mainWindow);
+  assetsWindow = mainWindow;
 
   applyCornerRadius(MACOS_CORNER_RADIUS);
   applyBackdrop();
@@ -312,8 +324,11 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_STAT, ({ dir, source }) => statEntry(dir, source));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_REMOVE, ({ dir, path }) => removeEntry(dir, path));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_FS_REAL_PATH, ({ dir, source }) => realPathEntry(dir, source));
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSET_UPLOAD, (data, event) => { trustedRenderer(event); return uploadAssetOriginal(data); });
-  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSET_FETCH, (data, event) => { trustedRenderer(event); return fetchAssetOriginal(data); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSETS_ATTACH, (data, event) => { trustedRenderer(event); return assetTransfers.attach(data); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSETS_UPDATE, ({ dir, local, eagerOriginals }, event) => { trustedRenderer(event); assetTransfers.update(dir, local, eagerOriginals); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSETS_DETACH, ({ dir }) => assetTransfers.detach(dir));
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSETS_RETRY, ({ dir, sampleId }, event) => { trustedRenderer(event); assetTransfers.retry(dir, sampleId); });
+  mainBridge.handle(MAIN_CHANNELS.CLOUD_ASSET_FETCH, ({ dir, sampleId, prefer }, event) => { trustedRenderer(event); return assetTransfers.fetch(dir, sampleId, prefer); });
   mainBridge.handle(MAIN_CHANNELS.SYNC_START, (data, event) => { trustedRenderer(event); return syncManager.start(data); });
   mainBridge.handle(MAIN_CHANNELS.SYNC_STOP, ({ dir }) => syncManager.stop(dir));
   mainBridge.handle(MAIN_CHANNELS.SYNC_STATUS_GET, ({ dir }) => syncManager.status(dir));

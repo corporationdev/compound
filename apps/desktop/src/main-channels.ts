@@ -83,7 +83,10 @@ export const MAIN_CHANNELS = {
   WORKSPACE_REMOVE: "workspace:remove",
   WORKSPACE_WATCH: "workspace:watch",
   WORKSPACE_UNWATCH: "workspace:unwatch",
-  CLOUD_ASSET_UPLOAD: "cloud:asset-upload",
+  CLOUD_ASSETS_ATTACH: "cloud:assets-attach",
+  CLOUD_ASSETS_UPDATE: "cloud:assets-update",
+  CLOUD_ASSETS_DETACH: "cloud:assets-detach",
+  CLOUD_ASSETS_RETRY: "cloud:assets-retry",
   CLOUD_ASSET_FETCH: "cloud:asset-fetch",
   HEADLESS_GET_MODE: "headless:get-mode",
   MCP_STATUS: "mcp:status",
@@ -97,6 +100,7 @@ export const MAIN_CHANNELS = {
   WORKSPACE_CHANGED: "workspace:changed",
   SYNC_STATUS: "sync:status",
   SYNC_CONFLICT: "sync:conflict",
+  CLOUD_ASSETS_STATE: "cloud:assets-state",
 } as const;
 
 /**
@@ -345,15 +349,25 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.WORKSPACE_UNWATCH]: { request: { dir: string }; response: void };
   // The renderer's signed native session changed; null on sign-out stops every sync.
   [MAIN_CHANNELS.SYNC_SESSION]: { request: { sessionToken: string | null }; response: void };
-  // Registers a library asset's original with the organization and streams
-  // the file at `source` (absolute path) to R2 unless the cloud already has it.
-  [MAIN_CHANNELS.CLOUD_ASSET_UPLOAD]: {
-    request: { dir: string; organizationId: string; sampleId: string; source: string; mimeType: string; name: string; token: string | null };
-    response: { assetId: string; state: "uploading" | "ready" };
+  // Hands a project's cloud assets to the transfer manager (see
+  // assets-transfers.ts): which library assets have bytes here, and whether
+  // originals missing here come down unasked. Answers the current state;
+  // changes follow as CLOUD_ASSETS_STATE events.
+  [MAIN_CHANNELS.CLOUD_ASSETS_ATTACH]: {
+    request: import("./assets-transfers").AttachRequest;
+    response: import("./assets-transfers").AssetsSnapshot;
   };
-  // Brings an original this machine lacks into `<dir>/cache/originals/`; null when the cloud has none.
+  [MAIN_CHANNELS.CLOUD_ASSETS_UPDATE]: {
+    request: { dir: string; local: import("./assets-transfers").LocalAssetInfo[]; eagerOriginals: boolean };
+    response: void;
+  };
+  [MAIN_CHANNELS.CLOUD_ASSETS_DETACH]: { request: { dir: string }; response: void };
+  [MAIN_CHANNELS.CLOUD_ASSETS_RETRY]: { request: { dir: string; sampleId: string }; response: void };
+  // The bytes of an asset missing here, brought into the project's cache:
+  // the proxy when preferred and the cloud has or is making one, else the
+  // original. Waits on another machine's upload rather than failing.
   [MAIN_CHANNELS.CLOUD_ASSET_FETCH]: {
-    request: { dir: string; organizationId: string; sampleId: string; token: string | null };
+    request: { dir: string; sampleId: string; prefer: "original" | "proxy" };
     response: { path: string; name: string; mimeType: string } | null;
   };
   [MAIN_CHANNELS.PROJECTS_FS_REAL_PATH]: {
@@ -392,6 +406,8 @@ export type MainEventMap = {
   [MAIN_CHANNELS.SYNC_STATUS]: { dir: string; status: import("./sync/workspace-sync").SyncStatus };
   // A merge had to choose between two edits to the same lines; the cloud's text was kept at `keptCopy`.
   [MAIN_CHANNELS.SYNC_CONFLICT]: { dir: string; path: string; keptCopy: string };
+  // A project's asset transfers moved (see assets-transfers.ts).
+  [MAIN_CHANNELS.CLOUD_ASSETS_STATE]: import("./assets-transfers").AssetsSnapshot;
 };
 export type MainEventChannel = keyof MainEventMap;
 
