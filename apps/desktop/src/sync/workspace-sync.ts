@@ -62,6 +62,8 @@ export const CONFLICTS_DIR = ".compound/conflicts";
 const PREFETCH_BATCH = 64;
 /** How long after a folder appears its contents are looked over for files the watcher missed. */
 const SWEEP_DELAY_MS = 250;
+/** How long the engine stays quiet before the status says synced. */
+const STATUS_SETTLE_MS = 700;
 const CONFLICT_SUFFIX = ".conflict";
 
 export type WorkspaceSyncOptions = {
@@ -70,6 +72,8 @@ export type WorkspaceSyncOptions = {
   backend: SyncBackend;
   /** For tests: how long after a folder appears it is swept for files. */
   sweepDelayMs?: number;
+  /** For tests: how long the engine must be quiet before it reports synced. */
+  statusSettleMs?: number;
   /** Watch the folder for changes; off in tests that drive `noteChange` themselves. */
   watch?: boolean;
   onStatus?: (status: SyncStatus) => void;
@@ -138,6 +142,7 @@ export class WorkspaceSync {
   private offline = false;
   private fatal: string | undefined;
   private lastStatus = "";
+  private statusTimer: ReturnType<typeof setTimeout> | undefined;
 
   private unsubscribe: (() => void) | undefined;
   private watcher: TreeWatcher | undefined;
@@ -238,6 +243,7 @@ export class WorkspaceSync {
   }
 
   async stop(): Promise<void> {
+    if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
     this.stopped = true;
     // A start still waiting on its first snapshot must not wait forever.
     this.rejectStarted?.(new Error("Sync stopped before it started"));
@@ -287,10 +293,28 @@ export class WorkspaceSync {
     return run;
   }
 
+  /**
+   * Reports the status when it changes. Going quiet is reported only once
+   * the engine has been quiet for a moment: every file sync writes comes
+   * back through the watcher as a change to look at, so a checkout of seven
+   * files would otherwise flip syncing and synced seven times over.
+   */
   private emitStatus(): void {
     const status = this.status;
     const key = JSON.stringify(status);
-    if (key === this.lastStatus) return;
+    if (key === this.lastStatus) {
+      if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
+      return;
+    }
+    if (status.state === "synced" && !this.stopped) {
+      if (this.statusTimer) return;
+      this.statusTimer = setTimeout(() => {
+        this.statusTimer = undefined;
+        this.emitStatus();
+      }, this.options.statusSettleMs ?? STATUS_SETTLE_MS);
+      return;
+    }
+    if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
     this.lastStatus = key;
     this.options.onStatus?.(status);
   }

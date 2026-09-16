@@ -47,7 +47,20 @@ const [projectsRevision, setProjectsRevision] = createSignal(1);
  * watcher. A view keyed on the records alone refetched too early after a
  * create, read the stale scan, and never asked again.
  */
-export const projectsListKey = () => ({ revision: projectsRevision(), workspace: workspaceProjects() });
+export const projectsListKey = () => `${projectsRevision()}:${(workspaceProjects() ?? []).map((project) => `${project.dir}@${project.modifiedAt}`).join('\n')}`;
+
+/**
+ * Records handed out last time, by folder. A list rebuilt with the same
+ * record for a folder answers the same object, so a view keyed on identity
+ * keeps that project's element rather than making it again on every refetch.
+ */
+const handedOut = new Map<string, ProjectRecord>();
+function stable(record: ProjectRecord): ProjectRecord {
+	const previous = handedOut.get(record.dir);
+	if (previous && JSON.stringify(previous) === JSON.stringify(record)) return previous;
+	handedOut.set(record.dir, record);
+	return record;
+}
 
 /** Changes whenever the list `listProjects` answers with would; a source for `createResource`. */
 export { projectsRevision };
@@ -130,7 +143,7 @@ export async function listProjects(): Promise<ProjectRecord[]> {
 		if (seen.has(record.dir) || isInWorkspace(record.dir) || (record.id && ids.has(record.id))) continue;
 		list.push(record);
 	}
-	return list;
+	return list.map(stable);
 }
 
 /**
