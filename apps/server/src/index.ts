@@ -22,7 +22,10 @@ export interface Env {
 const MAX_BYTES = 100 * 1024 * 1024;
 // Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
 const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
-const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish'] as const;
+const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish', 'asset-multipart-start', 'asset-multipart-part-url', 'asset-multipart-complete'] as const;
+/** Parts of a large original; R2 wants every part but the last at least 5 MiB, and at most 10,000 of them. */
+export const MULTIPART_PART_BYTES = 64 * 1024 * 1024;
+const MAX_PARTS = 10_000;
 const organizationId = z.string().min(1).max(100);
 const sampleId = z.string().regex(/^[0-9a-f]{16}$/);
 const assetRegisterSchema = z
@@ -49,6 +52,22 @@ const proxyRegisterSchema = z
   .object({
     assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
     size: z.number().int().min(1).max(MAX_ASSET_BYTES),
+  })
+  .strict();
+const multipartStartSchema = assetFinishSchema;
+const multipartPartSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    uploadId: z.string().min(1).max(1024),
+    partNumber: z.number().int().min(1).max(MAX_PARTS),
+    size: z.number().int().min(1).max(MULTIPART_PART_BYTES),
+  })
+  .strict();
+const multipartCompleteSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    uploadId: z.string().min(1).max(1024),
+    parts: z.array(z.object({ partNumber: z.number().int().min(1).max(MAX_PARTS), etag: z.string().min(1).max(256) }).strict()).min(1).max(MAX_PARTS),
   })
   .strict();
 const uploadSchema = z
@@ -82,6 +101,37 @@ function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   }
   return result.data;
 }
+function s3Client(env: Env) {
+  return new AwsClient({
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    service: 's3',
+    region: 'auto',
+  });
+}
+function s3Url(env: Env, key: string, query: Record<string, string> = {}) {
+  const url = new URL(`https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${key}`);
+  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
+  return url;
+}
+/** A signed request to the bucket's S3 API, for the multipart calls the binding does not cover in every environment. */
+async function s3(env: Env, method: 'GET' | 'POST' | 'DELETE', key: string, query: Record<string, string>, body?: string) {
+  const response = await s3Client(env).fetch(s3Url(env, key, query).toString(), { method, body, headers: body ? { 'Content-Type': 'application/xml' } : {} });
+  const text = await response.text();
+  return { ok: response.ok, status: response.status, text };
+}
+const xmlValue = (text: string, tag: string): string | null => text.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1] ?? null;
+/** The parts R2 has for a multipart upload; null when the upload is unknown (aborted, completed, or made up). */
+async function listParts(env: Env, key: string, uploadId: string): Promise<{ partNumber: number; etag: string; size: number }[] | null> {
+  const result = await s3(env, 'GET', key, { uploadId, 'max-parts': String(MAX_PARTS) });
+  if (!result.ok) return null;
+  return [...result.text.matchAll(/<Part>([\s\S]*?)<\/Part>/g)].map((match) => ({
+    partNumber: Number(xmlValue(match[1]!, 'PartNumber')),
+    etag: (xmlValue(match[1]!, 'ETag') ?? '').replace(/&quot;/g, '"'),
+    size: Number(xmlValue(match[1]!, 'Size')),
+  }));
+}
+
 async function signedUrl(
   env: Env,
   key: string,
@@ -198,6 +248,53 @@ export default {
             throw new HttpError(400, `Upload is ${object.size} bytes but the asset was declared as ${asset.size}`);
           await client.mutation(api.assets.finish, { assetId, originalKey: key });
         }
+        return json({ ok: true });
+      }
+      if (path === '/media/asset-multipart-start') {
+        const { assetId } = parseInput(multipartStartSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        if (asset.originalState === 'ready') return json({ done: true });
+        const key = originalKeyFor(asset);
+        // Carry on with an upload this asset already has parts in, if R2 still knows it.
+        if (asset.multipartUploadId) {
+          const parts = await listParts(env, key, asset.multipartUploadId);
+          if (parts) return json({ done: false, uploadId: asset.multipartUploadId, partSize: MULTIPART_PART_BYTES, parts });
+        }
+        const created = await s3(env, 'POST', key, { uploads: '' });
+        const uploadId = created.ok ? xmlValue(created.text, 'UploadId') : null;
+        if (!uploadId) throw new HttpError(502, `Could not start a multipart upload (${created.status})`);
+        await client.mutation(api.assets.setMultipart, { assetId, uploadId });
+        return json({ done: false, uploadId, partSize: MULTIPART_PART_BYTES, parts: [] });
+      }
+      if (path === '/media/asset-multipart-part-url') {
+        const input = parseInput(multipartPartSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        if (asset.multipartUploadId !== input.uploadId) throw new HttpError(409, 'Not the upload this asset is arriving through');
+        const url = s3Url(env, originalKeyFor(asset), { partNumber: String(input.partNumber), uploadId: input.uploadId });
+        url.searchParams.set('X-Amz-Expires', '3600');
+        const signed = await s3Client(env).sign(url, {
+          method: 'PUT',
+          headers: { 'Content-Length': String(input.size) },
+          aws: { signQuery: true, allHeaders: true },
+        });
+        return json({ uploadUrl: signed.url });
+      }
+      if (path === '/media/asset-multipart-complete') {
+        const input = parseInput(multipartCompleteSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        if (asset.originalState === 'ready') return json({ ok: true });
+        if (asset.multipartUploadId !== input.uploadId) throw new HttpError(409, 'Not the upload this asset is arriving through');
+        const key = originalKeyFor(asset);
+        const parts = [...input.parts].sort((a, b) => a.partNumber - b.partNumber);
+        const xml = `<CompleteMultipartUpload>${parts.map((part) => `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${part.etag.replace(/"/g, '&quot;')}</ETag></Part>`).join('')}</CompleteMultipartUpload>`;
+        const completed = await s3(env, 'POST', key, { uploadId: input.uploadId }, xml);
+        if (!completed.ok || /<Error>/.test(completed.text))
+          throw new HttpError(400, `Could not complete the upload: ${xmlValue(completed.text, 'Message') ?? completed.status}`);
+        const object = await env.MEDIA.head(key);
+        if (!object) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+        if (object.size !== asset.size)
+          throw new HttpError(400, `Upload is ${object.size} bytes but the asset was declared as ${asset.size}`);
+        await client.mutation(api.assets.finish, { assetId: input.assetId, originalKey: key });
         return json({ ok: true });
       }
       if (path === '/media/asset-proxy-upload-url') {

@@ -134,6 +134,9 @@ export default defineSchema({
     proxyKey: v.optional(v.string()),
     proxySize: v.optional(v.number()),
     proxyState: v.optional(v.union(v.literal('uploading'), v.literal('ready'))),
+    // The S3 multipart upload a large original is arriving through, so a
+    // client that stops can carry on from the parts already in the bucket.
+    multipartUploadId: v.optional(v.string()),
     uploadedBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),

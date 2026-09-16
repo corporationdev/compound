@@ -100,6 +100,18 @@ export const registerProxy = mutation({
   },
 });
 
+/** Records (or clears) the multipart upload an original is arriving through; only while it is still uploading. */
+export const setMultipart = mutation({
+  args: { assetId: v.id('assets'), uploadId: v.union(v.string(), v.null()) },
+  handler: async (ctx, { assetId, uploadId }) => {
+    const asset = await ctx.db.get(assetId);
+    if (!asset) throw new ConvexError('Asset not found');
+    await requireMember(ctx, asset.organizationId);
+    if (asset.originalState === 'ready') throw new ConvexError('The original is already in the cloud');
+    await ctx.db.patch(assetId, { multipartUploadId: uploadId ?? undefined, updatedAt: Date.now() });
+  },
+});
+
 /** Marks the proxy ready once the Worker has seen it in R2, at the key the asset implies. */
 export const finishProxy = mutation({
   args: { assetId: v.id('assets'), proxyKey: v.string() },
@@ -148,7 +160,7 @@ export const finish = mutation({
     await requireMember(ctx, asset.organizationId);
     if (originalKey !== originalKeyFor(asset)) throw new ConvexError('Original key does not match the asset');
     if (asset.originalState === 'ready') return;
-    await ctx.db.patch(assetId, { originalKey, originalState: 'ready', updatedAt: Date.now() });
+    await ctx.db.patch(assetId, { originalKey, originalState: 'ready', multipartUploadId: undefined, updatedAt: Date.now() });
   },
 });
 

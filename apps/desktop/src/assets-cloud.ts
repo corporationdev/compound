@@ -27,6 +27,15 @@ import { MediaRequestError, mediaRequest } from "./cloud";
 
 /** The largest original the cloud takes; R2 accepts 5 GiB in one PUT. */
 export const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
+/**
+ * Originals above this go up in parts, each its own request with its own
+ * retries, and an upload that stops carries on from the parts the bucket
+ * already has. One request for a file this size fails somewhere on most
+ * connections and has to start over.
+ */
+export const MULTIPART_THRESHOLD = 32 * 1024 * 1024;
+/** Attempts per part before the whole upload counts as failed. */
+const PART_ATTEMPTS = 4;
 
 /** Where fetched originals live inside a project, relative to its folder. */
 export const ORIGINALS_DIR = join("cache", "originals");
@@ -100,29 +109,89 @@ export async function fileSize(path: string): Promise<number | null> {
 }
 
 /**
- * PUTs a file to a signed URL, streaming from disk. The signature binds
- * Content-Type and Content-Length, so both are sent exactly as declared.
+ * PUTs a stretch of a file to a signed URL, streaming from disk. The
+ * signature binds the headers given (Content-Length always, Content-Type
+ * for a whole object), so they are sent exactly as declared. Answers the
+ * ETag the bucket gave the bytes.
  */
-function putFile(url: string, source: string, size: number, mimeType: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+function putRange(
+  url: string,
+  source: string,
+  range: { start: number; length: number },
+  headers: Record<string, string>,
+  onProgress?: (sent: number) => void,
+  signal?: AbortSignal,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const request = httpsRequest(new URL(url), { method: "PUT", headers: { "Content-Type": mimeType, "Content-Length": String(size) } }, (response) => {
+    const request = httpsRequest(new URL(url), { method: "PUT", headers: { ...headers, "Content-Length": String(range.length) } }, (response) => {
       response.resume();
       response.on("end", () => {
-        if (response.statusCode && response.statusCode < 300) resolve();
+        if (response.statusCode && response.statusCode < 300) resolve(String(response.headers.etag ?? ""));
         else reject(new Error(`Asset upload failed (${response.statusCode})`));
       });
     });
     request.on("error", reject);
     signal?.addEventListener("abort", () => request.destroy(new Error("Upload cancelled")), { once: true });
-    const stream = createReadStream(source);
+    const stream = createReadStream(source, { start: range.start, end: range.start + range.length - 1 });
     let sent = 0;
     stream.on("data", (chunk: Buffer | string) => {
       sent += chunk.length;
-      onProgress?.(sent, size);
+      onProgress?.(sent);
     });
     stream.on("error", (error) => request.destroy(error));
     stream.pipe(request);
   });
+}
+
+function putFile(url: string, source: string, size: number, mimeType: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+  return putRange(url, source, { start: 0, length: size }, { "Content-Type": mimeType }, (sent) => onProgress?.(sent, size), signal).then(() => undefined);
+}
+
+type MultipartStart = { done: true } | { done: false; uploadId: string; partSize: number; parts: { partNumber: number; etag: string; size: number }[] };
+
+/**
+ * Sends a large original in parts. The server hands back the upload the
+ * asset is arriving through and the parts the bucket already holds, so a
+ * run that stopped picks up where it was; each part gets its own retries.
+ */
+async function uploadMultipart(assetId: string, source: string, size: number, token: string | null, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+  const start = (await mediaRequest("asset-multipart-start", { assetId }, token)) as MultipartStart;
+  if (start.done) return;
+  const { uploadId, partSize } = start;
+  const count = Math.ceil(size / partSize);
+  const etags = new Map<number, string>();
+  let done = 0;
+  for (const part of start.parts) {
+    const expected = part.partNumber === count ? size - (count - 1) * partSize : partSize;
+    if (part.partNumber >= 1 && part.partNumber <= count && part.size === expected) {
+      etags.set(part.partNumber, part.etag);
+      done += part.size;
+    }
+  }
+  onProgress?.(done, size);
+  for (let partNumber = 1; partNumber <= count; partNumber++) {
+    if (etags.has(partNumber)) continue;
+    const range = { start: (partNumber - 1) * partSize, length: Math.min(partSize, size - (partNumber - 1) * partSize) };
+    let etag = "";
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const { uploadUrl } = (await mediaRequest("asset-multipart-part-url", { assetId, uploadId, partNumber, size: range.length }, token)) as { uploadUrl: string };
+        etag = await putRange(uploadUrl, source, range, {}, (sent) => onProgress?.(done + sent, size), signal);
+        break;
+      } catch (error) {
+        if (signal?.aborted || attempt >= PART_ATTEMPTS) throw error;
+        console.warn(`[assets] part ${partNumber}/${count} of ${source} failed (attempt ${attempt}): ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    etags.set(partNumber, etag);
+    done += range.length;
+    onProgress?.(done, size);
+  }
+  await mediaRequest(
+    "asset-multipart-complete",
+    { assetId, uploadId, parts: [...etags].map(([partNumber, etag]) => ({ partNumber, etag })) },
+    token,
+  );
 }
 
 /**
@@ -145,6 +214,10 @@ export async function uploadAssetOriginal(request: UploadOriginalRequest, onProg
   if (!registered.uploadUrl) return { assetId: registered.assetId, state: "ready" };
 
   if ((await fileSize(request.source)) !== size) throw new Error("The file changed while it was being uploaded");
+  if (size > MULTIPART_THRESHOLD) {
+    await uploadMultipart(registered.assetId, request.source, size, request.token, onProgress, signal);
+    return { assetId: registered.assetId, state: "ready" };
+  }
   await putFile(registered.uploadUrl, request.source, size, mimeType, onProgress, signal);
   await mediaRequest("asset-upload-finish", { assetId: registered.assetId }, request.token);
   return { assetId: registered.assetId, state: "ready" };

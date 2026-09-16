@@ -21,7 +21,7 @@ const { MEDIA_OPERATIONS } = await import("./cloud");
 
 describe("media operations", () => {
   it("lets every asset operation through to the server", () => {
-    for (const operation of ["asset-upload-url", "asset-upload-finish", "asset-download-url", "asset-proxy-upload-url", "asset-proxy-upload-finish"]) {
+    for (const operation of ["asset-upload-url", "asset-upload-finish", "asset-download-url", "asset-proxy-upload-url", "asset-proxy-upload-finish", "asset-multipart-start", "asset-multipart-part-url", "asset-multipart-complete"]) {
       expect(MEDIA_OPERATIONS).toContain(operation);
     }
   });

@@ -299,6 +299,21 @@ test('assets.list shows every asset of the organization to members, and proxies 
   await expect(alice.as.mutation(api.assets.finishProxy, { assetId: id, proxyKey: `assets/${alice.organizationId}/${args.sampleId}/proxy.mp4` })).rejects.toThrow('No proxy upload');
 });
 
+test('assets.setMultipart records the upload an original arrives through, for members, until it is ready', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const args = { organizationId: alice.organizationId, sampleId: '0123456789abcdef', size: 1234, mimeType: 'video/mp4', name: 'clip.mp4' };
+  const { assetId } = await alice.as.mutation(api.assets.register, args);
+  const id = assetId as Id<'assets'>;
+  await expect(bob.as.mutation(api.assets.setMultipart, { assetId: id, uploadId: 'u1' })).rejects.toThrow('Not a member');
+  await alice.as.mutation(api.assets.setMultipart, { assetId: id, uploadId: 'u1' });
+  expect((await alice.as.query(api.assets.describe, { assetId: id })).multipartUploadId).toBe('u1');
+  await alice.as.mutation(api.assets.finish, { assetId: id, originalKey: `assets/${alice.organizationId}/${args.sampleId}/clip.mp4` });
+  expect((await alice.as.query(api.assets.describe, { assetId: id })).multipartUploadId).toBeUndefined();
+  await expect(alice.as.mutation(api.assets.setMultipart, { assetId: id, uploadId: 'u2' })).rejects.toThrow('already in the cloud');
+});
+
 test('assets.describe and assets.finish are for members only, and finish binds the key to the asset', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');

@@ -91,7 +91,7 @@ export class MediaRequestError extends Error {
   }
 }
 /** Every operation the media server exposes that this process may call; anything else never leaves the machine. */
-export const MEDIA_OPERATIONS = ['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish', 'asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish'] as const;
+export const MEDIA_OPERATIONS = ['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish', 'asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish', 'asset-multipart-start', 'asset-multipart-part-url', 'asset-multipart-complete'] as const;
 
 export async function mediaRequest(path: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
   if (!(MEDIA_OPERATIONS as readonly string[]).includes(path))

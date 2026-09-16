@@ -35,9 +35,22 @@ const asset = {
 };
 const KEY = 'assets/org-1/0123456789abcdef/clip.mp4';
 type Handlers = Record<string, unknown | (() => unknown)>;
-function backend(handlers: Handlers) {
+type S3Handler = (request: { method: string; url: URL; body: string }) => { status?: number; body?: string };
+const s3Calls: { method: string; url: URL; body: string }[] = [];
+let s3Handler: S3Handler = () => ({ status: 500, body: '<Error><Message>no S3 fake</Message></Error>' });
+function backend(handlers: Handlers, s3?: S3Handler) {
   const calls: { path: string; args: unknown }[] = [];
+  s3Calls.length = 0;
+  if (s3) s3Handler = s3;
   globalThis.fetch = (async (_url, init) => {
+    const url = new URL(_url instanceof Request ? _url.url : String(_url));
+    if (url.hostname.endsWith('r2.cloudflarestorage.com')) {
+      const body = init?.body ? String(init.body) : _url instanceof Request ? await _url.text() : '';
+      const request = { method: (init?.method ?? (_url instanceof Request ? _url.method : 'GET')).toUpperCase(), url, body };
+      s3Calls.push(request);
+      const reply = s3Handler(request);
+      return new Response(reply.body ?? '', { status: reply.status ?? 200 });
+    }
     const input = JSON.parse(String(init?.body));
     calls.push({ path: input.path, args: Array.isArray(input.args) ? input.args[0] : input.args });
     if (input.path === 'auth:getCurrentUser') return Response.json({ status: 'success', value: { id: 'user' } });
@@ -180,4 +193,55 @@ test('proxy upload signs a PUT at the proxy key, finish checks its size, and dow
   expect(new URL(data.url).pathname).toBe(`/compound-media-dev/${PROXY_KEY}`);
   backend({ 'assets:get': { ...asset, originalState: 'ready', originalKey: KEY } });
   expect((await worker.fetch(request('asset-download-url', lookup), env)).status).toBe(404);
+});
+
+test('multipart: start creates or resumes an upload, part URLs are signed per part, and complete verifies the object', async () => {
+  const KEY_URL = `/compound-media-dev/${KEY}`;
+  // Start, with nothing under way: R2 is asked for an upload id, which is recorded on the asset.
+  let calls = backend({ 'assets:describe': asset, 'assets:setMultipart': null }, ({ method, url }) =>
+    method === 'POST' && url.searchParams.has('uploads') ? { body: '<InitiateMultipartUploadResult><UploadId>up-1</UploadId></InitiateMultipartUploadResult>' } : { status: 500 });
+  let response = await worker.fetch(request('asset-multipart-start', { assetId: 'asset-1' }), env);
+  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 64 * 1024 * 1024, parts: [] });
+  expect(s3Calls[0]?.url.pathname).toBe(KEY_URL);
+  expect(calls.find((call) => call.path === 'assets:setMultipart')?.args).toEqual({ assetId: 'asset-1', uploadId: 'up-1' });
+
+  // Start again with an upload recorded: the parts R2 holds come back, so the client skips them.
+  const inFlight = { ...asset, multipartUploadId: 'up-1' };
+  backend({ 'assets:describe': inFlight }, ({ method, url }) =>
+    method === 'GET' && url.searchParams.get('uploadId') === 'up-1'
+      ? { body: '<ListPartsResult><Part><PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag><Size>1000</Size></Part></ListPartsResult>' }
+      : { status: 500 });
+  response = await worker.fetch(request('asset-multipart-start', { assetId: 'asset-1' }), env);
+  expect((await response.json()) as unknown).toEqual({ done: false, uploadId: 'up-1', partSize: 64 * 1024 * 1024, parts: [{ partNumber: 1, etag: '"e1"', size: 1000 }] });
+
+  // A recorded upload R2 no longer knows is replaced.
+  calls = backend({ 'assets:describe': inFlight, 'assets:setMultipart': null }, ({ method, url }) =>
+    method === 'GET' ? { status: 404, body: '<Error><Code>NoSuchUpload</Code></Error>' }
+      : method === 'POST' && url.searchParams.has('uploads') ? { body: '<r><UploadId>up-2</UploadId></r>' } : { status: 500 });
+  response = await worker.fetch(request('asset-multipart-start', { assetId: 'asset-1' }), env);
+  expect(((await response.json()) as { uploadId: string }).uploadId).toBe('up-2');
+
+  // Part URLs are signed for this upload only, with the part's length bound.
+  backend({ 'assets:describe': inFlight });
+  response = await worker.fetch(request('asset-multipart-part-url', { assetId: 'asset-1', uploadId: 'up-1', partNumber: 2, size: 500 }), env);
+  const signed = new URL(((await response.json()) as { uploadUrl: string }).uploadUrl);
+  expect(signed.pathname).toBe(KEY_URL);
+  expect(signed.searchParams.get('partNumber')).toBe('2');
+  expect(signed.searchParams.get('uploadId')).toBe('up-1');
+  expect(signed.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host');
+  expect((await worker.fetch(request('asset-multipart-part-url', { assetId: 'asset-1', uploadId: 'other', partNumber: 2, size: 500 }), env)).status).toBe(409);
+
+  // Complete sends the parts in order, then the object is checked and the asset finished.
+  calls = backend({ 'assets:describe': inFlight, 'assets:finish': null }, ({ method, url, body }) =>
+    method === 'POST' && url.searchParams.get('uploadId') === 'up-1' && body.includes('<PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag>')
+      ? { body: '<CompleteMultipartUploadResult><ETag>"final"</ETag></CompleteMultipartUploadResult>' } : { status: 500 });
+  response = await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 2, etag: '"e2"' }, { partNumber: 1, etag: '"e1"' }] }), { ...env, MEDIA: { head: async () => ({ size: asset.size }) } as unknown as R2Bucket });
+  expect((await response.json()) as unknown).toEqual({ ok: true });
+  expect(s3Calls[0]?.body.indexOf('<PartNumber>1</PartNumber>')).toBeLessThan(s3Calls[0]!.body.indexOf('<PartNumber>2</PartNumber>'));
+  expect(calls.find((call) => call.path === 'assets:finish')?.args).toEqual({ assetId: 'asset-1', originalKey: KEY });
+
+  // A size that does not match what was declared never finishes the asset.
+  calls = backend({ 'assets:describe': inFlight, 'assets:finish': null }, () => ({ body: '<CompleteMultipartUploadResult/>' }));
+  expect((await worker.fetch(request('asset-multipart-complete', { assetId: 'asset-1', uploadId: 'up-1', parts: [{ partNumber: 1, etag: '"e1"' }] }), { ...env, MEDIA: { head: async () => ({ size: 1 }) } as unknown as R2Bucket })).status).toBe(400);
+  expect(calls.some((call) => call.path === 'assets:finish')).toBe(false);
 });
