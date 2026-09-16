@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
-import { afterEach, expect, test } from 'bun:test';
-import { deleteDB, openDB, type IDBPDatabase } from 'idb';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { IDBFactory } from 'fake-indexeddb';
+import { openDB, type IDBPDatabase } from 'idb';
 import type { GlobalDBSchema, ProjectRecord } from '../src/lib/db';
 import { migrateLegacyDatabase } from '../src/lib/db-migration';
 
@@ -41,11 +42,12 @@ const record = (dir: string, id: string): ProjectRecord => ({
 });
 const putRoot = (db: IDBPDatabase<GlobalDBSchema>, value: LegacyRoot) => db.put('roots' as never, value as never);
 
-afterEach(async () => {
-  for (const db of connections.splice(0)) db.close();
-  await deleteDB('compound-idb');
-  await deleteDB('diffusion-studio-idb');
-});
+// Every test starts from an empty IndexedDB of its own. Other test files in
+// this process (the app's db module, for one) hold `compound-idb` open at a
+// newer version, which would make opening it at version 4 fail and deleting
+// it block.
+beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
+afterEach(() => { for (const db of connections.splice(0)) db.close(); });
 
 test('single-project roots and compiled bundles migrate once; forgetting a project stays forgotten', async () => {
   const old = await legacyDatabase();
