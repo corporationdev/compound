@@ -61,3 +61,21 @@ test('a source found here is local and never asks the resolver; the resolver can
   expect(await library.file(library.get('song.m4a')!)).toBe(local);
   await library.dispose();
 });
+
+test('a resolver installed after the load can be asked to attach the assets that were missing', async () => {
+	const { fs, local } = setup(false);
+	const library = new AssetLibrary(fs);
+	await library.load();
+	const before = library.get('song.m4a')!;
+	expect(await library.file(before)).toBe(local);
+	const cloud = new File(['cloud'], 'song.m4a');
+	const asked: string[] = [];
+	library.setMissingResolver(async r => { asked.push(r.id); return { getFile: async () => cloud }; });
+	await library.resolveMissingSources();
+	// The same asset object, with its handle swapped; URL assets are not asked about.
+	expect(asked).toEqual([record.id]);
+	expect(library.get('song.m4a')).toBe(before);
+	expect(await library.file(before)).toBe(cloud);
+	expect(library.hasLocalBytes(record.id)).toBe(false);
+	await library.dispose();
+});

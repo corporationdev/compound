@@ -105,8 +105,12 @@ export class VideoBuffer {
 	private settleTimer: ReturnType<typeof setTimeout> | null = null;
 	private lastSeekAt: number = -Infinity;
 
+	/** The handle the bytes were read through; a swapped one is a reason to build again after a failure. */
+	public readonly builtWith: VideoAsset['handle'];
+
 	public constructor(asset: VideoAsset) {
 		this.asset = asset;
+		this.builtWith = asset.handle;
 
 		const pixels = Math.min(asset.width * asset.height, MAX_TILE_PIXELS);
 		const count = Math.min(MAX_CACHE_COUNT, Math.max(MIN_CACHE_COUNT, Math.floor(CACHE_PIXEL_BUDGET / pixels)));
@@ -738,8 +742,11 @@ export function resolveVideoDecoder(world: World, entity: Entity): VideoDecoderI
 
 	// The id is the only thing that can go stale: a library edit assigns onto
 	// the asset in place, so the object a live decoder holds is the library's.
+	// One that failed to read bytes a handle no longer in use is built again:
+	// the library resolved the source since (a cloud asset whose bytes arrived).
 	const existing = entity.get(VideoDecoderHandle);
-	if (existing && existing.asset.id === assetId) {
+	const stale = existing instanceof VideoBuffer && existing.errored && existing.asset.handle !== existing.builtWith;
+	if (existing && existing.asset.id === assetId && !stale) {
 		if (existing instanceof SequenceDecoder) {
 			existing.hasCache = hasCache;
 			existing.frameRate = getSequenceFrameRate(entity, existing.asset);

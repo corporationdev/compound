@@ -155,6 +155,26 @@ export class AssetLibrary {
 		this.resolveMissing = resolve;
 	}
 
+	/**
+	 * Asks the resolver for every asset whose bytes are not here and whose
+	 * source is a file: for a resolver installed after a load, which left
+	 * those attached to their absent sources. The handle is swapped on the
+	 * asset in place, as a library edit is, so what holds the asset sees it.
+	 */
+	public async resolveMissingSources(): Promise<void> {
+		if (!this.resolveMissing || this.disposed) return;
+		let changed = false;
+		for (const [id, entry] of this.map) {
+			if (isPartialAsset(entry) || entry.transient || entry.type === 'SEQUENCE') continue;
+			if (this.local.has(id) || isUrlSource(entry.source)) continue;
+			const handle = await this.resolveMissing(toRecord(entry) as AssetRecord);
+			if (!handle || this.disposed) continue;
+			entry.handle = handle;
+			changed = true;
+		}
+		if (changed) this.publish();
+	}
+
 	public rememberCatalogSource(asset: Asset, source: AssetCatalogSource): void {
 		if (this.disposed) throw new Error('The project was closed');
 		// File-watcher reloads can replace the instance returned by an earlier import.

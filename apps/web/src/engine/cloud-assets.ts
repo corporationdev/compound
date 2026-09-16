@@ -198,6 +198,9 @@ export function attachCloudAssets(library: AssetLibrary, options: CloudAssetsOpt
 	library.setMissingResolver(async (record: AssetRecord): Promise<AssetFileHandle | null> =>
 		stopped || record.type === 'SEQUENCE' ? null : new CloudAssetHandle(dir, record.id),
 	);
+	// The library loaded before this attached: what was missing then is
+	// attached to an absent source and gets its cloud handle now.
+	void library.resolveMissingSources().catch((error) => console.warn('[cloud-assets] could not resolve missing sources:', error));
 
 	const localAssets = (): LocalAssetInfo[] =>
 		library.assets()
