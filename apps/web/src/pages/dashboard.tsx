@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { useSearchParams } from "@solidjs/router";
-import { Match, Show, Switch, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { toast } from "somoto";
 
 import { DashboardAccountView } from "@/components/dashboard/account-view";
@@ -13,15 +13,17 @@ import { DashboardHomeView } from "@/components/dashboard/home-view";
 import { DashboardMcpView } from "@/components/dashboard/mcp-view";
 import { DashboardProjectsView } from "@/components/dashboard/projects-view";
 import { DashboardSettingsView } from "@/components/dashboard/settings-view";
+import { DashboardSidebarUser } from "@/components/dashboard/sidebar-user-menu";
 import {
   DashboardSidebarHeader,
   DashboardSidebarItem,
   DashboardSidebarNav,
   DashboardSidebarSection,
   DashboardSidebarTopSpacer,
-  DashboardSidebarUser,
 } from "@/components/dashboard/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { WorkspaceFileTree } from "@/components/workspace/file-tree";
+import { WorkspaceView } from "@/components/workspace/workspace-view";
 import { useFullscreenState } from "@/hooks/use-fullscreen-state";
 import { isDesktop, openProjectFolder, pickProjectFolder } from "@/projects";
 import { isInputTarget } from "@/utils";
@@ -31,6 +33,7 @@ import type { DashboardView } from "@/components/dashboard/types";
 const DASHBOARD_VIEWS: readonly DashboardView[] = [
   "home",
   "projects",
+  "workspace",
   "account",
   "settings",
   "mcp",
@@ -54,8 +57,23 @@ function isSettingsView(view: DashboardView): boolean {
   return SETTINGS_VIEWS.includes(view);
 }
 
+/** The `/workspace/*path` segment, decoded; '' at the workspace root. */
+function decodePath(raw: string | undefined): string {
+  if (!raw) return "";
+  return raw.split("/").map((segment) => {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  }).join("/");
+}
+
 export function DashboardPage() {
   const [params, setParams] = useSearchParams();
+  const routeParams = useParams<{ path?: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const isFullscreen = useFullscreenState();
 
   // ⌘I: the native folder picker, and the chosen folder on the recents list.
@@ -84,8 +102,15 @@ export function DashboardPage() {
     onCleanup(() => window.removeEventListener("keydown", handleShortcut));
   });
 
-  const view = (): DashboardView => parseView(params.dashboard);
-  const setView = (next: DashboardView) => setParams({ dashboard: next }, { replace: true });
+  // A workspace file is its own route (so it can be linked and restored);
+  // the other views are a query param on the dashboard route.
+  const onWorkspaceRoute = createMemo(() => location.pathname.startsWith("/workspace"));
+  const workspacePath = createMemo(() => (onWorkspaceRoute() ? decodePath(routeParams.path) : null));
+  const view = (): DashboardView => (onWorkspaceRoute() ? "workspace" : parseView(params.dashboard));
+  const setView = (next: DashboardView) => {
+    if (onWorkspaceRoute()) navigate(`/?dashboard=${next}`, { replace: true });
+    else setParams({ dashboard: next }, { replace: true });
+  };
 
   // Which navigation the sidebar shows. Landing on a settings view (deep link,
   // reload) opens the settings navigation; the user row opens it by itself.
@@ -115,14 +140,19 @@ export function DashboardPage() {
         <Show when={!settingsNavOpen()} fallback={<DashboardSidebarTopSpacer />}>
           <DashboardSidebarHeader />
         </Show>
-        <DashboardSidebarNav>
+        <DashboardSidebarNav fill={!settingsNavOpen() && isDesktop()}>
           <Show
             when={settingsNavOpen()}
             fallback={
-              <DashboardSidebarSection>
-                <DashboardSidebarItem active={view() === "home"} onClick={() => setView("home")} icon="home" label="Home" />
-                <DashboardSidebarItem active={view() === "projects"} onClick={() => setView("projects")} icon="compound-project-file" label="Projects" />
-              </DashboardSidebarSection>
+              <>
+                <DashboardSidebarSection>
+                  <DashboardSidebarItem active={view() === "home"} onClick={() => setView("home")} icon="home" label="Home" />
+                  <DashboardSidebarItem active={view() === "projects"} onClick={() => setView("projects")} icon="compound-project-file" label="Projects" />
+                </DashboardSidebarSection>
+                <Show when={isDesktop()}>
+                  <WorkspaceFileTree selectedPath={workspacePath()} />
+                </Show>
+              </>
             }
           >
             <DashboardSidebarSection>
@@ -136,9 +166,14 @@ export function DashboardPage() {
             </DashboardSidebarSection>
           </Show>
         </DashboardSidebarNav>
-        <Show when={!settingsNavOpen()}>
-          <DashboardSidebarUser onClick={openProfile} />
-        </Show>
+        <DashboardSidebarUser
+          onAccount={openProfile}
+          onSwitch={() => {
+            // File paths belong to the previous organization. Start at home
+            // instead of opening the same path in the newly selected workspace.
+            if (onWorkspaceRoute()) setView("home");
+          }}
+        />
       </aside>
 
       <Separator orientation="vertical" class="bg-border-strong" />
@@ -150,6 +185,9 @@ export function DashboardPage() {
           </Match>
           <Match when={view() === "projects"}>
             <DashboardProjectsView />
+          </Match>
+          <Match when={view() === "workspace"}>
+            <WorkspaceView path={workspacePath() ?? ""} />
           </Match>
           <Match when={view() === "account"}>
             <DashboardAccountView />

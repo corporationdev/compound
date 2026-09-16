@@ -81,8 +81,20 @@ export async function authRequest(
     : operation === 'token' ? result : { success: true };
   return { data, sessionToken };
 }
+/** A media server refusal, with the status so a caller can tell "not there" (404) from a failure. */
+export class MediaRequestError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'MediaRequestError';
+    this.status = status;
+  }
+}
+/** Every operation the media server exposes that this process may call; anything else never leaves the machine. */
+export const MEDIA_OPERATIONS = ['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish', 'asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish', 'asset-multipart-start', 'asset-multipart-part-url', 'asset-multipart-complete'] as const;
+
 export async function mediaRequest(path: string, body: Record<string, unknown>, token: string | null): Promise<unknown> {
-  if (!['upload-url', 'transcribe', 'transcribe-status', 'transcribe-cancel', 'analyze', 'catalog-list', 'catalog-get', 'catalog-artwork', 'catalog-search', 'catalog-search-status', 'catalog-resolve', 'catalog-prepare', 'catalog-playback', 'catalog-save', 'catalog-remove', 'catalog-upload-url', 'catalog-upload-finish'].includes(path))
+  if (!(MEDIA_OPERATIONS as readonly string[]).includes(path))
     throw new Error('Unknown media operation');
   if (!token) throw new Error('Sign in required');
   const config = await cloudConfig();
@@ -92,8 +104,14 @@ export async function mediaRequest(path: string, body: Record<string, unknown>, 
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(255000),
   });
-  const result = (await response.json()) as { error?: string };
-  if (!response.ok) throw new Error(result.error ?? 'Media request failed');
+  const text = await response.text();
+  let result: { error?: string };
+  try {
+    result = JSON.parse(text) as { error?: string };
+  } catch {
+    throw new MediaRequestError(response.status, `Media server answered ${response.status} with ${text.trim().slice(0, 80) || 'nothing'} (is the server up?)`);
+  }
+  if (!response.ok) throw new MediaRequestError(response.status, result.error ?? 'Media request failed');
   return result;
 }
 

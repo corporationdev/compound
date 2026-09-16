@@ -27,7 +27,15 @@ export type ThumbnailAsset = {
 type Asset = ThumbnailAsset;
 
 /** Re-renders a thumbnail when the asset, or the file behind it, changes. */
-const keyOf = (asset: Asset): string => `${asset.id}:${asset.stat?.mtime ?? asset.lastModified ?? ''}`;
+const handleIds = new WeakMap<object, number>();
+let nextHandleId = 0;
+/** A number per handle object: a swapped handle (a cloud asset whose bytes arrived) is a reason to derive again. */
+const handleId = (handle: object): number => {
+  let id = handleIds.get(handle);
+  if (id === undefined) handleIds.set(handle, (id = ++nextHandleId));
+  return id;
+};
+const keyOf = (asset: Asset): string => `${asset.id}:${asset.stat?.mtime ?? asset.lastModified ?? ''}:${handleId(asset.handle)}`;
 
 type ThumbnailSize = {
   width: number;

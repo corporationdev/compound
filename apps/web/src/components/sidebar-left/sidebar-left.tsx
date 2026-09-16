@@ -10,6 +10,8 @@ import { toast } from "somoto";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
 import { ProjectMenu } from "./project-menu";
+import { CloudAssetsPill } from "./cloud-assets-pill";
+import { SyncStatusPill } from "./sync-status-pill";
 import { useProject } from "@/context/project";
 import { cx } from "@/lib/cva";
 
@@ -104,6 +106,8 @@ export function ProjectHeader(props: ProjectHeaderProps) {
           placeholder="Project name"
           class="w-full bg-transparent focus-ring px-1 h-5 ml-1 rounded text-xs text-muted-foreground font-450 outline-none"
         />
+        <SyncStatusPill />
+        <CloudAssetsPill />
       </div>
     </div>
   )

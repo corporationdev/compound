@@ -52,6 +52,14 @@ export interface LibraryOptions {
 	 * the host can rebind whatever held the old one (`from`).
 	 */
 	onRelink?: (asset: Asset, from: string) => void;
+	/**
+	 * Called on load for an asset whose source is not on this machine — a
+	 * linked file that lives on a teammate's disk. A handle it returns is
+	 * attached in place of the missing file's; the record itself (its
+	 * `source`) is left as it is, since the manifest is shared across
+	 * machines. Null means the asset stays attached to its absent source.
+	 */
+	resolveMissing?: (record: AssetRecord) => Promise<AssetFileHandle | null>;
 }
 
 export interface ImportResult {
@@ -103,6 +111,9 @@ export class AssetLibrary {
 	private readonly map = new Map<string, AssetEntry>();
 	private readonly onRename: LibraryOptions['onRename'];
 	private readonly onRelink: LibraryOptions['onRelink'];
+	private resolveMissing: LibraryOptions['resolveMissing'];
+	/** Ids of assets whose bytes were found on this machine (source stat succeeded, or produced here). */
+	private local = new Set<string>();
 	private inflight = new Map<string, Promise<Asset>>();
 	private saveTimer: ReturnType<typeof setTimeout> | undefined;
 	private saving: Promise<void> = Promise.resolve();
@@ -114,6 +125,7 @@ export class AssetLibrary {
 		this.cache = new AssetCache(fs);
 		this.onRename = options.onRename;
 		this.onRelink = options.onRelink;
+		this.resolveMissing = options.resolveMissing;
 		[this.assets, this.setAssets] = createSignal<Asset[]>([]);
 		[this.partials, this.setPartials] = createSignal<PartialAsset[]>([]);
 		[this.folders, this.setFolders] = createSignal<ReadonlySet<string>>(new Set());
@@ -128,6 +140,41 @@ export class AssetLibrary {
 	}
 
 	public get closed(): boolean { return this.disposed; }
+
+	/**
+	 * Whether the bytes of the asset with `id` are on this machine: its source
+	 * was found on load, or it was produced or imported here. False for URL
+	 * assets and for anything whose source is missing, however it was resolved.
+	 */
+	public hasLocalBytes(id: string): boolean {
+		return this.local.has(id);
+	}
+
+	/** Installs (or removes) the resolver for sources missing here; see `LibraryOptions.resolveMissing`. */
+	public setMissingResolver(resolve: LibraryOptions['resolveMissing']): void {
+		this.resolveMissing = resolve;
+	}
+
+	/**
+	 * Asks the resolver for every asset whose bytes are not here and whose
+	 * source is a file: for a resolver installed after a load, which left
+	 * those attached to their absent sources. Each gets a fresh object with
+	 * the new handle, so a list keyed on identity re-renders it and a decoder
+	 * built on the old handle is told apart from one on the new.
+	 */
+	public async resolveMissingSources(): Promise<void> {
+		if (!this.resolveMissing || this.disposed) return;
+		let changed = false;
+		for (const [id, entry] of this.map) {
+			if (isPartialAsset(entry) || entry.transient || entry.type === 'SEQUENCE') continue;
+			if (this.local.has(id) || isUrlSource(entry.source)) continue;
+			const handle = await this.resolveMissing(toRecord(entry) as AssetRecord);
+			if (!handle || this.disposed) continue;
+			this.map.set(id, { ...entry, handle });
+			changed = true;
+		}
+		if (changed) this.publish();
+	}
 
 	public rememberCatalogSource(asset: Asset, source: AssetCatalogSource): void {
 		if (this.disposed) throw new Error('The project was closed');
@@ -270,6 +317,9 @@ export class AssetLibrary {
 		await this.scanAssetsDir();
 		this.publish();
 		this.cache.prune(this.map.keys());
+		for (const id of this.local) {
+			if (!this.map.has(id)) this.local.delete(id);
+		}
 	}
 
 	/** Attaches handles to a record; re-examines it when its source changed. */
@@ -278,13 +328,21 @@ export class AssetLibrary {
 
 		if (record.type === 'SEQUENCE') {
 			const frames = sortFrames(await this.fs.list(record.source)).filter((entry) => entry.kind === 'file');
+			if (frames.length) this.local.add(record.id); else this.local.delete(record.id);
 			const id = await hashSequence(frames);
 			if (id === record.id) return this.attach(record);
 			return this.describeSequence(record.source, frames, { path: record.path, createdAt: record.createdAt });
 		}
 
 		const stat = await this.fs.stat(record.source);
-		if (!stat || (record.stat && stat.size === record.stat.size && stat.mtime === record.stat.mtime)) {
+		if (!stat) {
+			this.local.delete(record.id);
+			// The record stays as it is either way; only what hands out the bytes changes.
+			const handle = this.resolveMissing ? await this.resolveMissing(record) : null;
+			return handle ? { ...this.attach(record), handle } : this.attach(record);
+		}
+		this.local.add(record.id);
+		if (record.stat && stat.size === record.stat.size && stat.mtime === record.stat.mtime) {
 			return this.attach(record);
 		}
 		const refreshed = await this.describeFile(record.source, {
@@ -794,6 +852,7 @@ export class AssetLibrary {
 		const mimeType = await detectMimeType(file);
 		if (!mimeType) throw new Error(`Unsupported file: ${basename(source)}`);
 		const [id, probe] = await Promise.all([hashBlob(file), probeMedia(file, mimeType)]);
+		this.local.add(id);
 
 		return {
 			id,
@@ -835,9 +894,11 @@ export class AssetLibrary {
 		if (!mimeType?.startsWith('image/')) throw new Error(`Not an image sequence: ${basename(source)}`);
 		const probe = await probeMedia(file, mimeType);
 		if (probe.type !== 'IMAGE') throw new Error(`Not an image sequence: ${basename(source)}`);
+		const id = await hashSequence(frames);
+		this.local.add(id);
 
 		return {
-			id: await hashSequence(frames),
+			id,
 			type: 'SEQUENCE',
 			path: meta.path,
 			source,

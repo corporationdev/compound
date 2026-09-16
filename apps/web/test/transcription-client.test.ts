@@ -1,4 +1,4 @@
-import { test, expect, mock, jest, afterEach } from 'bun:test';
+import { test, expect, mock, jest, afterEach, afterAll } from 'bun:test';
 let token = '';
 let handle: (request: any) => Promise<unknown>;
 mock.module('../src/lib/auth-client', () => ({ getToken: async () => token }));
@@ -14,6 +14,8 @@ Object.defineProperty(globalThis, 'localStorage', { value: {
 }, configurable: true });
 const segments = [{ text: 'Hello.', words: [{ text: 'Hello.', start: .1, end: .4 }] }];
 afterEach(() => { jest.useRealTimers(); storage.clear(); });
+// Other test files in the same process load browser-detecting libraries; do not leave a fake window behind.
+afterAll(() => { delete (globalThis as { window?: unknown }).window; delete (globalThis as { localStorage?: unknown }).localStorage; });
 
 test('the existing transcribe function returns unchanged captions after waiting on a job', async () => {
   token = 'test';

@@ -83,4 +83,62 @@ export default defineSchema({
   })
     .index('by_owner', ['ownerId', 'expiresAt'])
     .index('by_expiry', ['expiresAt']),
+  // One text file of an organization's workspace. The truth for the text;
+  // every desktop folder is a checkout of these rows (see docs/workspace-plan.md).
+  files: defineTable({
+    organizationId: v.string(),
+    path: v.string(),
+    text: v.string(),
+    hash: v.string(),
+    version: v.number(),
+    deleted: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index('by_org_path', ['organizationId', 'path'])
+    .index('by_org', ['organizationId']),
+  // Legacy: per-project rows from before the workspace. Kept until
+  // `migrations.projectsToWorkspace` has run on every deployment.
+  projects: defineTable({
+    organizationId: v.string(),
+    name: v.string(),
+    entry: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archivedAt: v.optional(v.number()),
+  }).index('by_org', ['organizationId']),
+  projectFiles: defineTable({
+    projectId: v.id('projects'),
+    path: v.string(),
+    text: v.string(),
+    hash: v.string(),
+    version: v.number(),
+    deleted: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index('by_project_path', ['projectId', 'path'])
+    .index('by_project', ['projectId']),
+  assets: defineTable({
+    organizationId: v.string(),
+    sampleId: v.string(),
+    size: v.number(),
+    mimeType: v.string(),
+    name: v.string(),
+    originalKey: v.optional(v.string()),
+    originalState: v.union(v.literal('uploading'), v.literal('ready')),
+    // A 720p MP4 made beside the original so another machine can start
+    // playing before the original has come down. Absent for assets that
+    // have none (audio, images) and for originals registered before proxies.
+    proxyKey: v.optional(v.string()),
+    proxySize: v.optional(v.number()),
+    proxyState: v.optional(v.union(v.literal('uploading'), v.literal('ready'))),
+    // The S3 multipart upload a large original is arriving through, so a
+    // client that stops can carry on from the parts already in the bucket.
+    multipartUploadId: v.optional(v.string()),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_org_sample', ['organizationId', 'sampleId']),
 });

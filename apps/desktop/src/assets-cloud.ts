@@ -1,0 +1,293 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Asset bytes between a project folder and R2, one transfer at a time. The
+// transfer manager (see assets-transfers.ts) decides what moves and when;
+// this moves it, with the destination and the credentials always obtained
+// from the authenticated server rather than from renderer input.
+//
+// Up: the file streams from disk to the signed URL, so a multi-gigabyte
+// original is never read into memory, and the server marks the asset ready
+// once it has seen the object. Down: the bytes land under `<dir>/cache/`,
+// written to a temp file beside the target and renamed once whole; `cache/`
+// is the app's own, ignored by sync, git and the renderer's watcher alike.
+// An original keeps its name's extension under `cache/originals/`; a proxy
+// is always `cache/proxies/<sampleId>.mp4`.
+
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, rename, stat, unlink } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
+import { isAbsolute, join } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+
+import { tempPathFor } from "./atomic";
+import { MediaRequestError, mediaRequest } from "./cloud";
+
+/** The largest original the cloud takes; R2 accepts 5 GiB in one PUT. */
+export const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
+/**
+ * Originals above this go up in parts, each its own request with its own
+ * retries, and an upload that stops carries on from the parts the bucket
+ * already has. One request for a file this size fails somewhere on most
+ * connections and has to start over.
+ */
+export const MULTIPART_THRESHOLD = 32 * 1024 * 1024;
+/** Attempts per part before the whole upload counts as failed; a connection that drops a part now and then is the normal case. */
+const PART_ATTEMPTS = 8;
+
+/** Where fetched originals live inside a project, relative to its folder. */
+export const ORIGINALS_DIR = join("cache", "originals");
+/** Where proxies live inside a project, made here or fetched, relative to its folder. */
+export const PROXIES_DIR = join("cache", "proxies");
+
+export type AssetVariant = "original" | "proxy";
+
+/** Bytes moved so far, and the total; called as the transfer advances. */
+export type ProgressCallback = (bytes: number, total: number) => void;
+
+export type UploadOriginalRequest = {
+  dir: string;
+  organizationId: string;
+  sampleId: string;
+  /** Absolute path of the file on this machine. */
+  source: string;
+  mimeType: string;
+  name: string;
+  token: string | null;
+};
+export type UploadProxyRequest = { dir: string; sampleId: string; assetId: string; token: string | null };
+export type FetchRequest = { dir: string; organizationId: string; sampleId: string; variant: AssetVariant; token: string | null };
+export type FetchResponse = { path: string; name: string; mimeType: string } | null;
+
+const SAMPLE_ID = /^[0-9a-f]{16}$/;
+
+/** A library id as the cloud names it; anything else is not one and never reaches a path. */
+export function validSampleId(sampleId: string): boolean {
+  return SAMPLE_ID.test(sampleId);
+}
+
+/** The extension of a file name, dot included and lower-cased; '' when there is none. */
+export function extensionOf(name: string): string {
+  const base = name.slice(Math.max(name.lastIndexOf("/"), name.lastIndexOf("\\")) + 1);
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "";
+  const ext = base.slice(dot).toLowerCase();
+  return /^\.[a-z0-9]{1,16}$/.test(ext) ? ext : "";
+}
+
+/**
+ * Where a fetched original is kept: named by its sample id (its identity on
+ * every machine) with the extension of its cloud name, so decoders that go
+ * by extension still recognise it.
+ */
+export function originalCachePath(dir: string, sampleId: string, name: string): string {
+  if (!validSampleId(sampleId)) throw new Error("Invalid asset id");
+  return join(dir, ORIGINALS_DIR, `${sampleId}${extensionOf(name)}`);
+}
+
+/** Where an asset's proxy is kept, whether made on this machine or fetched. */
+export function proxyCachePath(dir: string, sampleId: string): string {
+  if (!validSampleId(sampleId)) throw new Error("Invalid asset id");
+  return join(dir, PROXIES_DIR, `${sampleId}.mp4`);
+}
+
+/**
+ * A media type without its parameters, lower-cased: the library probes
+ * `video/mp4; codecs="avc1.64001f, mp4a.40.2"`, the cloud records and signs
+ * for `video/mp4`. The PUT must carry exactly what was signed.
+ */
+export function mediaEssence(mimeType: string): string {
+  return mimeType.split(";")[0]!.trim().toLowerCase();
+}
+
+/** The size of the file at `path` when it is a plain file, else null. */
+export async function fileSize(path: string): Promise<number | null> {
+  const info = await stat(path).catch(() => null);
+  return info?.isFile() ? info.size : null;
+}
+
+/**
+ * PUTs a stretch of a file to a signed URL, streaming from disk. The
+ * signature binds the headers given (Content-Length always, Content-Type
+ * for a whole object), so they are sent exactly as declared. Answers the
+ * ETag the bucket gave the bytes.
+ */
+function putRange(
+  url: string,
+  source: string,
+  range: { start: number; length: number },
+  headers: Record<string, string>,
+  onProgress?: (sent: number) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(new URL(url), { method: "PUT", headers: { ...headers, "Content-Length": String(range.length) } }, (response) => {
+      response.resume();
+      response.on("end", () => {
+        if (response.statusCode && response.statusCode < 300) resolve(String(response.headers.etag ?? ""));
+        else reject(new Error(`Asset upload failed (${response.statusCode})`));
+      });
+    });
+    request.on("error", reject);
+    signal?.addEventListener("abort", () => request.destroy(new Error("Upload cancelled")), { once: true });
+    const stream = createReadStream(source, { start: range.start, end: range.start + range.length - 1 });
+    let sent = 0;
+    stream.on("data", (chunk: Buffer | string) => {
+      sent += chunk.length;
+      onProgress?.(sent);
+    });
+    stream.on("error", (error) => request.destroy(error));
+    stream.pipe(request);
+  });
+}
+
+function putFile(url: string, source: string, size: number, mimeType: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+  return putRange(url, source, { start: 0, length: size }, { "Content-Type": mimeType }, (sent) => onProgress?.(sent, size), signal).then(() => undefined);
+}
+
+type MultipartStart = { done: true } | { done: false; uploadId: string; partSize: number; parts: { partNumber: number; etag: string; size: number }[] };
+
+/**
+ * Sends a large original in parts. The server hands back the upload the
+ * asset is arriving through and the parts the bucket already holds, so a
+ * run that stopped picks up where it was; each part gets its own retries.
+ */
+async function uploadMultipart(assetId: string, source: string, size: number, token: string | null, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+  const start = (await mediaRequest("asset-multipart-start", { assetId }, token)) as MultipartStart;
+  if (start.done) return;
+  const { uploadId, partSize } = start;
+  const count = Math.ceil(size / partSize);
+  const etags = new Map<number, string>();
+  let done = 0;
+  for (const part of start.parts) {
+    const expected = part.partNumber === count ? size - (count - 1) * partSize : partSize;
+    if (part.partNumber >= 1 && part.partNumber <= count && part.size === expected) {
+      etags.set(part.partNumber, part.etag);
+      done += part.size;
+    }
+  }
+  onProgress?.(done, size);
+  for (let partNumber = 1; partNumber <= count; partNumber++) {
+    if (etags.has(partNumber)) continue;
+    const range = { start: (partNumber - 1) * partSize, length: Math.min(partSize, size - (partNumber - 1) * partSize) };
+    let etag = "";
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const { uploadUrl } = (await mediaRequest("asset-multipart-part-url", { assetId, uploadId, partNumber, size: range.length }, token)) as { uploadUrl: string };
+        etag = await putRange(uploadUrl, source, range, {}, (sent) => onProgress?.(done + sent, size), signal);
+        break;
+      } catch (error) {
+        if (signal?.aborted || attempt >= PART_ATTEMPTS) throw error;
+        console.warn(`[assets] part ${partNumber}/${count} of ${source} failed (attempt ${attempt}): ${error instanceof Error ? error.message : String(error)}`);
+        await new Promise((resolve) => setTimeout(resolve, Math.min(30_000, 1_000 * 2 ** (attempt - 1))));
+      }
+    }
+    etags.set(partNumber, etag);
+    done += range.length;
+    onProgress?.(done, size);
+  }
+  await mediaRequest(
+    "asset-multipart-complete",
+    { assetId, uploadId, parts: [...etags].map(([partNumber, etag]) => ({ partNumber, etag })) },
+    token,
+  );
+}
+
+/**
+ * Sends the bytes of a library asset to the cloud, if the cloud does not
+ * have them yet. `source` is the absolute path of the file on this machine.
+ */
+export async function uploadAssetOriginal(request: UploadOriginalRequest, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<{ assetId: string; state: "uploading" | "ready" }> {
+  if (!validSampleId(request.sampleId)) throw new Error("Invalid asset id");
+  if (!isAbsolute(request.source)) throw new Error("Asset source must be an absolute path");
+  const size = await fileSize(request.source);
+  if (size === null) throw new Error(`No such file: ${request.source}`);
+  if (size < 1 || size > MAX_ASSET_BYTES) throw new Error("Originals must be between 1 byte and 4 GiB");
+
+  const mimeType = mediaEssence(request.mimeType);
+  const registered = (await mediaRequest(
+    "asset-upload-url",
+    { organizationId: request.organizationId, sampleId: request.sampleId, size, mimeType, name: request.name },
+    request.token,
+  )) as { assetId: string; uploadUrl: string | null };
+  if (!registered.uploadUrl) return { assetId: registered.assetId, state: "ready" };
+
+  if ((await fileSize(request.source)) !== size) throw new Error("The file changed while it was being uploaded");
+  if (size > MULTIPART_THRESHOLD) {
+    await uploadMultipart(registered.assetId, request.source, size, request.token, onProgress, signal);
+    return { assetId: registered.assetId, state: "ready" };
+  }
+  await putFile(registered.uploadUrl, request.source, size, mimeType, onProgress, signal);
+  await mediaRequest("asset-upload-finish", { assetId: registered.assetId }, request.token);
+  return { assetId: registered.assetId, state: "ready" };
+}
+
+/** Sends the proxy at `cache/proxies/<sampleId>.mp4` up beside its original, if the cloud lacks it. */
+export async function uploadAssetProxy(request: UploadProxyRequest, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+  const path = proxyCachePath(request.dir, request.sampleId);
+  const size = await fileSize(path);
+  if (size === null) throw new Error(`No proxy at ${path}`);
+  const registered = (await mediaRequest("asset-proxy-upload-url", { assetId: request.assetId, size }, request.token)) as { uploadUrl: string | null };
+  if (!registered.uploadUrl) return;
+  await putFile(registered.uploadUrl, path, size, "video/mp4", onProgress, signal);
+  await mediaRequest("asset-proxy-upload-finish", { assetId: request.assetId }, request.token);
+}
+
+/**
+ * Brings a variant this machine lacks into the project's cache; null when
+ * the cloud has none. A file already there at the expected size is reused
+ * without a download.
+ */
+export async function fetchAssetVariant(request: FetchRequest, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<FetchResponse> {
+  if (!validSampleId(request.sampleId)) throw new Error("Invalid asset id");
+  let media: { url: string; size: number; mimeType: string; name: string };
+  try {
+    media = (await mediaRequest(
+      "asset-download-url",
+      { organizationId: request.organizationId, sampleId: request.sampleId, variant: request.variant },
+      request.token,
+    )) as typeof media;
+  } catch (error) {
+    if (error instanceof MediaRequestError && error.status === 404) return null;
+    throw error;
+  }
+
+  const path = request.variant === "proxy"
+    ? proxyCachePath(request.dir, request.sampleId)
+    : originalCachePath(request.dir, request.sampleId, media.name);
+  const result = { path, name: media.name, mimeType: media.mimeType };
+  if ((await fileSize(path)) === media.size) {
+    onProgress?.(media.size, media.size);
+    return result;
+  }
+
+  await mkdir(join(request.dir, request.variant === "proxy" ? PROXIES_DIR : ORIGINALS_DIR), { recursive: true });
+  const response = await fetch(media.url, { signal });
+  if (!response.ok || !response.body) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`Asset download failed (${response.status})`);
+  }
+  const temp = tempPathFor(path);
+  try {
+    let received = 0;
+    const counting = Readable.fromWeb(response.body as import("node:stream/web").ReadableStream);
+    counting.on("data", (chunk: Buffer) => {
+      received += chunk.length;
+      onProgress?.(received, media.size);
+    });
+    await pipeline(counting, createWriteStream(temp), { signal });
+    if (received !== media.size) throw new Error("Asset download was cut short");
+    await rename(temp, path);
+  } catch (error) {
+    await unlink(temp).catch(() => {});
+    throw error;
+  }
+  return result;
+}
+
+/** Brings an original this machine lacks into `<dir>/cache/originals/`; null when the cloud has none. */
+export function fetchAssetOriginal(request: Omit<FetchRequest, "variant">, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<FetchResponse> {
+  return fetchAssetVariant({ ...request, variant: "original" }, onProgress, signal);
+}

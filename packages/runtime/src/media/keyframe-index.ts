@@ -24,6 +24,11 @@ export function clearKeyframeIndexCache() {
  * Returns the shared keyframe index for an asset, starting the walk on first
  * access. Cheap to call repeatedly — one index is built per asset, not per decoder.
  */
+/** Drops the remembered index of one asset, for one that now hands out different bytes. */
+export function forgetKeyframeIndex(assetId: string): void {
+	indexCache.delete(assetId);
+}
+
 export function getKeyframeIndex(assetId: string, track: InputVideoTrack): KeyframeIndex {
 	let index = indexCache.get(assetId);
 

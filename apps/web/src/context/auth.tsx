@@ -12,6 +12,8 @@ import {
 import { mainBridge } from '@/lib/ipc';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
 import { setCatalogCacheScope } from '@/lib/catalog-cache';
+import { syncSessionWithMain } from '@/lib/cloud-session';
+import { setCloudUser } from '@/lib/organizations';
 
 function createAuth() {
   const [user, setUser] = createSignal<AppUser | null>(null);
@@ -33,6 +35,10 @@ function createAuth() {
       setError(null);
       if (next) convex?.setAuth(getToken);
       else convex?.setAuth(async () => null);
+      // After the client is authenticated: the organizations subscription runs under it.
+      setCloudUser(next?.id ?? null);
+      // Main's sync engine follows the same session.
+      void syncSessionWithMain();
     } catch (err) {
       if (current === revision)
         setError(err instanceof Error ? err.message : 'Could not restore session');
@@ -77,6 +83,8 @@ function createAuth() {
     void setCatalogCacheScope(null);
     setUser(null);
     convex?.setAuth(async () => null);
+    setCloudUser(null);
+    void syncSessionWithMain();
   };
   const updateProfile = async (name: string, image?: string) => {
     await call(
@@ -96,6 +104,8 @@ function createAuth() {
     void setCatalogCacheScope(null);
     setUser(null);
     convex?.setAuth(async () => null);
+    setCloudUser(null);
+    void syncSessionWithMain();
   };
   onMount(() => {
     void refreshSession();

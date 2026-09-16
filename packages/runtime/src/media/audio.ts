@@ -16,6 +16,11 @@ import type { AudioBus } from './audio-bus';
 
 const audioTrackCache = new Map<string, Promise<InputAudioTrack | null>>();
 
+/** Drops the remembered track of one asset, for one that now hands out different bytes. */
+export function forgetAudioTrack(assetId: string) {
+	audioTrackCache.delete(assetId);
+}
+
 export function clearAudioTrackCache() {
 	audioTrackCache.clear();
 }

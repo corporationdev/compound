@@ -472,9 +472,11 @@ export async function createNewProject(): Promise<ProjectInfo | null> {
     toast.error("Projects on disk are only available in the desktop app");
     return null;
   }
-  // Waits for the roots to come back from the database, and asks for one
-  // when there is none to wait for.
-  if (!(await ensureProjectsRoot())) return null;
+  // Waits for the workspace to open, and gives up when it does not.
+  if (!(await ensureProjectsRoot())) {
+    toast.error("Your workspace is not open yet", { description: "Sign in and choose a folder for it first." });
+    return null;
+  }
 
   const project = await createProject(generateProjectName());
   track("project_created");

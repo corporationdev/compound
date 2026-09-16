@@ -4,6 +4,7 @@
 
 import { createContext, useContext, onCleanup, onMount } from "solid-js";
 import { toast } from "somoto";
+import { chooseAudioCodec } from "@/utils/audio-codec";
 import { canEncodeVideo } from "mediabunny";
 import { useWorld } from "@compound/koota-solid";
 import { computeOutputSize } from "@compound/encoder";
@@ -73,6 +74,36 @@ export function ExportProvider(props: { children: JSX.Element }) {
       }
     }
 
+    // The same for audio: Linux has no AAC encoder, and the encoder would
+    // only say so after the file was picked. Opus stands in where it can.
+    const audioEnabled = config.audio?.enabled !== false && format !== "wav";
+    if (audioEnabled) {
+      const preferred = config.audio?.codec ?? "aac";
+      const codec = await chooseAudioCodec(preferred, {
+        numberOfChannels: config.audio?.numberOfChannels ?? 2,
+        sampleRate: config.audio?.sampleRate ?? 48000,
+        bitrate: config.audio?.bitrate ?? 128e3,
+      });
+      if (!codec) {
+        toast.error("Export not supported", {
+          description: `This machine cannot encode ${preferred.toUpperCase()} audio. Choose another audio codec, or export without audio.`,
+          duration: 10_000,
+        });
+        return;
+      }
+      if (codec !== preferred) {
+        config = { ...config, audio: { ...config.audio, codec } };
+        // Linux Chromium never has AAC, so on Linux this is the normal case
+        // and not worth a word; elsewhere it means something is missing.
+        if (window.desktop?.platform !== "linux") {
+          toast(`Audio will be ${codec.toUpperCase()}`, {
+            description: `This machine cannot encode ${preferred.toUpperCase()}; ${codec.toUpperCase()} is used instead.`,
+            duration: 8_000,
+          });
+        }
+      }
+    }
+
     const name = project.name().replace(/\s+/g, "-").toLowerCase();
 
     let target: FileSystemFileHandle;
@@ -113,6 +144,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
         console.error("Export failed:", result.error);
         toast.error("Export failed", {
           description: result.error.message,
+          duration: 15_000,
         });
         track('export_failed', {
           format,
@@ -188,6 +220,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
         open={!!renderOverlay()}
         progress={renderOverlay()?.progress ?? 0}
         remaining={renderOverlay()?.remaining}
+        downloading={renderOverlay()?.downloading}
         config={renderOverlay()?.config as ExportConfig | undefined}
         width={renderOverlay()?.width ?? 0}
         height={renderOverlay()?.height ?? 0}

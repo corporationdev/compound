@@ -5,7 +5,6 @@
 import { app, dialog, shell, type BrowserWindow } from "electron";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { watch, type FSWatcher } from "node:fs";
 import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -16,7 +15,10 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { PluginItem, TransformOptions } from "@babel/core";
 import type { BuildOptions, Plugin } from "esbuild";
 
-import { isTempPath, TEMP_PREFIX, writeFileAtomic } from "./atomic";
+import { TEMP_PREFIX, writeFileAtomic } from "./atomic";
+import { withProjectLock } from "./sync/locks";
+import { SYNC_DIR } from "./sync/state";
+import { watchTree, type TreeWatcher } from "./tree-watch";
 import { cloudConfig } from "./cloud";
 import { isHeadless } from "./headless";
 import { mainBridge } from "./main-manager";
@@ -158,7 +160,7 @@ async function describe(dir: string): Promise<ProjectInfo | null> {
 export const getProject = (dir: string): Promise<ProjectInfo | null> => describe(dir);
 
 /**
- * The folder projects go in when the user has not picked one. `~/Movies` on
+ * The folder workspaces go in when the user has not picked one. `~/Movies` on
  * macOS, `Videos` elsewhere — chosen because it is the one media folder the
  * sync services leave alone: iCloud's "Desktop & Documents Folders" covers
  * only those two, and OneDrive's Known Folder Move only Desktop, Documents,
@@ -389,26 +391,6 @@ async function confirmCloudLocation(
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options);
   return response === 1;
-}
-
-/** Direct child folders of `root` that could hold a project, in a stable order. */
-async function childDirs(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules")
-    .map((entry) => entry.name)
-    .sort()
-    .map((name) => join(root, name));
-}
-
-/**
- * Every direct child folder of `root` that holds an entry file. The one
- * search of the disk for projects there is: the app runs it when a projects
- * root is chosen, to put the projects already in it on its list. Reads only.
- */
-export async function scanProjects(root: string): Promise<ProjectInfo[]> {
-  const projects = await Promise.all((await childDirs(root)).map(describe));
-  return projects.filter((project): project is ProjectInfo => project !== null);
 }
 
 /**
@@ -749,8 +731,8 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
  * written once, so opening an up-to-date project writes nothing. Types come
  * from @compound/jsx (jsxImportSource), installed by the project.
  */
-export async function scaffold(dir: string, displayName = basename(dir)): Promise<void> {
-  const entry = await ensureRecord(dir, displayName);
+export async function scaffold(dir: string, displayName = basename(dir), name = basename(dir)): Promise<void> {
+  const entry = await ensureRecord(dir, displayName, name);
   // JavaScript projects are left alone.
   if (!entry) return;
   await writeIfMissing(dir, "tsconfig.json", TSCONFIG);
@@ -769,14 +751,14 @@ export async function scaffold(dir: string, displayName = basename(dir)): Promis
  * the folder by. Nothing a folder already has is touched. Returns the entry,
  * or undefined for a JavaScript project, which is left entirely alone.
  */
-async function ensureRecord(dir: string, displayName = basename(dir)): Promise<string | undefined> {
+async function ensureRecord(dir: string, displayName = basename(dir), name = basename(dir)): Promise<string | undefined> {
   let entry = await findEntry(dir);
   if (entry && !/\.tsx?$/.test(entry)) return undefined;
   if (!entry) {
     await writeIfMissing(dir, "index.tsx", STARTER);
     entry = "index.tsx";
   }
-  await ensurePackage(dir, basename(dir), displayName, entry);
+  await ensurePackage(dir, name, displayName, entry);
   return entry;
 }
 
@@ -815,9 +797,20 @@ export async function initProject(window: BrowserWindow | null, dir: string): Pr
  * inside it is the project.
  */
 export async function createProject(root: string, displayName: string): Promise<ProjectInfo> {
-  const dir = join(root, await freeFolder(root, folderName(displayName)));
-  await mkdir(dir, { recursive: true });
-  await scaffold(dir, displayName);
+  const name = await freeFolder(root, folderName(displayName));
+  const dir = join(root, name);
+  // Made whole out of sight, then renamed into place: the tree, the
+  // dashboard and sync see a finished project appear, never a folder that
+  // is not one yet. The temp name is one the watchers ignore.
+  const staging = join(root, `${TEMP_PREFIX}${name}.${process.pid}-${Date.now()}`);
+  await mkdir(staging, { recursive: true });
+  try {
+    await scaffold(staging, displayName, name);
+    await rename(staging, dir);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
   const project = await describe(dir);
   if (!project) throw new Error("Failed to scaffold the project.");
   return project;
@@ -881,12 +874,16 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
   // answering to one id is the thing the id exists to prevent. The folder is
   // already named for the copy, so the record is written here rather than
   // through `renameProject` (which would move it again).
-  const pkg = await readPackage(target);
+  const pkg = (await readPackage(target)) ?? packageJson(basename(target), source.displayName);
   await writePackage(target, {
-    ...(pkg ?? packageJson(basename(target), source.displayName)),
+    ...pkg,
     projectId: nanoid(),
     displayName: `${source.displayName} (Copy)`,
   });
+  // A copy made from a checkout of the old per-project sync must not carry
+  // that sync state along, or its edits would be merged against a base that
+  // was never its own.
+  await rm(join(target, ...SYNC_DIR.split("/")), { recursive: true, force: true });
   const project = await describe(target);
   if (!project) throw new Error("Failed to duplicate the project.");
   return project;
@@ -967,13 +964,17 @@ export async function compileProject(dir: string): Promise<CompileResult> {
   const entry = await findEntry(dir);
   if (!entry) return { ok: false, error: noEntryError() };
 
-  // Fills in the package.json record for folders that predate it; the rest
-  // of the scaffold is the dashboard's (see `initProject`).
-  await ensureRecord(dir);
+  // Both of these may write into the folder, so they take the folder's lock:
+  // cloud sync writes there too, and neither may land on the other's text.
+  await withProjectLock(dir, async () => {
+    // Fills in the package.json record for folders that predate it; the rest
+    // of the scaffold is the dashboard's (see `initProject`).
+    await ensureRecord(dir);
 
-  // Names every element before it is numbered, so the ids this compile hands
-  // the canvas are durable ones. A fully keyed project is not written to.
-  await stampProject(sourceContext(dir));
+    // Names every element before it is numbered, so the ids this compile hands
+    // the canvas are durable ones. A fully keyed project is not written to.
+    await stampProject(sourceContext(dir));
+  });
 
   // esbuild resolves symlinks, so the loader has to match on real paths.
   const root = await realpath(dir);
@@ -1013,7 +1014,9 @@ export async function compileProject(dir: string): Promise<CompileResult> {
  */
 export async function writeProject(dir: string, edits: SourceEdit[]): Promise<WriteResult> {
   try {
-    return await applyEdits(sourceContext(dir), edits);
+    // The read, the edit and the write are one step under the folder's lock:
+    // a cloud change landing between them would be written over.
+    return await withProjectLock(dir, () => applyEdits(sourceContext(dir), edits));
   } catch (error) {
     return { skipped: edits.map(editLabel), error: error instanceof Error ? error.message : String(error) };
   }
@@ -1053,12 +1056,14 @@ export async function readManifest(dir: string): Promise<unknown> {
  * mid-write leaves the old manifest and no reader ever sees half of one, and
  * claimed first so the watcher does not hand it back as a change.
  */
-export async function writeManifest(dir: string, manifest: unknown): Promise<void> {
-  const path = join(dir, MANIFEST_FILE);
-  const text = `# Compound asset library. Edited by the app; hand edits are read on the next load.
+export function writeManifest(dir: string, manifest: unknown): Promise<void> {
+  return withProjectLock(dir, async () => {
+    const path = join(dir, MANIFEST_FILE);
+    const text = `# Compound asset library. Edited by the app; hand edits are read on the next load.
 ${stringifyYaml(manifest, { lineWidth: 0 })}`;
-  noteContent(path, text);
-  await writeFileAtomic(path, text);
+    noteContent(path, text);
+    await writeFileAtomic(path, text);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,14 +1083,16 @@ export async function readConfig(dir: string): Promise<unknown> {
  * null), leaving the rest of the record alone. The watcher is told to keep
  * quiet about it, like the manifest: the app already shows these values.
  */
-export async function writeConfig(dir: string, config: unknown): Promise<void> {
-  const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
-  const next: PackageJson = { ...pkg };
-  // Migrate on save so an old export setting cannot reappear after clearing it.
-  delete next.diffusion;
-  if (config === null || config === undefined) delete next[CONFIG_FIELD];
-  else next[CONFIG_FIELD] = config;
-  await writePackage(dir, next);
+export function writeConfig(dir: string, config: unknown): Promise<void> {
+  return withProjectLock(dir, async () => {
+    const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), basename(dir));
+    const next: PackageJson = { ...pkg };
+    // Migrate on save so an old export setting cannot reappear after clearing it.
+    delete next.diffusion;
+    if (config === null || config === undefined) delete next[CONFIG_FIELD];
+    else next[CONFIG_FIELD] = config;
+    await writePackage(dir, next);
+  });
 }
 
 /** Entries of a directory; [] when it is missing or not a directory. */
@@ -1179,7 +1186,7 @@ export async function removeEntry(dir: string, path: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Watch
 
-const watchers = new Map<string, FSWatcher>();
+const watchers = new Map<string, TreeWatcher>();
 
 /**
  * What the app believes is on disk, by absolute path: a digest of the content
@@ -1262,32 +1269,27 @@ export function watchProject(window: BrowserWindow | null, dir: string): void {
   // never be reported.
   let queue: Promise<void> = Promise.resolve();
 
-  const watcher = watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename) return;
-    // Project-relative and `/`-separated; installs churn node_modules constantly.
-    const path = filename.split(sep).join("/");
-    if (path.startsWith("node_modules/") || path === "node_modules") return;
-    // The app's folder: a docs refresh writes the whole tree in one burst.
-    if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
-    // Half a file by definition, and renamed away the moment it is whole.
-    if (isTempPath(path)) return;
-
-    const file = join(dir, filename);
-    queue = queue
-      .then(async () => {
-        const current = await digestOf(file);
-        if (known.get(file) === current) return;
-        known.set(file, current);
-        mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
-      })
-      .catch(() => { });
+  const watcher = watchTree(dir, {
+    onChange: (path) => {
+      // The app's folder: a docs refresh writes the whole tree in one burst.
+      if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
+      const file = join(dir, ...path.split("/"));
+      queue = queue
+        .then(async () => {
+          const current = await digestOf(file);
+          if (known.get(file) === current) return;
+          known.set(file, current);
+          mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
+        })
+        .catch(() => { });
+    },
+    onError: () => unwatchProject(dir),
   });
-  watcher.on("error", () => unwatchProject(dir));
   watchers.set(dir, watcher);
 }
 
 export function unwatchProject(dir: string): void {
-  watchers.get(dir)?.close();
+  void watchers.get(dir)?.close();
   watchers.delete(dir);
   // What the folder holds while nobody is watching is not the app's to
   // remember: the next watch starts from a fresh load of the project anyway.

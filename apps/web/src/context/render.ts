@@ -4,9 +4,10 @@
 
 import { createSignal } from "solid-js";
 import { createEncoder, computeOutputSize } from "@compound/encoder";
-import { Computed, FrameRate, Workarea } from "@compound/runtime";
+import { Computed, FrameRate, Library, Workarea } from "@compound/runtime";
 
 import { createCapture } from "@/engine/capture";
+import { ensureOriginals } from "@/engine/cloud-assets";
 import { version } from "../../package.json";
 
 import type { Entity } from "koota";
@@ -30,6 +31,8 @@ export type RenderOverlayState = {
   duration: number;
   progress: number;
   remaining?: { minutes: number; seconds: number };
+  /** Originals of cloud assets still coming down before the encode starts. */
+  downloading?: { done: number; total: number };
 };
 
 const PROGRESS_LOG_STEP = 2;
@@ -91,6 +94,14 @@ export async function renderScene(
 
   let capture: Capture | undefined;
   try {
+    // A cloud asset plays from its proxy; the encode reads the original.
+    const library = world.get(Library);
+    if (library) {
+      await ensureOriginals(library, (done, total) => {
+        if (total === 0) return;
+        setOverlay((prev) => (prev ? { ...prev, downloading: done < total ? { done, total } : undefined } : prev));
+      });
+    }
     capture = await createCapture(world, scene, {
       dir,
       frameRate: config?.video?.fps,

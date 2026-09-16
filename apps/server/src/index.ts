@@ -1,6 +1,7 @@
 import { DEEPGRAM_MODEL, GEMINI_MODEL } from '@compound/config/models';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@compound/backend/convex/_generated/api';
+import { originalKeyFor, proxyKeyFor, PROXY_MIME_TYPE } from '@compound/backend/assets-key';
 import { ConvexError } from 'convex/values';
 import type { Id } from '@compound/backend/convex/_generated/dataModel';
 import { AwsClient } from 'aws4fetch';
@@ -19,6 +20,58 @@ export interface Env {
   GOOGLE_GENERATIVE_AI_API_KEY: string;
 }
 const MAX_BYTES = 100 * 1024 * 1024;
+// Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
+const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
+const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish', 'asset-multipart-start', 'asset-multipart-part-url', 'asset-multipart-complete'] as const;
+// Parts of a large original; R2 wants every part but the last at least 5 MiB,
+// and at most 10,000 of them. Not exported: the Workers runtime reads every
+// export of this module as a handler.
+const MULTIPART_PART_BYTES = 16 * 1024 * 1024;
+const MAX_PARTS = 10_000;
+const organizationId = z.string().min(1).max(100);
+const sampleId = z.string().regex(/^[0-9a-f]{16}$/);
+const assetRegisterSchema = z
+  .object({
+    organizationId,
+    sampleId,
+    size: z.number().int().min(1).max(MAX_ASSET_BYTES),
+    // Parameters (`; codecs="…"`) are dropped: the object is signed and
+    // served by its type alone.
+    mimeType: z
+      .string()
+      .transform((type) => type.split(';')[0]!.trim().toLowerCase())
+      .pipe(z.string().regex(/^[\w.+-]+\/[\w.+-]+$/)),
+    name: z.string().min(1).max(255).refine((name) => !/[/\\\0]/.test(name)),
+  })
+  .strict();
+const assetFinishSchema = z
+  .object({ assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>) })
+  .strict();
+const assetLookupSchema = z
+  .object({ organizationId, sampleId, variant: z.enum(['original', 'proxy']).default('original') })
+  .strict();
+const proxyRegisterSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    size: z.number().int().min(1).max(MAX_ASSET_BYTES),
+  })
+  .strict();
+const multipartStartSchema = assetFinishSchema;
+const multipartPartSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    uploadId: z.string().min(1).max(1024),
+    partNumber: z.number().int().min(1).max(MAX_PARTS),
+    size: z.number().int().min(1).max(MULTIPART_PART_BYTES),
+  })
+  .strict();
+const multipartCompleteSchema = z
+  .object({
+    assetId: z.string().min(1).max(100).transform((id) => id as Id<'assets'>),
+    uploadId: z.string().min(1).max(1024),
+    parts: z.array(z.object({ partNumber: z.number().int().min(1).max(MAX_PARTS), etag: z.string().min(1).max(256) }).strict()).min(1).max(MAX_PARTS),
+  })
+  .strict();
 const uploadSchema = z
   .object({
     size: z.number().int().min(1).max(MAX_BYTES),
@@ -44,9 +97,57 @@ class HttpError extends Error {
 }
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new HttpError(400, 'Invalid request');
+  if (!result.success) {
+    const fields = [...new Set(result.error.issues.map((issue) => issue.path.join('.') || 'body'))];
+    throw new HttpError(400, `Invalid request: ${fields.join(', ')}`);
+  }
   return result.data;
 }
+function s3Client(env: Env) {
+  return new AwsClient({
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    service: 's3',
+    region: 'auto',
+  });
+}
+function s3Url(env: Env, key: string, query: Record<string, string> = {}) {
+  // Each segment encoded by hand: a name can hold anything but a slash, and the URL parser would leave `?`, `#` and `&` to mean something else.
+  const path = key.split('/').map(encodeURIComponent).join('/');
+  const url = new URL(`https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${path}`);
+  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
+  return url;
+}
+/**
+ * The size of the object at `key`, or null when there is none. Asked of the
+ * S3 API rather than the binding: the binding's `head` answers nothing for
+ * keys with characters outside ASCII (an em dash in a song's name) in the
+ * environments this runs in, and the S3 API is what the bytes arrived by.
+ */
+async function objectSize(env: Env, key: string): Promise<number | null> {
+  const response = await s3Client(env).fetch(s3Url(env, key).toString(), { method: 'HEAD' });
+  await response.body?.cancel().catch(() => {});
+  if (!response.ok) return null;
+  return Number(response.headers.get('content-length') ?? 'NaN');
+}
+/** A signed request to the bucket's S3 API, for the multipart calls the binding does not cover in every environment. */
+async function s3(env: Env, method: 'GET' | 'POST' | 'DELETE', key: string, query: Record<string, string>, body?: string) {
+  const response = await s3Client(env).fetch(s3Url(env, key, query).toString(), { method, body, headers: body ? { 'Content-Type': 'application/xml' } : {} });
+  const text = await response.text();
+  return { ok: response.ok, status: response.status, text };
+}
+const xmlValue = (text: string, tag: string): string | null => text.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1] ?? null;
+/** The parts R2 has for a multipart upload; null when the upload is unknown (aborted, completed, or made up). */
+async function listParts(env: Env, key: string, uploadId: string): Promise<{ partNumber: number; etag: string; size: number }[] | null> {
+  const result = await s3(env, 'GET', key, { uploadId, 'max-parts': String(MAX_PARTS) });
+  if (!result.ok) return null;
+  return [...result.text.matchAll(/<Part>([\s\S]*?)<\/Part>/g)].map((match) => ({
+    partNumber: Number(xmlValue(match[1]!, 'PartNumber')),
+    etag: (xmlValue(match[1]!, 'ETag') ?? '').replace(/&quot;/g, '"'),
+    size: Number(xmlValue(match[1]!, 'Size')),
+  }));
+}
+
 async function signedUrl(
   env: Env,
   key: string,
@@ -60,9 +161,7 @@ async function signedUrl(
     service: 's3',
     region: 'auto',
   });
-  const url = new URL(
-    `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.MEDIA_BUCKET_NAME}/${key}`,
-  );
+  const url = s3Url(env, key);
   url.searchParams.set('X-Amz-Expires', method === 'PUT' ? '900' : '600');
   return (
     await signer.sign(url, {
@@ -124,7 +223,7 @@ export default {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const path = new URL(request.url).pathname;
       if (path === '/health' && request.method === 'GET') return json({ ok: true });
-      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
+      if (!['/media/upload-url', '/media/transcribe', '/media/transcribe-status', '/media/transcribe-cancel', '/media/analyze', ...CATALOG_OPERATIONS.map(operation => `/media/${operation}`), ...ASSET_OPERATIONS.map(operation => `/media/${operation}`)].includes(path))
         throw new HttpError(404, 'Not found');
       if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -139,6 +238,121 @@ export default {
           if (error instanceof z.ZodError) throw new HttpError(400, 'Invalid library request');
           throw error;
         }
+      }
+      if (path === '/media/asset-upload-url') {
+        const input = parseInput(assetRegisterSchema, body);
+        const registered = await client.mutation(api.assets.register, input);
+        if (registered.state === 'ready') return json({ assetId: registered.assetId, uploadUrl: null });
+        // The key is the asset's identity (organization, sample, name) as the
+        // backend recorded it, never the caller's spelling of it.
+        const asset = await client.query(api.assets.describe, { assetId: registered.assetId });
+        return json({
+          assetId: asset._id,
+          uploadUrl: await signedUrl(env, originalKeyFor(asset), 'PUT', asset.mimeType, asset.size),
+        });
+      }
+      if (path === '/media/asset-upload-finish') {
+        const { assetId } = parseInput(assetFinishSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        const key = originalKeyFor(asset);
+        if (asset.originalState !== 'ready') {
+          const size = await objectSize(env, key);
+          if (size === null) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+          if (size !== asset.size)
+            throw new HttpError(400, `Upload is ${size} bytes but the asset was declared as ${asset.size}`);
+          await client.mutation(api.assets.finish, { assetId, originalKey: key });
+        }
+        return json({ ok: true });
+      }
+      if (path === '/media/asset-multipart-start') {
+        const { assetId } = parseInput(multipartStartSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        if (asset.originalState === 'ready') return json({ done: true });
+        const key = originalKeyFor(asset);
+        // Carry on with an upload this asset already has parts in, if R2 still knows it.
+        if (asset.multipartUploadId) {
+          const parts = await listParts(env, key, asset.multipartUploadId);
+          if (parts) return json({ done: false, uploadId: asset.multipartUploadId, partSize: MULTIPART_PART_BYTES, parts });
+        }
+        const created = await s3(env, 'POST', key, { uploads: '' });
+        const uploadId = created.ok ? xmlValue(created.text, 'UploadId') : null;
+        if (!uploadId) throw new HttpError(502, `Could not start a multipart upload (${created.status})`);
+        await client.mutation(api.assets.setMultipart, { assetId, uploadId });
+        return json({ done: false, uploadId, partSize: MULTIPART_PART_BYTES, parts: [] });
+      }
+      if (path === '/media/asset-multipart-part-url') {
+        const input = parseInput(multipartPartSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        if (asset.multipartUploadId !== input.uploadId) throw new HttpError(409, 'Not the upload this asset is arriving through');
+        const url = s3Url(env, originalKeyFor(asset), { partNumber: String(input.partNumber), uploadId: input.uploadId });
+        url.searchParams.set('X-Amz-Expires', '3600');
+        const signed = await s3Client(env).sign(url, {
+          method: 'PUT',
+          headers: { 'Content-Length': String(input.size) },
+          aws: { signQuery: true, allHeaders: true },
+        });
+        return json({ uploadUrl: signed.url });
+      }
+      if (path === '/media/asset-multipart-complete') {
+        const input = parseInput(multipartCompleteSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        if (asset.originalState === 'ready') return json({ ok: true });
+        if (asset.multipartUploadId !== input.uploadId) throw new HttpError(409, 'Not the upload this asset is arriving through');
+        const key = originalKeyFor(asset);
+        const parts = [...input.parts].sort((a, b) => a.partNumber - b.partNumber);
+        const xml = `<CompleteMultipartUpload>${parts.map((part) => `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${part.etag.replace(/"/g, '&quot;')}</ETag></Part>`).join('')}</CompleteMultipartUpload>`;
+        const completed = await s3(env, 'POST', key, { uploadId: input.uploadId }, xml);
+        if (!completed.ok || /<Error>/.test(completed.text))
+          throw new HttpError(400, `Could not complete the upload: ${xmlValue(completed.text, 'Message') ?? completed.status}`);
+        const size = await objectSize(env, key);
+        if (size === null) throw new HttpError(400, `Upload not found in the bucket at ${key}`);
+        if (size !== asset.size)
+          throw new HttpError(400, `Upload is ${size} bytes but the asset was declared as ${asset.size}`);
+        await client.mutation(api.assets.finish, { assetId: input.assetId, originalKey: key });
+        return json({ ok: true });
+      }
+      if (path === '/media/asset-proxy-upload-url') {
+        const input = parseInput(proxyRegisterSchema, body);
+        const registered = await client.mutation(api.assets.registerProxy, input);
+        if (registered.state === 'ready') return json({ uploadUrl: null });
+        const asset = await client.query(api.assets.describe, { assetId: input.assetId });
+        return json({ uploadUrl: await signedUrl(env, proxyKeyFor(asset), 'PUT', PROXY_MIME_TYPE, input.size) });
+      }
+      if (path === '/media/asset-proxy-upload-finish') {
+        const { assetId } = parseInput(assetFinishSchema, body);
+        const asset = await client.query(api.assets.describe, { assetId });
+        if (asset.proxyState !== 'ready') {
+          const key = proxyKeyFor(asset);
+          const size = await objectSize(env, key);
+          if (size === null) throw new HttpError(400, `Proxy upload not found in the bucket at ${key}`);
+          if (size !== asset.proxySize)
+            throw new HttpError(400, `Proxy upload is ${size} bytes but was declared as ${asset.proxySize}`);
+          await client.mutation(api.assets.finishProxy, { assetId, proxyKey: key });
+        }
+        return json({ ok: true });
+      }
+      if (path === '/media/asset-download-url') {
+        const { variant, ...lookup } = parseInput(assetLookupSchema, body);
+        const asset = await client.query(api.assets.get, lookup);
+        if (!asset) throw new HttpError(404, 'Original not available');
+        if (variant === 'proxy') {
+          if (asset.proxyState !== 'ready' || !asset.proxyKey || !asset.proxySize)
+            throw new HttpError(404, 'Proxy not available');
+          return json({
+            url: await signedUrl(env, asset.proxyKey, 'GET'),
+            size: asset.proxySize,
+            mimeType: PROXY_MIME_TYPE,
+            name: `${asset.sampleId}.mp4`,
+          });
+        }
+        if (asset.originalState !== 'ready' || !asset.originalKey)
+          throw new HttpError(404, 'Original not available');
+        return json({
+          url: await signedUrl(env, asset.originalKey, 'GET'),
+          size: asset.size,
+          mimeType: asset.mimeType,
+          name: asset.name,
+        });
       }
       if (path === '/media/upload-url') {
         const upload = await client.mutation(api.uploads.create, parseInput(uploadSchema, body));
@@ -227,6 +441,10 @@ export default {
       }
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
+      if (error instanceof ConvexError && error.data === 'Not a member of this organization')
+        return json({ error: error.data }, 403);
+      if (error instanceof ConvexError && (error.data === 'Project not found' || error.data === 'Asset not found'))
+        return json({ error: error.data }, 404);
       if (
         error instanceof ConvexError &&
         (error.data === 'Media request limit reached' ||

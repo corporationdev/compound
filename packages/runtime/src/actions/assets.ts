@@ -103,6 +103,15 @@ export function getAssetFile(asset: Pick<Asset, 'handle'>): Promise<File> {
 	return promise;
 }
 
+/**
+ * Drops the remembered read for a handle, so the next `getAssetFile` reads
+ * again: for a handle that now hands out different bytes (a cloud asset
+ * switched from its proxy to its original).
+ */
+export function forgetAssetFile(handle: Asset['handle']): void {
+	assetFileCache.delete(handle);
+}
+
 /** Returns the File/Blob backing an asset, or null if the asset is missing. */
 export async function getAssetBlob(world: World, id: string): Promise<Blob | null> {
 	const asset = getAsset(world, id);

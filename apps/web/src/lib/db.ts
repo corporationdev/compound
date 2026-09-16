@@ -7,6 +7,7 @@ import { migrateLegacyDatabase } from './db-migration';
 import type * as idb from 'idb';
 
 import type { ProjectInfo } from '@desktop/main-channels';
+import type { ProjectView } from '@/engine/view-state';
 
 const adjectives = ["Golden", "Silent", "Fast", "Bright", "Dark", "Wild", "Calm"];
 const nouns = ["River", "Mountain", "Dream", "Storm", "Sunset", "Forest", "Ocean"];
@@ -49,6 +50,18 @@ export interface ProjectBundle {
   updatedAt: string;
 }
 
+/**
+ * Where the editor was looking in a project — playhead, selection, camera,
+ * timeline scroll, expanded rows — keyed by the project's id. Local to this
+ * machine: the file carries the project's opening state, this carries what
+ * this editor did with it since (see `@/engine/view-state`).
+ */
+export interface ProjectViewRecord {
+  projectId: string;
+  view: ProjectView;
+  updatedAt: string;
+}
+
 export interface GlobalDBSchema extends idb.DBSchema {
   meta: { key: string; value: boolean | string };
   projects: {
@@ -63,18 +76,25 @@ export interface GlobalDBSchema extends idb.DBSchema {
     value: ProjectBundle;
     key: string;
   };
+  views: {
+    value: ProjectViewRecord;
+    key: string;
+  };
 }
 
 type UpgradeTransaction = Parameters<NonNullable<idb.OpenDBCallbacks<GlobalDBSchema>['upgrade']>>[3];
 
 const DB_NAME = 'compound-idb';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
   async upgrade(db, _oldVersion, _newVersion, tx) {
     if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
     if (!db.objectStoreNames.contains('bundles')) {
       db.createObjectStore('bundles', { keyPath: 'projectId' });
+    }
+    if (!db.objectStoreNames.contains('views')) {
+      db.createObjectStore('views', { keyPath: 'projectId' });
     }
     if (!db.objectStoreNames.contains('projects')) {
       const store = db.createObjectStore('projects', { keyPath: 'dir' });
@@ -108,7 +128,7 @@ function placeholderRecord(dir: string, recordedAt: string, lastOpenedAt: string
  * own (`kind: 'single'`). Version 3 does away with it. The single ones become
  * project records; the multi ones are dropped — the projects root lives in
  * localStorage now, and the projects the old one held come back on record
- * when the user picks a root again (see `adoptProjectsRoot` in @/projects).
+ * when the workspace is opened again (see `listProjects` in @/projects).
  */
 async function retireRoots(db: idb.IDBPDatabase<GlobalDBSchema>, tx: UpgradeTransaction): Promise<void> {
   type LegacyRoot = { path: string; kind?: 'multi' | 'single'; createdAt: string; lastUsedAt: string };
@@ -266,5 +286,42 @@ export async function forgetProjectBundle(projectId: string): Promise<void> {
     await db.delete('bundles', projectId);
   } catch (e) {
     console.error('Failed to forget project bundle', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project views
+
+/** Records where the editor is looking in `projectId`, replacing the record before it. */
+export async function saveProjectView(projectId: string, view: ProjectView): Promise<void> {
+  if (!projectId) return;
+  try {
+    const db = await dbPromise;
+    await db.put('views', { projectId, view, updatedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error('Failed to save project view', e);
+  }
+}
+
+/** The view `projectId` was last left at, or null when it has none on record. */
+export async function loadProjectView(projectId: string): Promise<ProjectView | null> {
+  if (!projectId) return null;
+  try {
+    const db = await dbPromise;
+    return (await db.get('views', projectId))?.view ?? null;
+  } catch (e) {
+    console.error('Failed to load project view', e);
+    return null;
+  }
+}
+
+/** Forgets a project's view, for when the project itself is deleted. */
+export async function forgetProjectView(projectId: string): Promise<void> {
+  if (!projectId) return;
+  try {
+    const db = await dbPromise;
+    await db.delete('views', projectId);
+  } catch (e) {
+    console.error('Failed to forget project view', e);
   }
 }

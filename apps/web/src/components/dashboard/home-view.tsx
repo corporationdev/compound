@@ -50,7 +50,7 @@ import {
   openProjectFolder,
   pickProjectFolder,
   projectKey,
-  projectsRevision,
+  projectsListKey,
   type ProjectInfo,
 } from "@/projects";
 
@@ -126,7 +126,7 @@ export function DashboardHomeView() {
   // The projects the app knows — created here, or opened from a folder —
   // refetched whenever that list changes.
   const [projects, { refetch: refetchProjects }] = createResource(
-    projectsRevision,
+    projectsListKey,
     () => listProjects(),
   );
   // The model is shared with the chat panel and remembered across sessions;

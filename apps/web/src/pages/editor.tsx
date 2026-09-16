@@ -22,10 +22,15 @@ import { attachLibrary, isLibraryFile } from '@/engine/library';
 import { attachAi } from '@/utils/gen-ai';
 import { attachProjectConfig, isProjectConfigFile } from '@/engine/project-config';
 import { loadProjectBundle, rememberProjectBundle } from '@/lib/db';
+import { createViewStore, VIEW_PROPS } from '@/engine/view-state';
 import { isCacheFile } from '@compound/assets';
 import { createEditWriter } from '@/projects/edits';
 import { compileProject, refreshProject, watchProject } from '@/projects/host';
 import { captureProjectCover } from '@/projects/cover';
+import { attachCloudAssets } from '@/engine/cloud-assets';
+import { cloudUserId } from '@/lib/organizations';
+import { isInWorkspace, workspace } from '@/lib/workspace';
+import { Library } from '@compound/runtime';
 import { useProject } from "@/context/project";
 import { useEngineContext } from "@/engine";
 
@@ -74,6 +79,10 @@ export function EditorPage() {
     attachAi(world, library, dir);
     // The project's own settings (package.json `compound`), next to the scene.
     const config = attachProjectConfig(world, dir);
+    // Where the editor was looking last time: playhead, selection, camera,
+    // timeline, expanded rows. Kept here rather than in the file, and put
+    // back on the stage after every mount.
+    const view = createViewStore(untrack(project.id), world);
 
     const unmount = (): void => {
       // Before the entities go: what the editor changed is still owed to the
@@ -102,7 +111,18 @@ export function EditorPage() {
       // from here on an edit in the editor can find its way back.
       writer = createEditWriter(dir, world);
       const editor = getDocumentEditor(world);
-      unlisten = editor.onEdit((edit) => writer?.push(edit));
+      // Pointing and viewing stay local; everything else is the file's.
+      unlisten = editor.onEdit((edit) => {
+        if (edit.kind === 'prop' && VIEW_PROPS.has(edit.name)) view.push(edit);
+        else writer?.push(edit);
+      });
+      // The file's values are the defaults; what this editor did with them
+      // since goes back on top — once the record has been read, and only if
+      // this is still the mount it was meant for.
+      const current = mounted;
+      view.ready.then(() => {
+        if (!disposed && mounted === current) view.applyToWorld();
+      });
       // A mount comes from the file: edits recorded against the document it
       // replaced cannot be replayed against this one.
       getEditHistory(world).reset();
@@ -193,9 +213,23 @@ export function EditorPage() {
       refreshProject(dir);
       unwatch();
       unmount();
+      view.dispose();
       config.dispose();
       library.dispose();
     });
+  });
+
+  // Cloud originals for a project inside the workspace, keyed on the folder
+  // like the mount above. Text sync is the workspace's (see lib/workspace);
+  // this attaches the library the mount effect above set up so this
+  // machine's bytes go up and a teammate's come down on first use.
+  createEffect(() => {
+    const dir = project.dir();
+    const current = workspace();
+    if (!dir || !current || !cloudUserId() || !isInWorkspace(dir)) return;
+    const library = untrack(() => world.get(Library));
+    const detachAssets = library ? attachCloudAssets(library, { dir, organizationId: current.organizationId }) : undefined;
+    onCleanup(() => detachAssets?.());
   });
 
   const timelineStyles = createMemo(() => {

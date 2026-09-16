@@ -1,6 +1,6 @@
 import { afterEach, expect, jest, spyOn, test } from 'bun:test';
 import { convexTest } from 'convex-test';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import schema from '../convex/schema';
 import { api, internal, components } from '../convex/_generated/api';
 import { internalAction } from '../convex/_generated/server';
@@ -10,16 +10,17 @@ import { PUBLIC_CATALOG } from '../catalog_manifest';
 import { catalogManifestSource, validatePublicCatalog } from '../convex/catalog_manifest';
 import type { Id } from '../convex/_generated/dataModel';
 
-function modules(dir: string) {
-  return Object.fromEntries([...new Bun.Glob('**/*.ts').scanSync(dir)].map(path => [`${dir}/${path}`, () => import(`${dir}/${path}`)]));
+function modules(dir: string, ignore: string[] = []) {
+  return Object.fromEntries([...new Bun.Glob('**/*.ts').scanSync(dir)].filter(path => !ignore.some(prefix => path.startsWith(prefix))).map(path => [`${dir}/${path}`, () => import(`${dir}/${path}`)]));
 }
-const authDir = resolve(dirname(import.meta.resolve('@convex-dev/better-auth/package.json').replace('file://', '')), 'src/component');
+// The Better Auth component is installed locally under convex/betterAuth.
+const authDir = resolve(import.meta.dirname, '../convex/betterAuth');
 const authSchema = (await import(`${authDir}/schema.ts`)).default;
 function setup(realArtwork = false) {
   jest.useFakeTimers();
   const dir = resolve(import.meta.dirname, '../convex');
   const t = convexTest(schema, {
-    ...modules(dir),
+    ...modules(dir, ['betterAuth/']),
     [`${dir}/catalog_actions.ts`]: async () => ({
       ...(realArtwork ? { artwork: (await import('../convex/catalog_actions')).artwork } : {}),
       prepareSource: internalAction({ args: { sourceId: v.id('catalogSources'), attempt: v.number() }, handler: async () => null }),

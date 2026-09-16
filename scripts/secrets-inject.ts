@@ -24,7 +24,7 @@ const examples = targets.map((target) => ({ target, values: readEnv(`${target}/.
 // Apify titles without requiring the CI service account to edit vault contents.
 const apifyItemIds = {
   dev: 'objiujwnpqllihha7gju73tpiu',
-  preview: 'zge7irfcyb7n5hujyzke5aaxce',
+  preview: 'xehcupwopwh2ikbj4svfnem27e',
   prod: 'l4emdm3q6xsrcz7nhwe474kura',
 } as const;
 const template = parse(
@@ -64,10 +64,13 @@ const result = (() => {
     rmSync(temporary, { recursive: true, force: true });
   }
 })();
-if (result.status !== 0)
+if (result.status !== 0) {
+  // op reports which reference it could not resolve on stderr; it never echoes secret values.
+  const detail = (result.stderr ?? '').trim() || result.error?.message || `exit status ${result.status ?? 'unknown'}`;
   throw new Error(
-    '1Password injection failed. Check the service account, vault names, items, and field permissions.',
+    `1Password injection failed. Check the service account, vault names, items, and field permissions.\n${detail}`,
   );
+}
 const values = parse(result.stdout);
 requireKeys(values, keys);
 if (!args.includes('--check')) {

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { AssetId, Computed, Fonts, FrameRate, Generating, getActiveEntity, Library, Name, PendingSource, Source, SourceError } from "@compound/runtime";
-import { getProjectsRoot } from "@/projects";
+import { ensureProjectsRoot } from "@/projects";
 
 import type { Entity, World } from "koota";
 import type { GenerationRow } from "@compound/dapi";
@@ -18,7 +18,8 @@ import type { ToolHandler } from "../handler";
  * drawing it. With no project open only the root is left to report.
  */
 export const context: ToolHandler<"context"> = async (_, ctx) => {
-  const rootDir = await getProjectsRoot();
+  // The workspace's projects folder, waiting for the workspace to open when it has not yet.
+  const rootDir = await ensureProjectsRoot();
 
   const open = ctx.session();
   if (!open) return { rootDir, projectDir: null, currentTime: null, fontFamilies: [], generations: [] };

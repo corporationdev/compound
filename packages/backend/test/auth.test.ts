@@ -1,24 +1,21 @@
 import { test, expect, afterEach } from 'bun:test';
 import { convexTest } from 'convex-test';
-import { resolve, dirname } from 'node:path';
+import { resolve } from 'node:path';
 import schema from '../convex/schema';
 import { api, internal, components } from '../convex/_generated/api';
 
-const componentDir = resolve(
-  dirname(import.meta.resolve('@convex-dev/better-auth/package.json').replace('file://', '')),
-  'src/component',
-);
+// The Better Auth component is installed locally under convex/betterAuth.
+const componentDir = resolve(import.meta.dirname, '../convex/betterAuth');
 const componentSchema = (await import(`${componentDir}/schema.ts`)).default;
-function modules(dir: string) {
+function modules(dir: string, ignore: string[] = []) {
   return Object.fromEntries(
-    [...new Bun.Glob('**/*.ts').scanSync(dir)].map((path) => [
-      `${dir}/${path}`,
-      () => import(`${dir}/${path}`),
-    ]),
+    [...new Bun.Glob('**/*.ts').scanSync(dir)]
+      .filter((path) => !ignore.some((prefix) => path.startsWith(prefix)))
+      .map((path) => [`${dir}/${path}`, () => import(`${dir}/${path}`)]),
   );
 }
 function setup() {
-  const t = convexTest(schema, modules(resolve(import.meta.dirname, '../convex')));
+  const t = convexTest(schema, modules(resolve(import.meta.dirname, '../convex'), ['betterAuth/']));
   t.registerComponent('betterAuth', componentSchema, modules(componentDir));
   return t;
 }

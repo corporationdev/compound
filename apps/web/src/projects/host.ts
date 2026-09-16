@@ -3,12 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
-import { createSignal } from 'solid-js';
+import { createEffect, createMemo, createRoot, createSignal, on } from 'solid-js';
 
 import { MAIN_CHANNELS } from '@desktop/main-channels';
 import { mainBridge } from '@/lib/ipc';
 import {
-	addProjectRecords,
 	findProjectRecords,
 	forgetProject as forgetProjectRecord,
 	listProjectRecords,
@@ -16,37 +15,52 @@ import {
 	rememberProject,
 	updateProjectRecord,
 } from '@/lib/db';
+import { isInWorkspace, pathSeparator, workspace, workspaceDir, workspaceProjects } from '@/lib/workspace';
 
 import type { CompileResult, ProjectInfo, SourceEdit, WriteResult } from '@desktop/main-channels';
 import type { ProjectRecord } from '@/lib/db';
 
 export type { CompileResult, ProjectInfo, ProjectRecord, SourceEdit, WriteResult };
 
-// There is one projects root, so it is one localStorage value rather than a
-// database row — read synchronously, so it is known from the first render.
-// Unset for anyone who has never picked one, and for everyone upgrading from
-// when the roots lived in the database: they get the default, or pick, the
-// next time a project is created, and the projects the old root held come
-// back with it (see `adoptProjectsRoot`).
+/** The starter folder projects are created in, inside the workspace. */
+const PROJECTS_FOLDER = 'projects';
 
-const ROOT_STORAGE_KEY = 'compound:projects-root';
+// New projects go in the workspace's projects folder. The workspace is the
+// active organization's, so this follows the organization switcher; null off
+// the desktop and until the workspace has been opened.
+const projectsRoot = createRoot(() => createMemo(() => {
+	const dir = workspaceDir();
+	return dir ? dir + pathSeparator() + PROJECTS_FOLDER : null;
+}));
 
-const storedRoot = (): string | null => {
-	try {
-		return window.localStorage.getItem(ROOT_STORAGE_KEY);
-	} catch {
-		return null;
-	}
-};
-
-const [projectsRoot, setProjectsRoot] = createSignal<string | null>(storedRoot());
-
-/** The folder new projects are created in: null until one is picked. */
+/** The folder new projects are created in: null until the workspace is open. */
 export { projectsRoot };
 
 // Bumped whenever the list of known projects changes — one created, opened,
 // renamed, copied, or deleted — so a view listing them can refetch on it.
 const [projectsRevision, setProjectsRevision] = createSignal(1);
+
+/**
+ * What a list of projects follows: the records here (a create, a forget),
+ * and the workspace's own scan of its folders, which moves when a project
+ * lands from another machine or when a folder made here is seen by the
+ * watcher. A view keyed on the records alone refetched too early after a
+ * create, read the stale scan, and never asked again.
+ */
+export const projectsListKey = () => `${projectsRevision()}:${(workspaceProjects() ?? []).map((project) => `${project.dir}@${project.modifiedAt}`).join('\n')}`;
+
+/**
+ * Records handed out last time, by folder. A list rebuilt with the same
+ * record for a folder answers the same object, so a view keyed on identity
+ * keeps that project's element rather than making it again on every refetch.
+ */
+const handedOut = new Map<string, ProjectRecord>();
+function stable(record: ProjectRecord): ProjectRecord {
+	const previous = handedOut.get(record.dir);
+	if (previous && JSON.stringify(previous) === JSON.stringify(record)) return previous;
+	handedOut.set(record.dir, record);
+	return record;
+}
 
 /** Changes whenever the list `listProjects` answers with would; a source for `createResource`. */
 export { projectsRevision };
@@ -55,6 +69,12 @@ export { projectsRevision };
 export function markProjectsChanged(): void {
 	setProjectsRevision((revision) => revision + 1);
 }
+
+// The workspace's projects are part of the list: when its walk answers, or
+// answers differently after a change on disk, the views refetch. Keyed on
+// what the walk found rather than the array, which is new on every listing.
+const projectsKey = () => (workspaceProjects() ?? []).map((project) => `${project.dir}\0${project.modifiedAt}\0${project.displayName}`).join('\n');
+createRoot(() => createEffect(on(projectsKey, () => setProjectsRevision((revision) => revision + 1), { defer: true })));
 
 export const isDesktop = (): boolean => !!window.desktop;
 
@@ -65,48 +85,8 @@ async function remember(project: ProjectInfo): Promise<void> {
 }
 
 /**
- * Makes `root` the projects root, and puts the projects it already holds on
- * the list — the ones that are not on it yet; the rest were opened when they
- * were opened. This is the one time the disk is searched for projects, and
- * what brings a user's projects back after an upgrade that forgot the root,
- * or a reinstall: pick the folder again, and there they are.
- */
-async function adoptProjectsRoot(root: string): Promise<void> {
-	try {
-		window.localStorage.setItem(ROOT_STORAGE_KEY, root);
-	} catch (error) {
-		console.warn('[projects] could not store the projects root', error);
-	}
-	setProjectsRoot(root);
-
-	let found: ProjectInfo[] = [];
-	try {
-		found = await mainBridge.call(MAIN_CHANNELS.PROJECTS_SCAN, { root });
-	} catch (error) {
-		console.warn(`[projects] could not look for projects in ${root}`, error);
-	}
-	if (found.length && (await addProjectRecords(found))) {
-		setProjectsRevision((revision) => revision + 1);
-	}
-}
-
-/** The projects root: null off the desktop and until one is picked. */
-export async function getProjectsRoot(): Promise<string | null> {
-	return projectsRoot();
-}
-
-/** Opens the native folder picker and adopts the chosen root. */
-export async function pickProjectsRoot(): Promise<string | null> {
-	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_ROOT, undefined);
-	if (!root) return null;
-
-	await adoptProjectsRoot(root);
-	return root;
-}
-
-/**
  * Opens the native folder picker for a folder to open as a single project.
- * Unlike `pickProjectsRoot` it changes nothing on its own — hand the path to
+ * Unlike the workspace it changes nothing on its own — hand the path to
  * `openProjectFolder`, which is what makes the folder a project.
  */
 export async function pickProjectFolder(): Promise<string | null> {
@@ -114,39 +94,56 @@ export async function pickProjectFolder(): Promise<string | null> {
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, undefined);
 }
 
+/** How long a caller waits for the workspace to open before giving up. */
+const WORKSPACE_WAIT_MS = 15_000;
+
 /**
- * The root to work against, defaulted to when there is none. Null off the
- * desktop, where there is no folder at all, and when the user is asked where
- * to put projects and declines to say.
+ * The folder new projects go in, once the workspace is open. Null off the
+ * desktop, where there is no folder at all, and when the workspace does not
+ * open in time (no organization yet, or the user declined to pick a root).
  */
 export async function ensureProjectsRoot(): Promise<string | null> {
 	if (!isDesktop()) return null;
-
 	const current = projectsRoot();
 	if (current) return current;
-
-	// Nothing picked yet: the default folder, so a first project costs a click
-	// rather than a trip through the folder picker. The picker is still there
-	// for anyone who wants to say — and for when the default will not do.
-	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, undefined);
-	if (!root) return pickProjectsRoot();
-
-	await adoptProjectsRoot(root);
-	return root;
+	const until = Date.now() + WORKSPACE_WAIT_MS;
+	while (Date.now() < until) {
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		const root = projectsRoot();
+		if (root) return root;
+	}
+	return null;
 }
 
 /**
- * The projects the app knows, most recently opened first, as their records
- * describe them — no folder is read. The dashboard shows this at launch, and
- * reading a folder under Desktop or Documents there is what would make macOS
- * ask for permission before the user has done anything; a project's folder
- * is looked at when the project is opened (see `checkProject`). So a record
- * whose folder is gone stays on the list until then: it may well come back
- * (a volume that is not mounted), and if not, opening it says so.
+ * The projects the app knows: every project folder in the workspace, plus
+ * any folder opened from elsewhere on disk that is still on record. A
+ * workspace project that has a record (a cover, a last-opened time) shows
+ * with it; one that has none shows as its folder describes it. Records for
+ * folders inside the workspace that the walk did not find are dropped from
+ * the answer: the folder is gone or no longer a project.
  */
 export async function listProjects(): Promise<ProjectRecord[]> {
 	if (!isDesktop()) return [];
-	return listProjectRecords();
+	const records = await listProjectRecords();
+	// The folders as they are now, not the last scan: a project made a moment ago is on disk before the watcher says so.
+	const found = workspace() ? await mainBridge.call(MAIN_CHANNELS.WORKSPACE_PROJECTS, { dir: workspace()!.dir }) : [];
+	const byDir = new Map(records.map((record) => [record.dir, record] as const));
+	const now = new Date().toISOString();
+	const list: ProjectRecord[] = found.map((project) => {
+		const record = byDir.get(project.dir);
+		return record
+			? { ...record, ...project }
+			: { ...project, recordedAt: now, lastOpenedAt: project.modifiedAt, cover: null };
+	});
+	const seen = new Set(found.map((project) => project.dir));
+	const ids = new Set(found.map((project) => project.id).filter(Boolean));
+	for (const record of records) {
+		// A record for a folder that moved into the workspace names the same project twice.
+		if (seen.has(record.dir) || isInWorkspace(record.dir) || (record.id && ids.has(record.id))) continue;
+		list.push(record);
+	}
+	return list.map(stable);
 }
 
 /**
@@ -180,10 +177,10 @@ export async function forgetProject(dir: string): Promise<void> {
 	setProjectsRevision((revision) => revision + 1);
 }
 
-/** Creates a project folder under the root, named after `displayName`, and puts it on the list. */
+/** Creates a project folder under the workspace's projects folder, named after `displayName`, and puts it on the list. */
 export async function createProject(displayName: string): Promise<ProjectInfo> {
 	const root = projectsRoot();
-	if (!root) throw new Error('No projects folder selected.');
+	if (!root) throw new Error('No workspace is open.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_CREATE, { root, displayName });
 	await remember(project);
@@ -192,17 +189,23 @@ export async function createProject(displayName: string): Promise<ProjectInfo> {
 
 /**
  * The project `ref` names: its id, or — for links made before ids existed,
- * and folders opened by name — its folder name. Only projects on the list
- * can be found; the records say which folders to look in, and the folders
- * say what they are now (one may have been renamed or replaced behind our
- * back, or be a folder that predates ids — in which case main gives it one
- * here, so the app can put an id in the URL).
+ * and folders opened by name — its folder name. Looked for among the
+ * workspace's projects and the records; the folders say what they are now
+ * (one may have been renamed or replaced behind our back, or be a folder
+ * that predates ids — in which case main gives it one here, so the app can
+ * put an id in the URL).
  */
 export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
 	if (!ref || !isDesktop()) return null;
 
-	for (const record of await findProjectRecords(ref)) {
-		const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir: record.dir });
+	const candidates: string[] = [];
+	for (const project of workspaceProjects() ?? []) {
+		if (project.id === ref || project.name === ref) candidates.push(project.dir);
+	}
+	for (const record of await findProjectRecords(ref)) candidates.push(record.dir);
+
+	for (const dir of candidates) {
+		const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir });
 		if (!project || (project.id !== ref && project.name !== ref)) continue;
 		// Just opened, and holding an id the record may not have had yet.
 		await rememberProject(project);
@@ -330,15 +333,15 @@ export function watchProject(dir: string, onChange: (paths: string[]) => void, d
 
 /**
  * Every project the app knows, for explicit CLI targeting independently of
- * navigation — the records, canonicalized, so two paths to the same folder
- * are one project.
+ * navigation — the list, canonicalized, so two paths to the same folder are
+ * one project.
  */
 export async function listKnownProjects(): Promise<ProjectInfo[]> {
 	if (!isDesktop()) return [];
 
 	const dirs = new Set<string>();
 	const projects: ProjectInfo[] = [];
-	for (const project of await listProjectRecords()) {
+	for (const project of await listProjects()) {
 		const canonical = await mainBridge.call(MAIN_CHANNELS.PROJECTS_FS_REAL_PATH, { dir: project.dir, source: '.' });
 		const dir = canonical || project.dir;
 		if (dirs.has(dir)) continue;
