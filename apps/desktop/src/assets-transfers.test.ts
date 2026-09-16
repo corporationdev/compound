@@ -119,18 +119,39 @@ describe("uploads", () => {
     assets.stop();
   });
 
-  it("retries a failed upload with backoff, then lists it as failed until a hand retries it", async () => {
+  it("retries a failed upload with backoff and never gives up on its own; it shows as failed with its reason meanwhile", async () => {
     const { assets } = project();
     failUploads = 3;
     assets.setLocal([{ sampleId: AUDIO, source: join(dir, "b.wav"), mimeType: "audio/wav", name: "b.wav", type: "AUDIO" }], false);
-    let snapshot = await settled(assets);
-    expect(calls).toEqual([`up:original:${AUDIO}`, `up:original:${AUDIO}`, `up:original:${AUDIO}`]);
+    // Two rungs on the ladder, three failures: the third attempt is listed as failed while the fourth is scheduled.
+    for (let round = 0; round < 50 && calls.length < 3; round++) await sleep(5);
+    await sleep(3);
+    const snapshot = assets.snapshot();
     expect(snapshot.transfers).toEqual([expect.objectContaining({ sampleId: AUDIO, kind: "upload", phase: "failed", attempts: 3, error: "network" })]);
     expect(snapshot.summary.failed).toBe(1);
+    const final = await settled(assets);
+    expect(calls).toEqual([`up:original:${AUDIO}`, `up:original:${AUDIO}`, `up:original:${AUDIO}`, `up:original:${AUDIO}`]);
+    expect(final.transfers).toEqual([]);
+    expect(final.cloud[AUDIO].original).toBe("ready");
+    assets.stop();
+  });
+
+  it("a hand retries a failed transfer at once", async () => {
+    const assets = new ProjectAssets({
+      dir, organizationId: ORG, cloud: fakeCloud,
+      feed: (_organizationId, onSnapshot) => { feeds.push(onSnapshot); onSnapshot(cloud); return () => {}; },
+      getToken: async () => "jwt", onChange: () => {}, retryDelays: [10, 60_000],
+    });
+    assets.start();
+    failUploads = 2;
+    assets.setLocal([{ sampleId: AUDIO, source: join(dir, "b.wav"), mimeType: "audio/wav", name: "b.wav", type: "AUDIO" }], false);
+    for (let round = 0; round < 50 && calls.length < 2; round++) await sleep(5);
+    await sleep(3);
+    expect(assets.snapshot().transfers[0]?.phase).toBe("failed");
     assets.retry(AUDIO);
-    snapshot = await settled(assets);
-    expect(snapshot.transfers).toEqual([]);
-    expect(snapshot.cloud[AUDIO].original).toBe("ready");
+    const final = await settled(assets);
+    expect(calls).toHaveLength(3);
+    expect(final.cloud[AUDIO].original).toBe("ready");
     assets.stop();
   });
 });

@@ -23,8 +23,10 @@ const MAX_BYTES = 100 * 1024 * 1024;
 // Library originals are whole source files; R2 takes up to 5 GiB in one PUT.
 const MAX_ASSET_BYTES = 4 * 1024 * 1024 * 1024;
 const ASSET_OPERATIONS = ['asset-upload-url', 'asset-upload-finish', 'asset-download-url', 'asset-proxy-upload-url', 'asset-proxy-upload-finish', 'asset-multipart-start', 'asset-multipart-part-url', 'asset-multipart-complete'] as const;
-/** Parts of a large original; R2 wants every part but the last at least 5 MiB, and at most 10,000 of them. */
-export const MULTIPART_PART_BYTES = 64 * 1024 * 1024;
+// Parts of a large original; R2 wants every part but the last at least 5 MiB,
+// and at most 10,000 of them. Not exported: the Workers runtime reads every
+// export of this module as a handler.
+const MULTIPART_PART_BYTES = 64 * 1024 * 1024;
 const MAX_PARTS = 10_000;
 const organizationId = z.string().min(1).max(100);
 const sampleId = z.string().regex(/^[0-9a-f]{16}$/);

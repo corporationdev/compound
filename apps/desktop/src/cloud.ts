@@ -104,7 +104,13 @@ export async function mediaRequest(path: string, body: Record<string, unknown>, 
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(255000),
   });
-  const result = (await response.json()) as { error?: string };
+  const text = await response.text();
+  let result: { error?: string };
+  try {
+    result = JSON.parse(text) as { error?: string };
+  } catch {
+    throw new MediaRequestError(response.status, `Media server answered ${response.status} with ${text.trim().slice(0, 80) || 'nothing'} (is the server up?)`);
+  }
   if (!response.ok) throw new MediaRequestError(response.status, result.error ?? 'Media request failed');
   return result;
 }

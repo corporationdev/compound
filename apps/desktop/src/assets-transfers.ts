@@ -94,7 +94,7 @@ export const realAssetCloud: AssetCloud = {
 
 const UPLOAD_CONCURRENCY = 2;
 const DOWNLOAD_CONCURRENCY = 2;
-/** Delays before each retry; after the last, the transfer waits for a hand. */
+/** Delays before each retry; the last repeats for as long as the project is open. A transfer is never given up on: the cloud may be down for a while. */
 const RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 300_000];
 /** How long a fetch waits for another machine to finish sending before it gives up. */
 const WAIT_LIMIT_MS = 15 * 60_000;
@@ -194,7 +194,9 @@ export class ProjectAssets {
   retry(sampleId: string): void {
     for (const transfer of [...this.transfers.values()]) {
       if (transfer.sampleId !== sampleId || transfer.phase !== "failed") continue;
-      this.ensure(transfer.kind, transfer.variant, transfer.sampleId);
+      if (transfer.retryTimer) clearTimeout(transfer.retryTimer);
+      transfer.retryTimer = undefined;
+      transfer.phase = "queued";
     }
     this.pump();
     this.emitSoon();
@@ -345,7 +347,7 @@ export class ProjectAssets {
   private ensure(kind: TransferKind, variant: AssetVariant, sampleId: string): Transfer {
     const key = keyOf(kind, variant, sampleId);
     const existing = this.transfers.get(key);
-    if (existing && existing.phase !== "done" && existing.phase !== "waiting" && existing.phase !== "failed") return existing;
+    if (existing && existing.phase !== "done" && existing.phase !== "waiting") return existing;
     const meta = this.cloud.get(sampleId);
     const local = this.local.get(sampleId);
     const total = variant === "proxy" ? meta?.proxySize ?? 0 : meta?.size ?? 0;
@@ -411,18 +413,15 @@ export class ProjectAssets {
       transfer.error = message;
       console.warn(`[assets] ${transfer.kind} of ${transfer.name} (${transfer.variant}) failed on attempt ${transfer.attempts}: ${message}`);
       const delays = this.options.retryDelays ?? RETRY_DELAYS_MS;
-      const delay = delays[transfer.attempts - 1];
-      if (delay === undefined) {
-        transfer.phase = "failed";
-        // Stays listed as failed for the retry button; a later fetch or retry makes a fresh transfer.
-        transfer.fail(error instanceof Error ? error : new Error(message));
-      } else {
-        transfer.phase = "queued";
-        transfer.retryTimer = setTimeout(() => {
-          transfer.retryTimer = undefined;
-          this.pump();
-        }, delay);
-      }
+      const delay = delays[Math.min(transfer.attempts, delays.length) - 1]!;
+      // Listed as failed once the ladder is climbed, so the reason shows and a
+      // hand can retry at once; the next attempt is still scheduled.
+      transfer.phase = transfer.attempts >= delays.length ? "failed" : "queued";
+      transfer.retryTimer = setTimeout(() => {
+        transfer.retryTimer = undefined;
+        if (transfer.phase === "failed") transfer.phase = "queued";
+        this.pump();
+      }, delay);
     } finally {
       this.pump();
       this.emitSoon();
