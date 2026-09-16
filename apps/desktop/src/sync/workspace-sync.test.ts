@@ -263,7 +263,7 @@ describe("two checkouts", () => {
     expect(backend.text(PROJECT, "index.tsx")).toBe(expected);
   });
 
-  it("converge when both edit the same line, and both sides learn which text lost", async () => {
+  it("converge when both edit the same line, and the side whose text lost keeps a copy out of the tree", async () => {
     const backend = new FakeBackend();
     const base = "line1\nline2\nline3\n";
     await backend.writeMany(PROJECT, [{ path: "index.tsx", text: base, hash: "x" }]);
@@ -281,16 +281,17 @@ describe("two checkouts", () => {
     expect(await read(b, "index.tsx")).toBe(final);
     expect(backend.text(PROJECT, "index.tsx")).toBe(final);
     expect(["line1\nfrom a\nline3\n", "line1\nfrom b\nline3\n"]).toContain(final);
-    // The copy of the losing text lives inside the project, so it syncs to
-    // both machines, and both are told about it.
-    expect(conflictsA.length).toBeGreaterThan(0);
-    expect(conflictsB.length).toBeGreaterThan(0);
+    // The losing text is kept under .compound on the machine that merged it
+    // away: not in the tree, and not sent to the cloud.
+    const conflicts = [...conflictsA, ...conflictsB];
+    expect(conflicts.length).toBeGreaterThan(0);
     const loser = final.includes("from a") ? "from b" : "from a";
-    for (const conflict of [...conflictsA, ...conflictsB]) {
+    for (const conflict of conflicts) {
       expect(conflict.path).toBe("index.tsx");
-      expect(conflict.keptCopy).toMatch(/\/conflicts\/index\.tsx\..*\.conflict$/);
+      expect(conflict.keptCopy).toMatch(/\/\.compound\/conflicts\/index\.tsx\..*\.conflict$/);
       expect(await readFile(conflict.keptCopy, "utf8")).toContain(loser);
     }
+    expect(backend.snapshot(PROJECT).some((file) => file.path.includes("conflict"))).toBe(false);
     expect(await folderText(a.dir)).toEqual(await folderText(b.dir));
   });
 

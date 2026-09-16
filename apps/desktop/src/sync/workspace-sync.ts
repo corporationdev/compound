@@ -51,13 +51,13 @@ export type SyncStatus = {
 
 /**
  * A merge had to choose between two edits to the same lines of `path`. The
- * text that lost is at `keptCopy`, a file inside the project's `conflicts/`
- * folder — which syncs, so the machine whose edit lost sees it too.
+ * text that lost is at `keptCopy`, a file under the app's own folder in the
+ * workspace, which neither the tree shows nor sync sends.
  */
 export type ConflictNotice = { path: string; keptCopy: string };
 
-/** Where the losing side of a merge is kept: inside the workspace, so it reaches every checkout. */
-export const CONFLICTS_DIR = "conflicts";
+/** Where the losing side of a merge is kept: under `.compound`, out of the tree and out of sync. */
+export const CONFLICTS_DIR = ".compound/conflicts";
 const CONFLICT_SUFFIX = ".conflict";
 
 export type WorkspaceSyncOptions = {
@@ -85,18 +85,10 @@ const MAX_RETRY_MS = 30_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** `conflicts/scenes/a.tsx.<stamp>.conflict` for `scenes/a.tsx`. */
+/** `.compound/conflicts/scenes/a.tsx.<stamp>.conflict` for `scenes/a.tsx`. */
 function conflictPathFor(path: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return `${CONFLICTS_DIR}/${path}.${stamp}${CONFLICT_SUFFIX}`;
-}
-
-/** The path a conflict copy was kept for, or null when `path` is not one. */
-function conflictSource(path: string): string | null {
-  if (!path.startsWith(`${CONFLICTS_DIR}/`) || !path.endsWith(CONFLICT_SUFFIX)) return null;
-  const inner = path.slice(CONFLICTS_DIR.length + 1, -CONFLICT_SUFFIX.length);
-  const stampAt = inner.lastIndexOf(".");
-  return stampAt > 0 ? inner.slice(0, stampAt) : null;
 }
 
 /** The folders holding a live `package.json` among `files`. */
@@ -347,10 +339,6 @@ export class WorkspaceSync {
       // cloud changed it — and a change beats a delete.
       if (!(await this.writeLocal(path, remote.text, null))) return this.retryRemote(meta);
       await this.advance(remote);
-      // A copy another checkout kept for us: the merge over there took its
-      // side of an overlap, and this is what it replaced.
-      const source = conflictSource(path);
-      if (source) this.options.onConflict?.({ path: source, keptCopy: this.absolute(path) });
       return;
     }
 
@@ -377,8 +365,7 @@ export class WorkspaceSync {
     if (merged.text !== local.text && !(await this.writeLocal(path, merged.text, local.hash))) return this.retryRemote(meta);
     await this.advance(remote);
     if (merged.conflicted) {
-      // The cloud's text lost the overlap. It is kept where the checkout
-      // that wrote it will see it: inside the workspace, which syncs.
+      // The cloud's text lost the overlap; a copy is kept on this machine.
       const kept = await this.keepCopy(path, remote.text);
       if (kept) this.options.onConflict?.({ path, keptCopy: this.absolute(kept) });
     }
@@ -396,12 +383,18 @@ export class WorkspaceSync {
     }
   }
 
-  /** Writes `text` as a conflict copy for `path` and queues it to go up. Returns the copy's path, or null when it could not be written. */
+  /** Writes `text` as a conflict copy for `path`, under the app's folder. Returns the copy's path, or null when it could not be written. */
   private async keepCopy(path: string, text: string): Promise<string | null> {
     const copy = conflictPathFor(path);
-    if (!(await this.writeLocal(copy, text, null))) return null;
-    this.schedulePush(copy);
-    return copy;
+    try {
+      const target = this.absolute(copy);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFileAtomic(target, text);
+      return copy;
+    } catch (error) {
+      console.warn(`[sync] ${this.organizationId}: could not keep a conflict copy of ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   /** The file moved while a row was being applied to it: apply the row again, against what is there now. */
