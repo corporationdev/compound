@@ -59,6 +59,13 @@ export interface SyncBackend {
   fetch(organizationId: string, path: string): Promise<RemoteFile | null>;
 
   /**
+   * Many rows with their text at once, for a checkout: the rows found among
+   * `paths`, in that order. May stop short of the list when the text adds
+   * up; the caller asks again for what it did not get.
+   */
+  fetchMany(organizationId: string, paths: string[]): Promise<RemoteFile[]>;
+
+  /**
    * Writes `text` at `path` if the server's version is `expectedVersion`.
    * `null` means create: only succeeds when the path is absent or a tombstone.
    */

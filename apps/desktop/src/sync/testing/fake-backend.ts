@@ -23,6 +23,8 @@ export class FakeBackend implements SyncBackend {
   delayMs = 0;
   writes = 0;
   removes = 0;
+  fetches = 0;
+  batchFetches = 0;
 
   private table(organizationId: string): Map<string, RemoteFile> {
     let table = this.rows.get(organizationId);
@@ -36,8 +38,16 @@ export class FakeBackend implements SyncBackend {
 
   async fetch(organizationId: string, path: string): Promise<RemoteFile | null> {
     await this.check();
+    this.fetches++;
     const row = this.table(organizationId).get(path);
     return row ? { ...row } : null;
+  }
+
+  async fetchMany(organizationId: string, paths: string[]): Promise<RemoteFile[]> {
+    await this.check();
+    this.batchFetches++;
+    const table = this.table(organizationId);
+    return paths.flatMap((path) => { const row = table.get(path); return row ? [{ ...row }] : []; });
   }
 
   /** The live text at a path, or null when absent or a tombstone. */

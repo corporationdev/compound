@@ -171,6 +171,36 @@ export const get = query({
   },
 });
 
+export const MAX_GET_MANY_FILES = 64;
+export const MAX_GET_MANY_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Rows with their text, by path, for a checkout that needs many at once.
+ * Rows come back in the order asked, missing paths left out. Stops after
+ * `MAX_GET_MANY_BYTES` of text, so a caller with more asks again from the
+ * first path it did not get.
+ */
+export const getMany = query({
+  args: { organizationId: v.string(), paths: v.array(v.string()) },
+  handler: async (ctx, { organizationId, paths }): Promise<RemoteFile[]> => {
+    await requireMember(ctx, organizationId);
+    if (paths.length > MAX_GET_MANY_FILES) throw new ConvexError(`At most ${MAX_GET_MANY_FILES} paths per call`);
+    const files: RemoteFile[] = [];
+    let bytes = 0;
+    for (const path of paths) {
+      const row = await ctx.db
+        .query('files')
+        .withIndex('by_org_path', (q) => q.eq('organizationId', organizationId).eq('path', path))
+        .unique();
+      if (!row) continue;
+      bytes += encoder.encode(row.text).length;
+      if (files.length > 0 && bytes > MAX_GET_MANY_BYTES) break;
+      files.push(toRemoteFile(row));
+    }
+    return files;
+  },
+});
+
 export const write = mutation({
   args: {
     organizationId: v.string(),

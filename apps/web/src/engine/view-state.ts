@@ -247,6 +247,14 @@ export function applyViewToWorld(world: World, view: ProjectView, overrides: Vie
 		const entity = entities.get(view.active);
 		if (entity?.has(Scene)) entity.add(Active);
 	}
+	// Nothing recorded and the file marks no scene — a project first opened on
+	// this machine after being made on another. The timeline shows the active
+	// scene, so an empty timeline beside a drawn canvas is what an unset one
+	// looks like: the first scene stands in until something else is picked.
+	if (!world.query(Active).length) {
+		const [first] = world.query(Scene);
+		first?.add(Active);
+	}
 
 	for (const [source, seconds] of Object.entries(view.playhead)) {
 		const entity = entities.get(source);

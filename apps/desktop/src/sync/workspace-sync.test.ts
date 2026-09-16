@@ -68,6 +68,28 @@ async function folderText(dir: string): Promise<Record<string, string>> {
   return Object.fromEntries(files.map((file) => [file.path, file.text]));
 }
 
+describe("checkout", () => {
+  it("brings a workspace down in batches, not a round trip per file, and knows its project folders from the first listing", async () => {
+    const backend = new FakeBackend();
+    const files = Array.from({ length: 150 }, (_, i) => ({ path: `projects/p${i % 3}/file${i}.md`, text: `${i}\n`, hash: `h${i}` }));
+    await backend.writeMany(PROJECT, [...files, { path: "projects/p0/package.json", text: "{}\n", hash: "pkg" }]);
+    const a = await checkout("a", backend);
+    expect(backend.batchFetches).toBe(3);
+    expect(backend.fetches).toBe(0);
+    expect(Object.keys(await folderText(a.dir))).toHaveLength(151);
+    expect([...a.projectRoots]).toEqual(["projects/p0"]);
+
+    // A second start of the same folder knows the project before the cloud answers.
+    await a.stop();
+    const again = new WorkspaceSync({ dir: a.dir, organizationId: PROJECT, backend, watch: false, coalesceMs: 5 });
+    syncs.push(again);
+    const started = again.start();
+    expect([...again.projectRoots]).toEqual([]);
+    await started;
+    expect([...again.projectRoots]).toEqual(["projects/p0"]);
+  });
+});
+
 describe("project roots", () => {
   it("names every folder the cloud holds a package.json in, from the first snapshot", async () => {
     const backend = new FakeBackend();

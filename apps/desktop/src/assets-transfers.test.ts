@@ -171,6 +171,20 @@ describe("downloads", () => {
     assets.stop();
   });
 
+  it("stops waiting for a proxy once the original is ready and no proxy was ever registered", async () => {
+    publish([meta(VIDEO, { originalState: "uploading" })]);
+    const { assets } = project();
+    assets.setLocal([], false);
+    const pending = assets.fetch(VIDEO, "proxy");
+    await sleep(30);
+    expect(assets.snapshot().summary.waiting).toBe(1);
+    // The other machine finishes the original but runs code that makes no proxies.
+    publish([meta(VIDEO, { originalState: "ready" })]);
+    expect((await pending)?.path).toBe(join(dir, "cache", "originals", `${VIDEO}.mp4`));
+    expect(calls).toEqual([`down:original:${VIDEO}`]);
+    assets.stop();
+  });
+
   it("falls back to the original for an asset that will never have a proxy", async () => {
     publish([meta(AUDIO, { originalState: "ready", mimeType: "audio/wav", name: "b.wav" }), meta(VIDEO, { originalState: "ready" })]);
     const { assets } = project();

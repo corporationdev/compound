@@ -58,6 +58,8 @@ export type ConflictNotice = { path: string; keptCopy: string };
 
 /** Where the losing side of a merge is kept: under `.compound`, out of the tree and out of sync. */
 export const CONFLICTS_DIR = ".compound/conflicts";
+/** Paths fetched per round trip on a checkout; matches the backend's cap. */
+const PREFETCH_BATCH = 64;
 const CONFLICT_SUFFIX = ".conflict";
 
 export type WorkspaceSyncOptions = {
@@ -120,6 +122,8 @@ export class WorkspaceSync {
   private latestSnapshot: RemoteFileMeta[] | null = null;
   private readonly latestMeta = new Map<string, RemoteFileMeta>();
   private roots: ReadonlySet<string> = new Set();
+  /** Rows fetched ahead for a snapshot, so a checkout is one round trip per batch rather than one per file. */
+  private readonly prefetched = new Map<string, RemoteFile>();
   private snapshotQueued = false;
 
   private readonly coalesce = new Map<string, ReturnType<typeof setTimeout>>();
@@ -163,6 +167,10 @@ export class WorkspaceSync {
       this.fail(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
+    // What this checkout already agreed on says which folders are projects
+    // before the cloud's first word arrives, so a listing in between marks
+    // them right.
+    this.roots = projectRootsOf(this.store.paths().map((path) => ({ path, deleted: this.store.get(path)?.hash === TOMBSTONE_HASH })) as RemoteFileMeta[]);
     this.emitStatus();
     this.unsubscribe = this.backend.subscribe(
       this.organizationId,
@@ -286,7 +294,9 @@ export class WorkspaceSync {
       this.latestMeta.clear();
       for (const meta of snapshot) this.latestMeta.set(meta.path, meta);
       this.roots = projectRootsOf(snapshot);
+      await this.prefetch(snapshot);
       for (const meta of snapshot) await this.applyRemote(meta);
+      this.prefetched.clear();
       if (this.initialized) return;
       await this.scanLocal();
       this.initialized = true;
@@ -296,6 +306,31 @@ export class WorkspaceSync {
     });
   }
 
+  /**
+   * Fetches, in batches, the text of every row in `snapshot` this checkout
+   * has yet to apply: a first checkout lands as a few round trips, and the
+   * folder fills in one go rather than file by file. A batch that fails is
+   * left to `applyRemote`, which fetches on its own and defers on error.
+   */
+  private async prefetch(snapshot: readonly RemoteFileMeta[]): Promise<void> {
+    const wanted = snapshot.filter((meta) => !meta.deleted && (this.store.get(meta.path)?.version ?? -1) < meta.version).map((meta) => meta.path);
+    while (wanted.length > 0 && !this.stopped) {
+      const batch = wanted.splice(0, PREFETCH_BATCH);
+      let rows: RemoteFile[];
+      try {
+        rows = await this.backend.fetchMany(this.organizationId, batch);
+      } catch {
+        return;
+      }
+      if (rows.length === 0) return;
+      for (const row of rows) this.prefetched.set(row.path, row);
+      // The backend answers in the order asked and may stop short when the
+      // text adds up: everything after the last row it gave goes back on the list.
+      const last = batch.indexOf(rows[rows.length - 1]!.path);
+      if (last >= 0 && last < batch.length - 1) wanted.unshift(...batch.slice(last + 1));
+    }
+  }
+
   /** Brings the folder up to the row `meta` describes, merging when the file has moved on locally. */
   private async applyRemote(meta: RemoteFileMeta): Promise<void> {
     const { path } = meta;
@@ -303,11 +338,17 @@ export class WorkspaceSync {
     if (known && known.version >= meta.version) return;
 
     let remote: RemoteFile | null;
-    try {
-      remote = await this.backend.fetch(this.organizationId, path);
-    } catch (error) {
-      this.defer(path, error);
-      return;
+    const ahead = this.prefetched.get(path);
+    this.prefetched.delete(path);
+    if (ahead && ahead.version >= meta.version) {
+      remote = ahead;
+    } else {
+      try {
+        remote = await this.backend.fetch(this.organizationId, path);
+      } catch (error) {
+        this.defer(path, error);
+        return;
+      }
     }
     this.online(path);
     if (!remote || (known && known.version >= remote.version)) return;

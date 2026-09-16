@@ -48,6 +48,10 @@ export class ConvexSyncBackend implements SyncBackend {
     return this.client.query(api.files.get, { organizationId, path }) as Promise<RemoteFile | null>;
   }
 
+  fetchMany(organizationId: string, paths: string[]): Promise<RemoteFile[]> {
+    return this.client.query(api.files.getMany, { organizationId, paths }) as Promise<RemoteFile[]>;
+  }
+
   write(organizationId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
     return this.client.mutation(api.files.write, { organizationId, path, text, hash, expectedVersion }) as Promise<WriteOutcome>;
   }

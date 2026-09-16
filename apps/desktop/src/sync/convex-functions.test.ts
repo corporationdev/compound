@@ -86,6 +86,10 @@ class HarnessBackend implements SyncBackend {
     return this.as.query(api.files.get, { organizationId, path }) as Promise<RemoteFile | null>;
   }
 
+  fetchMany(organizationId: string, paths: string[]): Promise<RemoteFile[]> {
+    return this.as.query(api.files.getMany, { organizationId, paths }) as Promise<RemoteFile[]>;
+  }
+
   async write(organizationId: string, path: string, text: string, hash: string, expectedVersion: number | null): Promise<WriteOutcome> {
     const outcome = (await this.as.mutation(api.files.write, { organizationId, path, text, hash, expectedVersion })) as WriteOutcome;
     await this.notifyAll();

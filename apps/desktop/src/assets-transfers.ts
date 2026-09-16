@@ -188,17 +188,22 @@ export class ProjectAssets {
    * under way.
    */
   async fetch(sampleId: string, prefer: AssetVariant): Promise<FetchResponse> {
-    const variant = await this.chooseVariant(sampleId, prefer);
-    const cached = await this.cachedPath(sampleId, variant);
-    if (cached) {
-      const meta = this.cloud.get(sampleId);
-      return { path: cached, name: variant === "proxy" ? `${sampleId}.mp4` : meta?.name ?? sampleId, mimeType: variant === "proxy" ? "video/mp4" : meta?.mimeType ?? "" };
+    for (;;) {
+      const variant = await this.chooseVariant(sampleId, prefer);
+      const cached = await this.cachedPath(sampleId, variant);
+      if (cached) {
+        const meta = this.cloud.get(sampleId);
+        return { path: cached, name: variant === "proxy" ? `${sampleId}.mp4` : meta?.name ?? sampleId, mimeType: variant === "proxy" ? "video/mp4" : meta?.mimeType ?? "" };
+      }
+      if (this.isReady(sampleId, variant)) {
+        const transfer = this.ensure("download", variant, sampleId);
+        this.pump();
+        return (await transfer.done) ?? null;
+      }
+      // Not there yet: wait for the cloud to move, then decide again — a
+      // proxy that was hoped for may never come, and the original will do.
+      await this.waitFor(sampleId, variant);
     }
-    await this.waitFor(sampleId, variant);
-    const transfer = this.ensure("download", variant, sampleId);
-    this.pump();
-    const result = await transfer.done;
-    return result ?? null;
   }
 
   private async chooseVariant(sampleId: string, prefer: AssetVariant): Promise<AssetVariant> {
@@ -220,12 +225,23 @@ export class ProjectAssets {
     return variant === "proxy" ? meta.proxyState === "ready" : meta.originalState === "ready";
   }
 
+  /**
+   * Whether what a fetch of `variant` waits on has arrived: the variant
+   * itself, or, for a proxy, the original with no proxy on its way — that
+   * asset will never have one, and the fetch falls back to the original.
+   */
+  private settled(sampleId: string, variant: AssetVariant): boolean {
+    if (this.isReady(sampleId, variant)) return true;
+    const meta = this.cloud.get(sampleId);
+    return variant === "proxy" && !!meta && meta.originalState === "ready" && meta.proxyState === null;
+  }
+
   private waitFor(sampleId: string, variant: AssetVariant): Promise<void> {
-    if (this.isReady(sampleId, variant)) return Promise.resolve();
+    if (this.settled(sampleId, variant)) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const waiter: Waiter = {
         variant,
-        check: () => this.isReady(sampleId, variant),
+        check: () => this.settled(sampleId, variant),
         resolve: () => { clearTimeout(waiter.timer); this.waiters.delete(waiter); this.dropWaiting(sampleId, variant); resolve(); },
         reject: (error) => { clearTimeout(waiter.timer); this.waiters.delete(waiter); this.dropWaiting(sampleId, variant); reject(error); },
         timer: setTimeout(() => waiter.reject(new Error(`${sampleId} is not in the cloud yet`)), WAIT_LIMIT_MS),

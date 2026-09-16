@@ -1,5 +1,6 @@
 import { test, expect, afterEach } from 'bun:test';
 import { convexTest } from 'convex-test';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import schema from '../convex/schema';
 import { api, internal, components } from '../convex/_generated/api';
@@ -181,6 +182,21 @@ test('version conflicts return the current row, or null when the file never exis
   expect(await alice.as.mutation(api.files.write, { organizationId, expectedVersion: 3, ...(await file('missing.tsx', 'x')) })).toEqual({ status: 'conflict', current: null });
   expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'missing.tsx', expectedVersion: 1 })).toEqual({ status: 'conflict', current: null });
   expect(await alice.as.mutation(api.files.remove, { organizationId, path: 'b.tsx', expectedVersion: 1 })).toMatchObject({ status: 'conflict', current: { version: 2 } });
+});
+
+test('getMany answers the rows asked for, in order, to members only, and caps the paths per call', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const bob = await identity(t, 'bob@example.com');
+  const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+  await alice.as.mutation(api.files.writeMany, { organizationId: alice.organizationId, files: [
+    { path: 'b.md', text: 'B', hash: sha('B') },
+    { path: 'a.md', text: 'A', hash: sha('A') },
+  ] });
+  const rows = await alice.as.query(api.files.getMany, { organizationId: alice.organizationId, paths: ['a.md', 'missing.md', 'b.md'] });
+  expect(rows.map((row) => [row.path, row.text])).toEqual([['a.md', 'A'], ['b.md', 'B']]);
+  await expect(bob.as.query(api.files.getMany, { organizationId: alice.organizationId, paths: ['a.md'] })).rejects.toThrow('Not a member');
+  await expect(alice.as.query(api.files.getMany, { organizationId: alice.organizationId, paths: Array.from({ length: 65 }, (_, i) => `${i}.md`) })).rejects.toThrow('At most 64');
 });
 
 test('remove creates a tombstone with a bumped version and list includes it', async () => {

@@ -156,6 +156,8 @@ const store = createRoot(() => {
         const sessionToken = await requireNativeSessionToken();
         const status = await mainBridge.call(MAIN_CHANNELS.SYNC_START, { dir, organizationId, sessionToken });
         setSyncStatus(status);
+        // The checkout is in: list once more with every project folder known.
+        setRevision((value) => value + 1);
       } catch (error) {
         console.error('[sync] could not start:', error);
         setSyncStatus({ state: 'error', pending: 0, skipped: [], error: (error as Error).message });
