@@ -524,7 +524,6 @@
 .workspace-block-button { display: grid; place-items: center; width: 23px; height: 25px; border-radius: 4px; color: var(--muted-foreground); cursor: pointer; }
 .workspace-block-button:hover { color: var(--foreground); background: var(--accent); }
 .workspace-block-button[draggable] { cursor: grab; }
-.workspace-block-grip { font-size: 23px; line-height: 20px; }
 .workspace-block-drop { position: fixed; z-index: 60; height: 3px; border-radius: 2px; background: var(--primary); pointer-events: none; }
 
 .workspace-table-toolbar { position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--popover); box-shadow: 0 3px 12px #0002; }

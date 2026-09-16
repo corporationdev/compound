@@ -139,7 +139,7 @@ export function BlockMenu(props: { editor: Editor; hidden?: boolean }) {
                   event.dataTransfer.setDragImage(block()!.element, 0, 0);
                 }
               }}>
-              <span aria-hidden="true" class="workspace-block-grip">⠿</span>
+              <Icon name="grip-vertical-small" class="size-5" />
             </DropdownMenuTrigger>
             <DropdownMenuPortal>
               <DropdownMenuContent class="w-56 max-h-[70vh] overflow-y-auto">

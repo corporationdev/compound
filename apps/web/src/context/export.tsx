@@ -93,10 +93,14 @@ export function ExportProvider(props: { children: JSX.Element }) {
       }
       if (codec !== preferred) {
         config = { ...config, audio: { ...config.audio, codec } };
-        toast(`Audio will be ${codec.toUpperCase()}`, {
-          description: `This machine cannot encode ${preferred.toUpperCase()}; ${codec.toUpperCase()} is used instead.`,
-          duration: 8_000,
-        });
+        // Linux Chromium never has AAC, so on Linux this is the normal case
+        // and not worth a word; elsewhere it means something is missing.
+        if (window.desktop?.platform !== "linux") {
+          toast(`Audio will be ${codec.toUpperCase()}`, {
+            description: `This machine cannot encode ${preferred.toUpperCase()}; ${codec.toUpperCase()} is used instead.`,
+            duration: 8_000,
+          });
+        }
       }
     }
 
