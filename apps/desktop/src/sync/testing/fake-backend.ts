@@ -26,6 +26,7 @@ export class FakeBackend implements SyncBackend {
   fetches = 0;
   batchFetches = 0;
   batchWrites = 0;
+  batchRemoves = 0;
 
   private table(organizationId: string): Map<string, RemoteFile> {
     let table = this.rows.get(organizationId);
@@ -125,6 +126,17 @@ export class FakeBackend implements SyncBackend {
     this.removes++;
     this.notify(organizationId);
     return { status: "ok", version };
+  }
+
+  async removeMany(organizationId: string, paths: Array<{ path: string; expectedVersion: number }>): Promise<WriteOutcome[]> {
+    await this.check();
+    this.batchRemoves++;
+    const results: WriteOutcome[] = [];
+    for (const { path, expectedVersion } of paths) {
+      this.removes--; // counted below by remove(); a batch is not one-at-a-time
+      results.push(await this.remove(organizationId, path, expectedVersion));
+    }
+    return results;
   }
 
   async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {

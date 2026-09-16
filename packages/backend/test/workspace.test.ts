@@ -199,6 +199,24 @@ test('getMany answers the rows asked for, in order, to members only, and caps th
   await expect(alice.as.query(api.files.getMany, { organizationId: alice.organizationId, paths: Array.from({ length: 65 }, (_, i) => `${i}.md`) })).rejects.toThrow('At most 64');
 });
 
+test('removeMany tombstones each path against its version in one call, answering conflicts per path', async () => {
+  const t = setup();
+  const alice = await member(t, 'alice@example.com');
+  const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+  await alice.as.mutation(api.files.writeMany, { organizationId: alice.organizationId, files: [
+    { path: 'p/a.md', text: 'A', hash: sha('A') },
+    { path: 'p/b.md', text: 'B', hash: sha('B') },
+  ] });
+  const results = await alice.as.mutation(api.files.removeMany, { organizationId: alice.organizationId, paths: [
+    { path: 'p/a.md', expectedVersion: 1 },
+    { path: 'p/b.md', expectedVersion: 7 },
+    { path: 'p/none.md', expectedVersion: 1 },
+  ] });
+  expect(results.map((r) => r.status)).toEqual(['ok', 'conflict', 'conflict']);
+  const rows = await alice.as.query(api.files.list, { organizationId: alice.organizationId });
+  expect(rows.map((r) => [r.path, r.deleted, r.version])).toEqual([['p/a.md', true, 2], ['p/b.md', false, 1]]);
+});
+
 test('remove creates a tombstone with a bumped version and list includes it', async () => {
   const t = setup();
   const alice = await member(t, 'alice@example.com');

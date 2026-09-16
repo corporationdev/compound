@@ -155,6 +155,9 @@ export class WorkspaceSync {
   /** Files neither side has seen, waiting to go up together. */
   private readonly fresh = new Set<string>();
   private freshTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Files gone from disk, waiting to be removed from the cloud together. */
+  private readonly gone = new Set<string>();
+  private goneTimer: ReturnType<typeof setTimeout> | undefined;
 
   private unsubscribe: (() => void) | undefined;
   private watcher: TreeWatcher | undefined;
@@ -245,6 +248,59 @@ export class WorkspaceSync {
     await walk(path);
   }
 
+  /**
+   * A file that is gone waits a moment for company, as a fresh one does: a
+   * project deleted here goes as a burst of removals, and they go up in one
+   * call so another machine's snapshot loses the whole folder at once —
+   * its package.json with the rest — never showing it as a plain folder.
+   */
+  private holdGone(path: string): void {
+    this.gone.add(path);
+    if (this.goneTimer) clearTimeout(this.goneTimer);
+    this.goneTimer = setTimeout(() => {
+      this.goneTimer = undefined;
+      const paths = [...this.gone];
+      this.gone.clear();
+      void this.enqueue(() => this.pushGone(paths));
+    }, this.options.freshWindowMs ?? FRESH_WINDOW_MS);
+    this.emitStatus();
+  }
+
+  private async pushGone(paths: string[]): Promise<void> {
+    if (this.stopped) return;
+    const removals: { path: string; expectedVersion: number }[] = [];
+    for (const path of paths) {
+      const known = this.store.get(path);
+      if (!known || known.hash === TOMBSTONE_HASH) continue;
+      // Back on disk meanwhile: not gone after all.
+      if ((await this.readLocal(path)) !== null) { void this.enqueue(() => this.reconcile(path)); continue; }
+      removals.push({ path, expectedVersion: known.version });
+    }
+    while (removals.length) {
+      const batch = removals.splice(0, PUSH_BATCH_FILES);
+      let outcomes;
+      try {
+        outcomes = await this.backend.removeMany(this.organizationId, batch);
+      } catch (error) {
+        for (const removal of batch) this.defer(removal.path, error);
+        return;
+      }
+      this.online(batch[0]!.path);
+      for (const [index, outcome] of outcomes.entries()) {
+        const path = batch[index]!.path;
+        if (outcome.status === "ok") {
+          await this.store.removeBase(path);
+          this.store.set(path, { version: outcome.version, hash: TOMBSTONE_HASH });
+        } else if (outcome.current) {
+          await this.applyRemote(outcome.current);
+        } else {
+          this.store.delete(path);
+          await this.store.removeBase(path);
+        }
+      }
+    }
+  }
+
   /** Sends files neither side has seen, together. Ones the cloud has learned of meanwhile take the usual route. */
   private async pushFresh(paths: string[]): Promise<void> {
     if (this.stopped) return;
@@ -287,6 +343,7 @@ export class WorkspaceSync {
   async stop(): Promise<void> {
     if (this.statusTimer) { clearTimeout(this.statusTimer); this.statusTimer = undefined; }
     if (this.freshTimer) { clearTimeout(this.freshTimer); this.freshTimer = undefined; }
+    if (this.goneTimer) { clearTimeout(this.goneTimer); this.goneTimer = undefined; }
     this.stopped = true;
     // A start still waiting on its first snapshot must not wait forever.
     this.rejectStarted?.(new Error("Sync stopped before it started"));
@@ -313,9 +370,9 @@ export class WorkspaceSync {
     const skipped = [...this.skipped].sort();
     if (this.fatal) return { state: "error", pending: this.pending.size, skipped, error: this.fatal };
     if (!this.initialized) return { state: "starting", pending: 0, skipped };
-    const pending = this.pending.size + this.coalesce.size + this.fresh.size;
+    const pending = this.pending.size + this.coalesce.size + this.fresh.size + this.gone.size;
     if (this.offline) return { state: "offline", pending, skipped };
-    if (this.busy > 0 || this.coalesce.size > 0 || this.fresh.size > 0 || this.snapshotQueued || this.pending.size > 0)
+    if (this.busy > 0 || this.coalesce.size > 0 || this.fresh.size > 0 || this.gone.size > 0 || this.snapshotQueued || this.pending.size > 0)
       return { state: "syncing", pending, skipped };
     return { state: "synced", pending: 0, skipped };
   }
@@ -468,7 +525,11 @@ export class WorkspaceSync {
     let remote: RemoteFile | null;
     const ahead = this.prefetched.get(path);
     this.prefetched.delete(path);
-    if (ahead && ahead.version >= meta.version) {
+    if (meta.deleted) {
+      // A tombstone is all there is to know; no round trip, so a folder's
+      // rows go away here as fast as they came down the snapshot.
+      remote = { ...meta, text: "" };
+    } else if (ahead && ahead.version >= meta.version) {
       remote = ahead;
     } else {
       try {
@@ -587,23 +648,7 @@ export class WorkspaceSync {
 
     if (local === null) {
       if (!known || known.hash === TOMBSTONE_HASH) return;
-      let outcome;
-      try {
-        outcome = await this.backend.remove(this.organizationId, path, known.version);
-      } catch (error) {
-        this.defer(path, error);
-        return;
-      }
-      this.online(path);
-      if (outcome.status === "ok") {
-        await this.store.removeBase(path);
-        this.store.set(path, { version: outcome.version, hash: TOMBSTONE_HASH });
-      } else if (outcome.current) {
-        await this.applyRemote(outcome.current);
-      } else {
-        this.store.delete(path);
-        await this.store.removeBase(path);
-      }
+      this.holdGone(path);
       return;
     }
 

@@ -143,6 +143,25 @@ describe("status", () => {
 });
 
 describe("removals", () => {
+  it("go up together when a folder is deleted, and come down without a round trip per tombstone", async () => {
+    const backend = new FakeBackend();
+    const a = await checkout("a", backend, { freshWindowMs: 30 });
+    const b = await checkout("b", backend, { freshWindowMs: 30 });
+    for (const name of ["package.json", "index.tsx", "README.md"]) await edit(a, `projects/doomed/${name}`, `${name}\n`);
+    await settle(a, b);
+    expect(await exists(b, "projects/doomed/package.json")).toBe(true);
+    const removesBefore = backend.removes;
+    const fetchesBefore = backend.fetches;
+    await rm(join(a.dir, "projects", "doomed"), { recursive: true });
+    for (const name of ["index.tsx", "package.json", "README.md"]) a.noteChange(`projects/doomed/${name}`);
+    await settle(a, b);
+    expect(backend.batchRemoves).toBe(1);
+    expect(backend.removes - removesBefore).toBe(0);
+    expect(backend.fetches - fetchesBefore).toBe(0);
+    expect(await exists(b, "projects/doomed")).toBe(false);
+    expect(backend.snapshot(PROJECT).filter((row) => row.path.startsWith("projects/doomed")).every((row) => row.deleted)).toBe(true);
+  });
+
   it("take the folders a removed file leaves empty with them, and no more", async () => {
     const backend = new FakeBackend();
     const a = await checkout("a", backend);

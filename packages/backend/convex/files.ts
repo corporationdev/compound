@@ -249,6 +249,35 @@ export const remove = mutation({
   },
 });
 
+/**
+ * Tombstones many rows in one transaction, each checked against the version
+ * the caller last agreed on, so a folder deleted on one machine reaches every
+ * other as one snapshot rather than a row at a time. Answers one result per
+ * path, in order.
+ */
+export const removeMany = mutation({
+  args: {
+    organizationId: v.string(),
+    paths: v.array(v.object({ path: v.string(), expectedVersion: v.number() })),
+  },
+  handler: async (ctx, { organizationId, paths }): Promise<WriteResult[]> => {
+    const { user } = await requireMember(ctx, organizationId);
+    if (paths.length > MAX_WRITE_MANY_FILES) throw new ConvexError(`At most ${MAX_WRITE_MANY_FILES} paths per call`);
+    const results: WriteResult[] = [];
+    for (const { path, expectedVersion } of paths) {
+      validatePath(path);
+      const row = await currentRow(ctx, organizationId, path);
+      const conflict = checkVersion(row, expectedVersion);
+      if (conflict) { results.push(conflict); continue; }
+      if (!row) { results.push({ status: 'conflict', current: null }); continue; }
+      if (row.deleted) { results.push({ status: 'ok', version: row.version }); continue; }
+      const version = await upsert(ctx, organizationId, row, { path, text: '', hash: EMPTY_SHA256, deleted: true }, user._id);
+      results.push({ status: 'ok', version });
+    }
+    return results;
+  },
+});
+
 /** Force-upserts every file (no version check), bumping versions. Chunked by the caller. */
 export const writeMany = mutation({
   args: {

@@ -80,6 +80,9 @@ export interface SyncBackend {
   /** Turns the row at `path` into a tombstone if its version is `expectedVersion`. */
   remove(organizationId: string, path: string, expectedVersion: number): Promise<WriteOutcome>;
 
+  /** Tombstones many rows in one call, each against its version; one outcome per path, in order. */
+  removeMany(organizationId: string, paths: Array<{ path: string; expectedVersion: number }>): Promise<WriteOutcome[]>;
+
   /** Force-writes many files at once, no version check. Used to publish a local folder. */
   writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void>;
 }

@@ -60,6 +60,10 @@ export class ConvexSyncBackend implements SyncBackend {
     return this.client.mutation(api.files.remove, { organizationId, path, expectedVersion }) as Promise<WriteOutcome>;
   }
 
+  removeMany(organizationId: string, paths: Array<{ path: string; expectedVersion: number }>): Promise<WriteOutcome[]> {
+    return this.client.mutation(api.files.removeMany, { organizationId, paths }) as Promise<WriteOutcome[]>;
+  }
+
   async writeMany(organizationId: string, files: Array<{ path: string; text: string; hash: string }>): Promise<void> {
     await this.client.mutation(api.files.writeMany, { organizationId, files });
   }
