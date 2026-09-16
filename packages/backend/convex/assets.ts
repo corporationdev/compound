@@ -68,6 +68,7 @@ export const list = query({
       .withIndex('by_org_sample', (q) => q.eq('organizationId', organizationId))
       .collect();
     return assets.map((asset) => ({
+      assetId: asset._id,
       sampleId: asset.sampleId,
       name: asset.name,
       mimeType: asset.mimeType,

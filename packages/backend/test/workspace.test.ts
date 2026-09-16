@@ -270,7 +270,7 @@ test('assets.list shows every asset of the organization to members, and proxies 
   const id = assetId as Id<'assets'>;
   await expect(bob.as.query(api.assets.list, { organizationId: alice.organizationId })).rejects.toThrow('Not a member');
   expect(await alice.as.query(api.assets.list, { organizationId: alice.organizationId })).toEqual([
-    { sampleId: args.sampleId, name: 'clip.mp4', mimeType: 'video/mp4', size: 1234, originalState: 'uploading', proxyState: null, proxySize: null, updatedAt: expect.any(Number) },
+    { assetId: id, sampleId: args.sampleId, name: 'clip.mp4', mimeType: 'video/mp4', size: 1234, originalState: 'uploading', proxyState: null, proxySize: null, updatedAt: expect.any(Number) },
   ]);
 
   await expect(bob.as.mutation(api.assets.registerProxy, { assetId: id, size: 100 })).rejects.toThrow('Not a member');
