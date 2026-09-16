@@ -49,7 +49,7 @@ function backend(handlers: Handlers) {
   }) as typeof fetch;
   return calls;
 }
-const register = { projectId: 'project-1', sampleId: asset.sampleId, size: asset.size, mimeType: asset.mimeType, name: asset.name };
+const register = { organizationId: 'org-1', sampleId: asset.sampleId, size: asset.size, mimeType: asset.mimeType, name: asset.name };
 
 test('asset-upload-url signs a PUT at the asset key bound to declared type and size', async () => {
   const calls = backend({
@@ -123,7 +123,7 @@ test('asset-upload-finish is idempotent for a ready asset and refuses non-member
 
 test('asset-download-url signs a GET for a ready original and 404s otherwise', async () => {
   backend({ 'assets:get': { ...asset, originalState: 'ready', originalKey: KEY } });
-  const response = await worker.fetch(request('asset-download-url', { projectId: 'project-1', sampleId: asset.sampleId }), env);
+  const response = await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env);
   expect(response.status).toBe(200);
   const data = (await response.json()) as { url: string; size: number; mimeType: string; name: string };
   expect(data).toMatchObject({ size: asset.size, mimeType: asset.mimeType, name: asset.name });
@@ -132,11 +132,11 @@ test('asset-download-url signs a GET for a ready original and 404s otherwise', a
   expect(signed.searchParams.get('X-Amz-Expires')).toBe('600');
 
   backend({ 'assets:get': asset });
-  expect((await worker.fetch(request('asset-download-url', { projectId: 'project-1', sampleId: asset.sampleId }), env)).status).toBe(404);
+  expect((await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env)).status).toBe(404);
   backend({ 'assets:get': null });
-  expect((await worker.fetch(request('asset-download-url', { projectId: 'project-1', sampleId: asset.sampleId }), env)).status).toBe(404);
+  expect((await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env)).status).toBe(404);
   backend({ 'assets:get': NOT_MEMBER });
-  expect((await worker.fetch(request('asset-download-url', { projectId: 'project-1', sampleId: asset.sampleId }), env)).status).toBe(403);
-  backend({ 'assets:get': { status: 'error', errorMessage: 'Project not found', errorData: 'Project not found' } });
-  expect((await worker.fetch(request('asset-download-url', { projectId: 'project-1', sampleId: asset.sampleId }), env)).status).toBe(404);
+  expect((await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env)).status).toBe(403);
+  backend({ 'assets:get': { status: 'error', errorMessage: 'Asset not found', errorData: 'Asset not found' } });
+  expect((await worker.fetch(request('asset-download-url', { organizationId: 'org-1', sampleId: asset.sampleId }), env)).status).toBe(404);
 });
