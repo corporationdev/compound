@@ -374,11 +374,11 @@ export class ProjectAssets {
       const message = error instanceof Error ? error.message : String(error);
       transfer.attempts++;
       transfer.error = message;
+      console.warn(`[assets] ${transfer.kind} of ${transfer.name} (${transfer.variant}) failed on attempt ${transfer.attempts}: ${message}`);
       const delays = this.options.retryDelays ?? RETRY_DELAYS_MS;
       const delay = delays[transfer.attempts - 1];
       if (delay === undefined) {
         transfer.phase = "failed";
-        console.warn(`[assets] ${transfer.kind} of ${transfer.name} failed: ${message}`);
         // Stays listed as failed for the retry button; a later fetch or retry makes a fresh transfer.
         transfer.fail(error instanceof Error ? error : new Error(message));
       } else {

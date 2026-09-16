@@ -17,6 +17,15 @@ vi.mock("electron", () => ({
 }));
 
 const { extensionOf, mediaEssence, originalCachePath, uploadAssetOriginal, fetchAssetOriginal, validSampleId } = await import("./assets-cloud");
+const { MEDIA_OPERATIONS } = await import("./cloud");
+
+describe("media operations", () => {
+  it("lets every asset operation through to the server", () => {
+    for (const operation of ["asset-upload-url", "asset-upload-finish", "asset-download-url", "asset-proxy-upload-url", "asset-proxy-upload-finish"]) {
+      expect(MEDIA_OPERATIONS).toContain(operation);
+    }
+  });
+});
 
 describe("originals cache paths", () => {
   it("keeps the cloud name's extension and names the file by its sample id", () => {

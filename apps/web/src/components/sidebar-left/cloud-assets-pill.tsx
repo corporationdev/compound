@@ -16,6 +16,7 @@ export function describeTransfer(transfer: AssetTransfer): string {
   const what = transfer.variant === "proxy" ? "proxy" : "original";
   if (transfer.phase === "waiting") return `Waiting for another machine to finish uploading the ${what}`;
   if (transfer.phase === "failed") return `${transfer.kind === "upload" ? "Upload" : "Download"} of the ${what} failed: ${transfer.error ?? "unknown error"}`;
+  if (transfer.phase === "queued" && transfer.error) return `Retrying the ${transfer.kind} of the ${what} (attempt ${transfer.attempts} failed: ${transfer.error})`;
   if (transfer.phase === "queued") return `${transfer.kind === "upload" ? "Upload" : "Download"} of the ${what} queued`;
   return `${transfer.kind === "upload" ? "Uploading" : "Downloading"} the ${what}: ${percent(transfer)}%`;
 }
@@ -100,9 +101,11 @@ export function CloudAssetsPill() {
                       </button>
                     </Show>
                   </div>
-                  <Show when={transfer.phase === "active" || transfer.phase === "queued"} fallback={
+                  <Show when={transfer.phase === "active" || (transfer.phase === "queued" && !transfer.error)} fallback={
                     <span class={cx("truncate", transfer.phase === "failed" ? "text-destructive" : "text-muted-foreground")}>
-                      {transfer.phase === "failed" ? transfer.error ?? "Failed" : "Waiting for another machine"}
+                      {transfer.phase === "failed" ? transfer.error ?? "Failed"
+                        : transfer.phase === "queued" ? `Retrying: ${transfer.error}`
+                        : "Waiting for another machine"}
                     </span>
                   }>
                     <div class="relative h-1 w-full overflow-hidden rounded-full bg-foreground/15">
