@@ -511,10 +511,13 @@ export class AssetTransferManager {
     this.projects.get(dir)?.setLocal(local, eagerOriginals);
   }
 
-  detach(dir: string): void {
-    this.projects.get(dir)?.stop();
-    this.projects.delete(dir);
-  }
+  /**
+   * The renderer let go of the project (closed it, or is reloading). The
+   * transfers carry on: an upload a third of the way through is not undone
+   * by a reload, and the next attach picks the project up where it is.
+   * Only a change of organization or the app's end stops them.
+   */
+  detach(_dir: string): void {}
 
   retry(dir: string, sampleId: string): void {
     this.projects.get(dir)?.retry(sampleId);
@@ -531,6 +534,9 @@ export class AssetTransferManager {
   }
 
   stopAll(): void {
-    for (const dir of [...this.projects.keys()]) this.detach(dir);
+    for (const [dir, project] of [...this.projects]) {
+      project.stop();
+      this.projects.delete(dir);
+    }
   }
 }

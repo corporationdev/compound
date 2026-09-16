@@ -745,7 +745,7 @@ export function resolveVideoDecoder(world: World, entity: Entity): VideoDecoderI
 	// One that failed to read bytes a handle no longer in use is built again:
 	// the library resolved the source since (a cloud asset whose bytes arrived).
 	const existing = entity.get(VideoDecoderHandle);
-	const stale = existing instanceof VideoBuffer && existing.errored && existing.asset.handle !== existing.builtWith;
+	const stale = existing instanceof VideoBuffer && existing.errored && getAsset(world, assetId)?.handle !== existing.builtWith;
 	if (existing && existing.asset.id === assetId && !stale) {
 		if (existing instanceof SequenceDecoder) {
 			existing.hasCache = hasCache;
