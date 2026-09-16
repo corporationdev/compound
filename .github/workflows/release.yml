@@ -98,6 +98,10 @@ jobs:
       - name: Verify signature, notarization, architectures, and bundled CLI
         run: bun scripts/release-artifacts.ts
       - name: Save verified release artifacts
+        # A backup copy only: the installers below go to the GitHub release and
+        # R2. Account artifact storage is small and fills after a few builds, so
+        # a full quota must not fail a signed, notarized release.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: Compound-mac-universal
@@ -105,6 +109,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
+          retention-days: 3
       - name: Attach installers to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
