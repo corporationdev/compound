@@ -731,8 +731,8 @@ async function ensurePackage(dir: string, name: string, displayName: string, ent
  * written once, so opening an up-to-date project writes nothing. Types come
  * from @compound/jsx (jsxImportSource), installed by the project.
  */
-export async function scaffold(dir: string, displayName = basename(dir)): Promise<void> {
-  const entry = await ensureRecord(dir, displayName);
+export async function scaffold(dir: string, displayName = basename(dir), name = basename(dir)): Promise<void> {
+  const entry = await ensureRecord(dir, displayName, name);
   // JavaScript projects are left alone.
   if (!entry) return;
   await writeIfMissing(dir, "tsconfig.json", TSCONFIG);
@@ -751,14 +751,14 @@ export async function scaffold(dir: string, displayName = basename(dir)): Promis
  * the folder by. Nothing a folder already has is touched. Returns the entry,
  * or undefined for a JavaScript project, which is left entirely alone.
  */
-async function ensureRecord(dir: string, displayName = basename(dir)): Promise<string | undefined> {
+async function ensureRecord(dir: string, displayName = basename(dir), name = basename(dir)): Promise<string | undefined> {
   let entry = await findEntry(dir);
   if (entry && !/\.tsx?$/.test(entry)) return undefined;
   if (!entry) {
     await writeIfMissing(dir, "index.tsx", STARTER);
     entry = "index.tsx";
   }
-  await ensurePackage(dir, basename(dir), displayName, entry);
+  await ensurePackage(dir, name, displayName, entry);
   return entry;
 }
 
@@ -797,9 +797,20 @@ export async function initProject(window: BrowserWindow | null, dir: string): Pr
  * inside it is the project.
  */
 export async function createProject(root: string, displayName: string): Promise<ProjectInfo> {
-  const dir = join(root, await freeFolder(root, folderName(displayName)));
-  await mkdir(dir, { recursive: true });
-  await scaffold(dir, displayName);
+  const name = await freeFolder(root, folderName(displayName));
+  const dir = join(root, name);
+  // Made whole out of sight, then renamed into place: the tree, the
+  // dashboard and sync see a finished project appear, never a folder that
+  // is not one yet. The temp name is one the watchers ignore.
+  const staging = join(root, `${TEMP_PREFIX}${name}.${process.pid}-${Date.now()}`);
+  await mkdir(staging, { recursive: true });
+  try {
+    await scaffold(staging, displayName, name);
+    await rename(staging, dir);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
   const project = await describe(dir);
   if (!project) throw new Error("Failed to scaffold the project.");
   return project;

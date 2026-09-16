@@ -25,7 +25,7 @@
 // them as changes and recompile. They come back through the watcher here too,
 // where the text equals its base and nothing happens.
 
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { writeFileAtomic } from "../atomic";
@@ -60,12 +60,16 @@ export type ConflictNotice = { path: string; keptCopy: string };
 export const CONFLICTS_DIR = ".compound/conflicts";
 /** Paths fetched per round trip on a checkout; matches the backend's cap. */
 const PREFETCH_BATCH = 64;
+/** How long after a folder appears its contents are looked over for files the watcher missed. */
+const SWEEP_DELAY_MS = 250;
 const CONFLICT_SUFFIX = ".conflict";
 
 export type WorkspaceSyncOptions = {
   dir: string;
   organizationId: string;
   backend: SyncBackend;
+  /** For tests: how long after a folder appears it is swept for files. */
+  sweepDelayMs?: number;
   /** Watch the folder for changes; off in tests that drive `noteChange` themselves. */
   watch?: boolean;
   onStatus?: (status: SyncStatus) => void;
@@ -190,6 +194,7 @@ export class WorkspaceSync {
       this.early.add(path);
       return;
     }
+    void this.sweepFolder(path);
     const timer = this.coalesce.get(path);
     if (timer) clearTimeout(timer);
     this.coalesce.set(path, setTimeout(() => {
@@ -197,6 +202,30 @@ export class WorkspaceSync {
       void this.enqueue(() => this.reconcile(path));
     }, this.options.coalesceMs ?? 100));
     this.emitStatus();
+  }
+
+  /**
+   * A folder that appeared (made, or renamed into place) may already hold
+   * files the watcher never saw: they were written in the moment between the
+   * folder's event and the watcher attaching to it — how a project is
+   * scaffolded — or came with a folder renamed in. A little after, every
+   * file under it is noted as changed; ones the store knows cost nothing.
+   */
+  private async sweepFolder(path: string): Promise<void> {
+    const info = await stat(this.absolute(path)).catch(() => null);
+    if (!info?.isDirectory()) return;
+    await new Promise((resolve) => setTimeout(resolve, this.options.sweepDelayMs ?? SWEEP_DELAY_MS));
+    if (this.stopped) return;
+    const walk = async (parent: string): Promise<void> => {
+      const entries = await readdir(this.absolute(parent), { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!shouldDescend(entry.name)) continue;
+        const child = `${parent}/${entry.name}`;
+        if (entry.isDirectory()) await walk(child);
+        else if (entry.isFile() && isSyncablePath(child)) this.noteChange(child);
+      }
+    };
+    await walk(path);
   }
 
   /** Resolves once nothing is queued or collecting. Failed pushes waiting to retry do not count. */
@@ -294,11 +323,23 @@ export class WorkspaceSync {
       this.latestMeta.clear();
       for (const meta of snapshot) this.latestMeta.set(meta.path, meta);
       this.roots = projectRootsOf(snapshot);
-      await this.prefetch(snapshot);
-      for (const meta of snapshot) await this.applyRemote(meta);
-      this.prefetched.clear();
+      try {
+        await this.prefetch(snapshot);
+        for (const meta of snapshot) await this.applyRemote(meta);
+      } catch (error) {
+        // One row that cannot be applied must not stop the rest, and never
+        // the start: an engine that never initializes parks every local
+        // change for good. The row is tried again with the next snapshot.
+        console.warn(`[sync] ${this.organizationId}: applying the cloud's files: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        this.prefetched.clear();
+      }
       if (this.initialized) return;
-      await this.scanLocal();
+      try {
+        await this.scanLocal();
+      } catch (error) {
+        console.warn(`[sync] ${this.organizationId}: scanning the folder: ${error instanceof Error ? error.message : String(error)}`);
+      }
       this.initialized = true;
       for (const path of this.early) this.noteChange(path);
       this.early.clear();

@@ -3,7 +3,7 @@
 // happens when the connection drops.
 
 import { tmpdir } from "node:os";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -87,6 +87,29 @@ describe("checkout", () => {
     expect([...again.projectRoots]).toEqual([]);
     await started;
     expect([...again.projectRoots]).toEqual(["projects/p0"]);
+  });
+});
+
+describe("folders that appear with files already in them", () => {
+  it("pushes files written the instant their folder was made, as a scaffold does, and files that came with a folder renamed in", async () => {
+    const backend = new FakeBackend();
+    const a = await checkout("a", backend, { sweepDelayMs: 30 });
+    // What the watcher reports for a folder that came into being: its own path, before it could attach to it.
+    await mkdir(join(a.dir, "projects", "fresh"), { recursive: true });
+    await writeFile(join(a.dir, "projects", "fresh", "package.json"), "{}\n");
+    await writeFile(join(a.dir, "projects", "fresh", "index.tsx"), "x\n");
+    a.noteChange("projects/fresh");
+    await settle(a);
+    expect(backend.text(PROJECT, "projects/fresh/package.json")).toBe("{}\n");
+    expect(backend.text(PROJECT, "projects/fresh/index.tsx")).toBe("x\n");
+
+    const staging = join(a.dir, ".dstmp-moved.1-1");
+    await mkdir(join(staging, "deep"), { recursive: true });
+    await writeFile(join(staging, "deep", "note.md"), "moved\n");
+    await rename(staging, join(a.dir, "projects", "moved"));
+    a.noteChange("projects/moved");
+    await settle(a);
+    expect(backend.text(PROJECT, "projects/moved/deep/note.md")).toBe("moved\n");
   });
 });
 
