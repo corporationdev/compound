@@ -45,12 +45,14 @@ const fakeCloud: AssetCloud = {
     calls.push(`up:original:${request.sampleId}`);
     if (failUploads > 0) { failUploads--; throw new Error("network"); }
     onProgress(10, 10);
-    publish(cloud.map((asset) => asset.sampleId === request.sampleId ? { ...asset, originalState: "ready" } : asset).concat(cloud.some((asset) => asset.sampleId === request.sampleId) ? [] : [meta(request.sampleId, { originalState: "ready", name: request.name, mimeType: request.mimeType })]));
+    const known = cloud.some((asset) => asset.sampleId === request.sampleId);
+    const updated: CloudAssetMeta[] = cloud.map((asset) => asset.sampleId === request.sampleId ? { ...asset, originalState: "ready" as const } : asset);
+    publish(known ? updated : [...updated, meta(request.sampleId, { originalState: "ready", name: request.name, mimeType: request.mimeType })]);
     return { assetId: `id-${request.sampleId}`, state: "ready" };
   },
   async uploadProxy(request) {
     calls.push(`up:proxy:${request.sampleId}`);
-    publish(cloud.map((asset) => asset.sampleId === request.sampleId ? { ...asset, proxyState: "ready", proxySize: 3 } : asset));
+    publish(cloud.map((asset) => asset.sampleId === request.sampleId ? { ...asset, proxyState: "ready" as const, proxySize: 3 } : asset));
   },
   async download(request, onProgress) {
     calls.push(`down:${request.variant}:${request.sampleId}`);
