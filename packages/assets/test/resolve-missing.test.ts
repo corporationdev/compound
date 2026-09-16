@@ -72,10 +72,12 @@ test('a resolver installed after the load can be asked to attach the assets that
 	const asked: string[] = [];
 	library.setMissingResolver(async r => { asked.push(r.id); return { getFile: async () => cloud }; });
 	await library.resolveMissingSources();
-	// The same asset object, with its handle swapped; URL assets are not asked about.
+	// A fresh asset object with the new handle; URL assets are not asked about.
 	expect(asked).toEqual([record.id]);
-	expect(library.get('song.m4a')).toBe(before);
-	expect(await library.file(before)).toBe(cloud);
+	const after = library.get('song.m4a')!;
+	expect(after).not.toBe(before);
+	expect(after.source).toBe(before.source);
+	expect(await library.file(after)).toBe(cloud);
 	expect(library.hasLocalBytes(record.id)).toBe(false);
 	await library.dispose();
 });

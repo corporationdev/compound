@@ -158,8 +158,9 @@ export class AssetLibrary {
 	/**
 	 * Asks the resolver for every asset whose bytes are not here and whose
 	 * source is a file: for a resolver installed after a load, which left
-	 * those attached to their absent sources. The handle is swapped on the
-	 * asset in place, as a library edit is, so what holds the asset sees it.
+	 * those attached to their absent sources. Each gets a fresh object with
+	 * the new handle, so a list keyed on identity re-renders it and a decoder
+	 * built on the old handle is told apart from one on the new.
 	 */
 	public async resolveMissingSources(): Promise<void> {
 		if (!this.resolveMissing || this.disposed) return;
@@ -169,7 +170,7 @@ export class AssetLibrary {
 			if (this.local.has(id) || isUrlSource(entry.source)) continue;
 			const handle = await this.resolveMissing(toRecord(entry) as AssetRecord);
 			if (!handle || this.disposed) continue;
-			entry.handle = handle;
+			this.map.set(id, { ...entry, handle });
 			changed = true;
 		}
 		if (changed) this.publish();
