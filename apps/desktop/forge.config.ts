@@ -63,7 +63,8 @@ const config: ForgeConfig = {
     // Linux zips are pull-request builds for the ThinkPad; macOS zips ship beside the DMG.
     new MakerZIP({}, ['darwin', 'linux']),
     new MakerDMG((arch) => ({
-      name: `${fileSlug}-mac-${arch}`,
+      // hdiutil caps a volume name at 27 characters, so a PR build drops the "mac".
+      name: appName === 'Compound' ? `Compound-mac-${arch}` : `${fileSlug}-${arch}`,
       icon: './assets/icon.icns',
       // Dark, on-brand window; @2x sibling is picked up automatically for retina.
       background: './assets/dmg-background.png',
