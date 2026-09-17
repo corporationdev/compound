@@ -69,7 +69,7 @@ test('an issue always maps to the same thread id', () => {
 });
 
 test('the first message names the skill and carries the issue', () => {
-  const text = firstMessage({ number: 4, title: 'Add a line', body: 'Details here.', labels: [] }, 'issue/4-add-a-line', 'main');
+  const text = firstMessage({ number: 4, title: 'Add a line', body: 'Details here.', labels: [], authorAssociation: 'MEMBER', author: 'isaacdyor' }, 'issue/4-add-a-line', 'main');
   expect(text.split('\n')[0]).toContain('issue-worker skill');
   expect(text).toContain('# Add a line');
   expect(text).toContain('Details here.');
