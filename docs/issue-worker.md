@@ -35,7 +35,7 @@ Then it asks for the **Prepare PR** workflow with a label (`bun run pr prepare <
 --platforms linux`), which deploys the PR's preview stage on request and
 builds a Linux installer against it. It launches that installer with a
 debugging port (`bun run pr app`), records a walkthrough with agent-browser,
-and attaches the recording to the PR (`bun run pr evidence`). Finally it asks
+and attaches the recording to the PR's draft release (`bun run pr evidence`), next to the installers. Finally it asks
 for the macOS installer so a person can try the build, and moves the issue to
 `in-review`. A person merges. Nothing is deployed on push; previews exist only
 when asked for, and Teardown Preview removes them when the PR closes.

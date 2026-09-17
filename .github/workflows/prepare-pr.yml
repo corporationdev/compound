@@ -25,7 +25,9 @@ on:
         options: [linux, mac, both, none]
         default: linux
 permissions:
-  contents: read
+  # Installers and evidence go on a draft release named after the PR: GitHub's
+  # artifact storage quota is shared across the organization and fills up.
+  contents: write
   pull-requests: write
 concurrency:
   group: prepare-pr-${{ github.event.pull_request.number || inputs.pr }}
@@ -71,6 +73,8 @@ jobs:
       cancel-in-progress: false
     outputs:
       stage: ${{ steps.stage.outputs.stage }}
+      runtime_config: ${{ steps.runtime.outputs.runtime_config }}
+      web_env: ${{ steps.runtime.outputs.web_env }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,16 +93,22 @@ jobs:
           op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
       - name: Deploy Convex preview, Alchemy, and curated catalog
         run: bun run deploy --stage "$STAGE"
-      - name: Save the stage's public client configuration for the desktop builds
+      - name: Hand the stage's public client configuration to the desktop builds
+        id: runtime
+        # Public URLs only; passed as job outputs so no artifact storage is used.
         run: |
-          mkdir -p .generated/runtime
-          cp apps/desktop/runtime-config.json .generated/runtime/runtime-config.json
-          cp apps/web/.env .generated/runtime/web.env
-      - uses: actions/upload-artifact@v4
-        with:
-          name: runtime-config
-          path: .generated/runtime/
-          if-no-files-found: error
+          echo "runtime_config=$(base64 -w0 apps/desktop/runtime-config.json)" >> "$GITHUB_OUTPUT"
+          echo "web_env=$(base64 -w0 apps/web/.env)" >> "$GITHUB_OUTPUT"
+      - name: Ensure the pull request's draft release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.resolve.outputs.number }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+        run: |
+          TAG="pr-$PR"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$HEAD_SHA" --title "PR #$PR builds and evidence" --notes "Installers built against the pull request's preview stage, and verification recordings. A draft on purpose: never published; removed when the pull request closes."
+          fi
       - name: Report the preview on the pull request
         uses: actions/github-script@v7
         env:
@@ -130,12 +140,13 @@ jobs:
           ref: ${{ needs.resolve.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@v4
-        with:
-          name: runtime-config
-          path: .generated/runtime/
       - name: Point the desktop at the preview stage
-        run: cp .generated/runtime/runtime-config.json apps/desktop/runtime-config.json && cp .generated/runtime/web.env apps/web/.env
+        env:
+          RUNTIME_CONFIG: ${{ needs.deploy.outputs.runtime_config }}
+          WEB_ENV: ${{ needs.deploy.outputs.web_env }}
+        run: |
+          echo "$RUNTIME_CONFIG" | base64 -d > apps/desktop/runtime-config.json
+          echo "$WEB_ENV" | base64 -d > apps/web/.env
       - name: Stage chat runtime
         run: bun run --cwd apps/desktop stage:chat
       - name: Compile desktop
@@ -149,13 +160,13 @@ jobs:
       - name: Verify the installer's stage
         env:
           EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
         run: bun scripts/pr-artifact-check.ts linux
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Compound-linux-x64
-          path: .generated/pr-build/
-          if-no-files-found: error
-          compression-level: 0
+      - name: Attach the installer to the pull request's draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.resolve.outputs.number }}
+        run: gh release upload "pr-$PR" .generated/pr-build/* --repo "$GITHUB_REPOSITORY" --clobber
   build-mac:
     needs: [resolve, deploy]
     if: needs.resolve.outputs.platforms == 'mac' || needs.resolve.outputs.platforms == 'both'
@@ -169,12 +180,13 @@ jobs:
           ref: ${{ needs.resolve.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@v4
-        with:
-          name: runtime-config
-          path: .generated/runtime/
       - name: Point the desktop at the preview stage
-        run: cp .generated/runtime/runtime-config.json apps/desktop/runtime-config.json && cp .generated/runtime/web.env apps/web/.env
+        env:
+          RUNTIME_CONFIG: ${{ needs.deploy.outputs.runtime_config }}
+          WEB_ENV: ${{ needs.deploy.outputs.web_env }}
+        run: |
+          echo "$RUNTIME_CONFIG" | base64 -d > apps/desktop/runtime-config.json
+          echo "$WEB_ENV" | base64 -d > apps/web/.env
       - name: Load Apple release credentials
         uses: 1password/load-secrets-action@v3
         with:
@@ -204,13 +216,13 @@ jobs:
       - name: Verify signature, notarization, and the installer's stage
         env:
           EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
         run: bun scripts/pr-artifact-check.ts mac
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Compound-mac-universal
-          path: .generated/pr-build/
-          if-no-files-found: error
-          compression-level: 0
+      - name: Attach the installers to the pull request's draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.resolve.outputs.number }}
+        run: gh release upload "pr-$PR" .generated/pr-build/* --repo "$GITHUB_REPOSITORY" --clobber
       - name: Clean up signing credentials
         if: always()
         run: bun scripts/release-signing-cleanup.ts
@@ -231,14 +243,16 @@ jobs:
           script: |
             const marker = '<!-- compound-pr-builds -->';
             const run = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({ ...context.repo, run_id: Number(process.env.GITHUB_RUN_ID) });
-            const link = (name) => { const a = data.artifacts.find(x => x.name === name); return a ? `[${name}](${run}/artifacts/${a.id})` : null; };
-            const rows = [
-              ['Linux x64 (zip)', process.env.LINUX, link('Compound-linux-x64')],
-              ['macOS universal (dmg, zip)', process.env.MAC, link('Compound-mac-universal')],
-            ].filter(([, result]) => result !== 'skipped').map(([label, result, url]) => `| ${label} | ${result} | ${url ?? ''} |`);
-            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\`. Sign in with any email and the code \`000000\`.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app <number> --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
             const number = Number(process.env.PR);
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const release = releases.find(r => r.tag_name === `pr-${number}`);
+            const assets = release?.assets ?? [];
+            const links = (test) => assets.filter(a => test(a.name)).map(a => `[${a.name}](${a.browser_download_url})`).join(', ');
+            const rows = [
+              ['Linux x64 (zip)', process.env.LINUX, links(n => n.includes('linux'))],
+              ['macOS universal (dmg, zip)', process.env.MAC, links(n => n.includes('mac') && !n.includes('manifest') && !n.includes('checksums'))],
+            ].filter(([, result]) => result !== 'skipped').map(([label, result, urls]) => `| ${label} | ${result} | ${urls} |`);
+            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\`. Sign in with any email and the code \`000000\`. Files are on the draft release \`pr-${number}\`${release ? ` ([open](${release.html_url}))` : ''}.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
             const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
             if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });

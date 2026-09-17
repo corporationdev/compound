@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { adoptDesktopSession } from './desktop-session.mjs';
@@ -16,9 +16,9 @@ import { adoptDesktopSession } from './desktop-session.mjs';
 //   bun run pr request-review <number>            ask CodeRabbit for another pass
 //   bun run pr wait-checks <number>               block until every check has finished
 //   bun run pr prepare <number> --platforms linux|mac|both|none [--wait]
-//   bun run pr app <number> --platform linux|mac  download the installer, launch it with a debugging port
+//   bun run pr app <number> --platform linux|mac  fetch the installer from the PR's draft release, launch it with a debugging port
 //   bun run pr app-stop <number>
-//   bun run pr evidence <number> <file>... [--body "..."]   attach files to the PR's evidence release and comment
+//   bun run pr evidence <number> <file>... [--body "..."]   attach files to the PR's draft release and comment
 export const REPO = process.env.COMPOUND_REPO ?? 'corporationdev/compound';
 const WORKFLOW_NAME = 'Prepare PR';
 const PREPARE_LABELS = ['linux', 'mac', 'both', 'none'] as const;
@@ -102,20 +102,32 @@ export async function prepare(number: number, platforms: string, wait: boolean) 
 }
 /** The port the launched installer listens on for CDP: stable per PR, clear of the sandbox blocks. */
 export const appPort = (number: number) => 41000 + (number % 1000);
+/** The PR's draft release holds its installers and evidence; tag `pr-<number>`. */
+const releaseTag = (number: number) => `pr-${number}`;
+type Asset = { name: string; url: string; size: number };
+function releaseAssets(number: number): Asset[] {
+  const result = spawnSync('gh', ['release', 'view', releaseTag(number), '-R', REPO, '--json', 'assets', '--jq', '.assets'], { encoding: 'utf8' });
+  return result.status === 0 ? JSON.parse(result.stdout) : [];
+}
 export async function app(number: number, platform: string) {
   const s = await status(number);
-  const artifact = platform === 'mac' ? 'Compound-mac-universal' : 'Compound-linux-x64';
-  const run = s.prepareRuns.find((r: { conclusion: string }) => r.conclusion === 'success');
-  if (!run) throw new Error(`No successful Prepare PR run for ${s.head.sha.slice(0, 7)}; run \`bun run pr prepare ${number} --platforms ${platform}\``);
+  const assets = releaseAssets(number);
+  const manifestAsset = assets.find((a) => a.name === `manifest-${platform}.json`);
+  if (!manifestAsset) throw new Error(`No ${platform} installer on release ${releaseTag(number)}; run \`bun run pr prepare ${number} --platforms ${platform}\``);
   const dir = join(APPS, String(number), platform);
-  const stamp = join(dir, 'run-id');
-  if (!existsSync(stamp) || readFileSync(stamp, 'utf8').trim() !== String(run.databaseId)) {
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dir, { recursive: true });
-    gh(['run', 'download', String(run.databaseId), '-R', REPO, '-n', artifact, '-D', dir]);
-    for (const file of readdirSync(dir)) if (file.endsWith('.zip') && !(platform === 'mac' && file.includes('.dmg')))
-      spawnSync(platform === 'mac' ? 'ditto' : 'unzip', platform === 'mac' ? ['-x', '-k', join(dir, file), join(dir, 'app')] : ['-q', '-o', join(dir, file), '-d', join(dir, 'app')], { stdio: 'inherit' });
-    writeFileSync(stamp, String(run.databaseId));
+  mkdirSync(dir, { recursive: true });
+  gh(['release', 'download', releaseTag(number), '-R', REPO, '-p', `manifest-${platform}.json`, '-D', dir, '--clobber']);
+  const manifest = JSON.parse(readFileSync(join(dir, `manifest-${platform}.json`), 'utf8')) as { headSha: string | null; stage: string; files: { name: string }[] };
+  if (manifest.headSha && manifest.headSha !== s.head.sha)
+    console.error(`warning: the ${platform} installer was built from ${manifest.headSha.slice(0, 7)}, the PR head is ${s.head.sha.slice(0, 7)}; run \`bun run pr prepare ${number} --platforms ${platform}\` for a current one`);
+  const stamp = join(dir, 'installed-sha');
+  if (!existsSync(stamp) || readFileSync(stamp, 'utf8').trim() !== String(manifest.headSha)) {
+    rmSync(join(dir, 'app'), { recursive: true, force: true });
+    const zip = manifest.files.map((f) => f.name).find((n) => n.endsWith('.zip'));
+    if (!zip) throw new Error(`No zip on release ${releaseTag(number)} for ${platform}`);
+    gh(['release', 'download', releaseTag(number), '-R', REPO, '-p', zip, '-D', dir, '--clobber']);
+    spawnSync(platform === 'mac' ? 'ditto' : 'unzip', platform === 'mac' ? ['-x', '-k', join(dir, zip), join(dir, 'app')] : ['-q', '-o', join(dir, zip), '-d', join(dir, 'app')], { stdio: 'inherit' });
+    writeFileSync(stamp, String(manifest.headSha));
   }
   const binary = platform === 'mac'
     ? [...new Bun.Glob('**/Compound.app/Contents/MacOS/Compound').scanSync(join(dir, 'app'))].map((p) => join(dir, 'app', p))[0]
@@ -130,7 +142,7 @@ export async function app(number: number, platform: string) {
   writeFileSync(pidFile, String(child.pid));
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
-    try { const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as { url: string }[]; if (pages.length) return { pid: child.pid, cdpPort: port, cdpUrl: `http://127.0.0.1:${port}`, binary, run: run.url, headSha: s.head.sha, pages: pages.map((p) => p.url), display: adopted }; } catch { /* not up yet */ }
+    try { const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as { url: string }[]; if (pages.length) return { pid: child.pid, cdpPort: port, cdpUrl: `http://127.0.0.1:${port}`, binary, stage: manifest.stage, builtFrom: manifest.headSha, headSha: s.head.sha, pages: pages.map((p) => p.url), display: adopted }; } catch { /* not up yet */ }
   }
   throw new Error(`The app did not open its debugging port ${port} within a minute`);
 }
@@ -144,15 +156,14 @@ export function appStop(number: number) {
   }
   return { stopped };
 }
-/** Files land on a draft release named after the PR: durable, collaborator-visible, no extra infrastructure. */
+/** Evidence joins the installers on the PR's draft release: durable, collaborator-visible, no extra infrastructure. */
 export async function evidence(number: number, files: string[], body?: string) {
   const s = await status(number);
-  const tag = `pr-${number}-evidence`;
+  const tag = releaseTag(number);
   if (spawnSync('gh', ['release', 'view', tag, '-R', REPO], { stdio: 'ignore' }).status !== 0)
-    gh(['release', 'create', tag, '-R', REPO, '--draft', '--target', s.head.sha, '--title', `PR #${number} evidence`, '--notes', `Verification recordings and screenshots for ${s.url}. Draft on purpose: never published.`]);
+    gh(['release', 'create', tag, '-R', REPO, '--draft', '--target', s.head.sha, '--title', `PR #${number} builds and evidence`, '--notes', `Installers built against the pull request's preview stage, and verification recordings for ${s.url}. A draft on purpose: never published; removed when the pull request closes.`]);
   gh(['release', 'upload', tag, '-R', REPO, '--clobber', ...files]);
-  const assets = JSON.parse(gh(['release', 'view', tag, '-R', REPO, '--json', 'assets', '--jq', '.assets'])) as { name: string; url: string; size: number }[];
-  const uploaded = assets.filter((a) => files.some((f) => f.endsWith(a.name)));
+  const uploaded = releaseAssets(number).filter((a) => files.some((f) => f.endsWith(a.name)));
   const marker = `<!-- compound-evidence ${s.head.sha} -->`;
   const lines = [marker, `## Verification evidence for ${s.head.sha.slice(0, 7)}`, '', ...(body ? [body, ''] : []), ...uploaded.map((a) => `- [${a.name}](${a.url}) (${(a.size / 1024 / 1024).toFixed(1)} MB)`), '', `Files live on the draft release \`${tag}\`; a video plays after download.`];
   gh(['pr', 'comment', String(number), '-R', REPO, '--body', lines.join('\n')]);

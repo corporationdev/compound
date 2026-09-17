@@ -38,6 +38,7 @@ const files = installers.map((relative) => {
   cpSync(join(out, 'make', relative), join(output, name));
   return { name, sha256: createHash('sha256').update(readFileSync(join(output, name))).digest('hex') };
 });
-writeFileSync(join(output, 'checksums.txt'), files.map((file) => `${file.sha256}  ${file.name}`).join('\n') + '\n');
-writeFileSync(join(output, 'manifest.json'), JSON.stringify({ platform, stage: config.stage, convexUrl: config.convexUrl, serverUrl: config.serverUrl, files }, null, 2) + '\n');
+// Both platforms land on one release, so the sidecar files carry the platform in their names.
+writeFileSync(join(output, `checksums-${platform}.txt`), files.map((file) => `${file.sha256}  ${file.name}`).join('\n') + '\n');
+writeFileSync(join(output, `manifest-${platform}.json`), JSON.stringify({ platform, headSha: process.env.HEAD_SHA ?? null, stage: config.stage, convexUrl: config.convexUrl, serverUrl: config.serverUrl, files }, null, 2) + '\n');
 console.log(`Verified ${platform} build for ${config.stage}: ${files.map((f) => f.name).join(', ')}`);
