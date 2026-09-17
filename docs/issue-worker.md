@@ -4,7 +4,7 @@ How a GitHub issue on `corporationdev/compound` becomes a pull request, without
 anyone opening a terminal. Setup and internals: `docs/cloud-setup.md`, section
 "Issues to T3 Code threads".
 
-1. Someone labels an issue `ready`. Its body is the plan.
+1. Someone labels an issue `ready`. Its body is the plan. The repository is public, so the worker only takes issues whose author is in the organization or a repository collaborator; others are skipped and logged.
 2. The issue worker on the ThinkPad (`bun run issue-worker`, running as a user
    service) checks every minute and picks the issue up.
 3. The worker moves the label to `in-progress`, creates a worktree on the branch

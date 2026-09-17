@@ -187,7 +187,7 @@ test('developer stages sign in with the fixed code and send no email; production
   process.env.RESEND_FROM_EMAIL = 'Compound <test@example.com>';
   const t = setup();
   let emails = 0;
-  globalThis.fetch = (async () => { emails++; return Response.json({ id: 'never' }); }) as typeof fetch;
+  globalThis.fetch = (async () => { emails++; return Response.json({ id: 'never' }); }) as unknown as typeof fetch;
   const auth = (path: string, body: unknown) =>
     t.fetch(`/api/auth/${path}`, { method: 'POST', headers: { Origin: 'compound://', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   expect((await auth('email-otp/send-verification-otp', { email: 'agent@compound.mov', type: 'sign-in' })).status).toBe(200);
