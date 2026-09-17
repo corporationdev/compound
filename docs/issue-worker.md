@@ -17,6 +17,9 @@ anyone opening a terminal. Setup and internals: `docs/cloud-setup.md`, section
    `in-review`. If it is blocked it comments on the issue and stops.
 5. Review the PR. Merging it closes the issue.
 
+To steer a running thread, comment on the issue or the PR: comments from people
+in the org are forwarded to the thread.
+
 ## Labels
 
 | Label         | Meaning                                              |
