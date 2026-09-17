@@ -249,8 +249,8 @@ jobs:
             const assets = release?.assets ?? [];
             const links = (test) => assets.filter(a => test(a.name)).map(a => `[${a.name}](${a.browser_download_url})`).join(', ');
             const rows = [
-              ['Linux x64 (zip)', process.env.LINUX, links(n => n.includes('linux'))],
-              ['macOS universal (dmg, zip)', process.env.MAC, links(n => n.includes('mac') && !n.includes('manifest') && !n.includes('checksums'))],
+              ['Linux x64 (zip)', process.env.LINUX, links(n => n.includes('linux') && n.endsWith('.zip'))],
+              ['macOS universal (dmg, zip)', process.env.MAC, links(n => n.endsWith('.dmg') || (n.includes('darwin') && n.endsWith('.zip')))],
             ].filter(([, result]) => result !== 'skipped').map(([label, result, urls]) => `| ${label} | ${result} | ${urls} |`);
             const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\`. Sign in with any email and the code \`000000\`. Files are on the draft release \`pr-${number}\`${release ? ` ([open](${release.html_url}))` : ''}.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
