@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { deployment } from '@compound/config/deployment';
 import { stagePorts } from '@compound/config/ports';
 import { getStageKind } from '@compound/config/stage';
@@ -24,7 +25,24 @@ const target = action === 'preview' ? { preview: true }
 if (action !== 'preview') requireKeys(backend, ['CONVEX_URL', 'SITE_URL', 'RESEND_FROM_EMAIL']);
 if (backend.BETTER_AUTH_SECRET.length < 32) throw new Error('BETTER_AUTH_SECRET needs at least 32 random characters');
 const cwd = resolve(root, 'packages/backend');
-if (sandbox) mkdirSync(resolve(cwd, '.convex/tmp'), { recursive: true });
+/**
+ * Where the Convex CLI and local backend keep temp files for a sandbox. They
+ * rename built modules from there into the deployment's storage, which fails
+ * across filesystems (a tmpfs /tmp on Linux), and they bind Unix sockets
+ * there, whose paths Linux caps at 108 bytes. So: the OS temp dir when it
+ * shares a filesystem with the state (macOS), otherwise a short per-stage
+ * directory under the home cache, which is on the same filesystem as any
+ * checkout under home. Null means leave the environment alone.
+ */
+function convexTempDir(): string | null {
+  const state = resolve(cwd, '.convex');
+  mkdirSync(state, { recursive: true });
+  if (statSync(tmpdir()).dev === statSync(state).dev) return null;
+  const dir = join(homedir(), '.cache', 'compound', 'convex-tmp', createHash('sha256').update(stage).digest('hex').slice(0, 8));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+const convexTmp = sandbox ? convexTempDir() : null;
 /**
  * The local deployment the Convex CLI created for this checkout, if any. Its
  * state lives beside the functions, so every worktree has its own; the CLI
@@ -56,10 +74,8 @@ const run = (command: string[], quiet = false) => {
     cwd,
     env: {
       ...process.env,
-      // The CLI and the local backend binary move built modules from their temp dir into the
-      // deployment's storage with a rename, which fails across filesystems (a tmpfs /tmp on
-      // Linux). Keep both temp dirs beside the state; TMPDIR is what the binary reads.
-      ...(sandbox ? { CONVEX_TMPDIR: resolve(cwd, '.convex/tmp'), TMPDIR: resolve(cwd, '.convex/tmp') } : {}),
+      // See convexTempDir; TMPDIR is what the backend binary reads, CONVEX_TMPDIR the CLI.
+      ...(convexTmp ? { CONVEX_TMPDIR: convexTmp, TMPDIR: convexTmp } : {}),
       STAGE: stage,
       // Empty values shadow the injected .env so the CLI never selects the shared cloud deployment for a sandbox.
       CONVEX_DEPLOYMENT: local ? `local:${local}` : '',
