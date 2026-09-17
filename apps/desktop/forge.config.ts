@@ -10,6 +10,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'));
+// A pull request build carries its own name and bundle id (scripts/pr-brand.ts)
+// so it installs beside the real app; a production build is plain "Compound".
+const runtimeConfig = (() => { try { return JSON.parse(readFileSync(join(__dirname, 'runtime-config.json'), 'utf8')); } catch { return {}; } })();
+const appName: string = runtimeConfig.appName ?? 'Compound';
+const appBundleId: string = runtimeConfig.appId ?? 'dev.corporation.compound';
+const fileSlug = appName.replace(/\s+/g, '-');
 const productionRelease = process.env.COMPOUND_RELEASE === '1';
 if (productionRelease) {
   if (process.env.SKIP_SIGN) throw new Error('Production releases must be signed');
@@ -19,8 +25,10 @@ if (productionRelease) {
 
 const config: ForgeConfig = {
   packagerConfig: {
-    name: 'Compound',
-    appBundleId: 'dev.corporation.compound',
+    name: appName,
+    // The binary keeps its name whatever the app is called, so tooling finds it.
+    executableName: 'Compound',
+    appBundleId,
     appCategoryType: 'public.app-category.video',
     appVersion: version,
     icon: './assets/icon',
@@ -55,7 +63,7 @@ const config: ForgeConfig = {
     // Linux zips are pull-request builds for the ThinkPad; macOS zips ship beside the DMG.
     new MakerZIP({}, ['darwin', 'linux']),
     new MakerDMG((arch) => ({
-      name: `Compound-mac-${arch}`,
+      name: `${fileSlug}-mac-${arch}`,
       icon: './assets/icon.icns',
       // Dark, on-brand window; @2x sibling is picked up automatically for retina.
       background: './assets/dmg-background.png',

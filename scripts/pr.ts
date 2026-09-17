@@ -104,7 +104,7 @@ export async function prepare(number: number, platforms: string, wait: boolean) 
 }
 /** The port the launched installer listens on for CDP: stable per PR, clear of the sandbox blocks. */
 export const appPort = (number: number) => 41000 + (number % 1000);
-type Manifest = { platform: string; headSha: string | null; stage: string; files: { name: string }[] };
+type Manifest = { platform: string; headSha: string | null; stage: string; appName?: string; files: { name: string }[] };
 async function manifest(number: number, platform: string): Promise<Manifest | null> {
   const r = await fetch(evidence.url(`${evidence.prefix(number)}manifest-${platform}.json`), { cache: 'no-store' });
   return r.ok ? (await r.json() as Manifest) : null;
@@ -130,7 +130,7 @@ export async function app(number: number, platform: string) {
     writeFileSync(stamp, String(m.headSha));
   }
   const binary = platform === 'mac'
-    ? [...new Bun.Glob('**/Compound.app/Contents/MacOS/Compound').scanSync(join(dir, 'app'))].map((p) => join(dir, 'app', p))[0]
+    ? [...new Bun.Glob('**/*.app/Contents/MacOS/Compound').scanSync(join(dir, 'app'))].map((p) => join(dir, 'app', p))[0]
     : [...new Bun.Glob('**/Compound').scanSync(join(dir, 'app'))].map((p) => join(dir, 'app', p)).find((p) => statSync(p).isFile());
   if (!binary) throw new Error(`No Compound binary found under ${dir}`);
   const pidFile = join(dir, 'app.pid');
@@ -142,7 +142,7 @@ export async function app(number: number, platform: string) {
   writeFileSync(pidFile, String(child.pid));
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
-    try { const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as { url: string }[]; if (pages.length) return { pid: child.pid, cdpPort: port, cdpUrl: `http://127.0.0.1:${port}`, binary, stage: m.stage, builtFrom: m.headSha, headSha: s.head.sha, pages: pages.map((p) => p.url), display: adopted }; } catch { /* not up yet */ }
+    try { const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as { url: string }[]; if (pages.length) return { pid: child.pid, cdpPort: port, cdpUrl: `http://127.0.0.1:${port}`, binary, appName: m.appName ?? 'Compound', stage: m.stage, builtFrom: m.headSha, headSha: s.head.sha, pages: pages.map((p) => p.url), display: adopted }; } catch { /* not up yet */ }
   }
   throw new Error(`The app did not open its debugging port ${port} within a minute`);
 }

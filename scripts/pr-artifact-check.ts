@@ -16,15 +16,20 @@ const output = join(root, '.generated/pr-build');
 mkdirSync(output, { recursive: true });
 let appDir: string;
 let installers: string[];
+const only = (pattern: string, where: string) => {
+  const matches = [...new Bun.Glob(pattern).scanSync({ cwd: where, onlyFiles: false })];
+  if (matches.length !== 1) throw new Error(`Expected one ${pattern} under ${where}, found ${matches.length}`);
+  return join(where, matches[0]!);
+};
 if (platform === 'mac') {
-  const app = join(out, 'Compound-darwin-universal/Compound.app');
+  const app = only('*-darwin-universal/*.app', out);
   appDir = join(app, 'Contents/Resources/app');
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
   execFileSync('xcrun', ['stapler', 'validate', app], { stdio: 'inherit' });
   execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' });
   installers = [...new Bun.Glob('**/*.{dmg,zip}').scanSync(join(out, 'make'))];
 } else if (platform === 'linux') {
-  const app = join(out, 'Compound-linux-x64');
+  const app = only('*-linux-x64', out);
   if (!existsSync(join(app, 'Compound'))) throw new Error('Linux package has no Compound binary');
   appDir = join(app, 'resources/app');
   installers = [...new Bun.Glob('**/*.zip').scanSync(join(out, 'make'))];
@@ -33,12 +38,14 @@ const config = JSON.parse(readFileSync(join(appDir, 'runtime-config.json'), 'utf
 if (config.stage !== expectedStage) throw new Error(`Installer is configured for ${config.stage}, expected ${expectedStage}`);
 if (config.stage === 'prod') throw new Error('Pull request builds must never carry production configuration');
 if (installers.length === 0) throw new Error('No installers were made');
+if (typeof config.appName !== 'string' || !config.appName.startsWith('Compound PR ')) throw new Error('Pull request builds must be branded with pr-brand.ts before packaging');
 const files = installers.map((relative) => {
-  const name = relative.split('/').pop()!;
+  // The app's display name has spaces; file names do not.
+  const name = relative.split('/').pop()!.replace(/\s+/g, '-');
   cpSync(join(out, 'make', relative), join(output, name));
   return { name, sha256: createHash('sha256').update(readFileSync(join(output, name))).digest('hex') };
 });
 // Both platforms land on one release, so the sidecar files carry the platform in their names.
 writeFileSync(join(output, `checksums-${platform}.txt`), files.map((file) => `${file.sha256}  ${file.name}`).join('\n') + '\n');
-writeFileSync(join(output, `manifest-${platform}.json`), JSON.stringify({ platform, headSha: process.env.HEAD_SHA ?? null, stage: config.stage, convexUrl: config.convexUrl, serverUrl: config.serverUrl, files }, null, 2) + '\n');
+writeFileSync(join(output, `manifest-${platform}.json`), JSON.stringify({ platform, headSha: process.env.HEAD_SHA ?? null, stage: config.stage, appName: config.appName, appId: config.appId, convexUrl: config.convexUrl, serverUrl: config.serverUrl, files }, null, 2) + '\n');
 console.log(`Verified ${platform} build for ${config.stage}: ${files.map((f) => f.name).join(', ')}`);

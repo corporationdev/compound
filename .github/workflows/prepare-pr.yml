@@ -141,6 +141,10 @@ jobs:
         run: |
           echo "$RUNTIME_CONFIG" | base64 -d > apps/desktop/runtime-config.json
           echo "$WEB_ENV" | base64 -d > apps/web/.env
+      - name: Name the build after the pull request
+        env:
+          PR: ${{ needs.resolve.outputs.number }}
+        run: bun scripts/pr-brand.ts "$PR"
       - name: Stage chat runtime
         run: bun run --cwd apps/desktop stage:chat
       - name: Compile desktop
@@ -180,6 +184,10 @@ jobs:
         run: |
           echo "$RUNTIME_CONFIG" | base64 -d > apps/desktop/runtime-config.json
           echo "$WEB_ENV" | base64 -d > apps/web/.env
+      - name: Name the build after the pull request
+        env:
+          PR: ${{ needs.resolve.outputs.number }}
+        run: bun scripts/pr-brand.ts "$PR"
       - name: Load Apple release credentials
         uses: 1password/load-secrets-action@v3
         with:
@@ -256,7 +264,7 @@ jobs:
               } catch {}
               rows.push(`| ${label} | ${result} | ${links} |`);
             }
-            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\` and published to \`${base}\`. Sign in with any email and the code \`000000\`.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
+            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\` and published to \`${base}\`. The app is named **Compound PR ${number}** with its own bundle id and profile, so it installs and runs beside the real Compound. Sign in with any email and the code \`000000\`.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
             const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
             if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
