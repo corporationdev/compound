@@ -31,7 +31,7 @@ The thread's agent pushes to a draft PR as it works, then leaves draft when
 confident. CodeRabbit reviews at that point (`.coderabbit.yaml` skips drafts).
 The agent closes out every review thread, fixing or explicitly declining with
 a reason, and re-requests review until nothing is unresolved and CI is green.
-Then it runs the **Prepare PR** workflow (`bun run pr prepare <n>
+Then it asks for the **Prepare PR** workflow with a label (`bun run pr prepare <n>
 --platforms linux`), which deploys the PR's preview stage on request and
 builds a Linux installer against it. It launches that installer with a
 debugging port (`bun run pr app`), records a walkthrough with agent-browser,
