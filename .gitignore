@@ -27,7 +27,8 @@ dist-contract
 *.njsproj
 *.sln
 *.sw?
-.claude
+.claude/*
+!.claude/skills/
 .claire
 
 # Electron
@@ -39,7 +40,6 @@ out/
 # AI
 skills-lock.json
 .agents
-.claude
 # Generated Compound runtime configuration and local secrets
 .generated/
 .astro/
@@ -50,6 +50,9 @@ apps/desktop/runtime-config.json
 .env.*
 !.env.example
 !.env.op
+
+# Local Convex backend state for sandbox (worktree) stages
+packages/backend/.convex/
 
 # Local transcription/model test environments
 .cache/

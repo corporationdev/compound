@@ -69,7 +69,7 @@ export const server = await Worker('server', {
     DEEPGRAM_API_KEY: alchemy.secret.env('DEEPGRAM_API_KEY'),
     GOOGLE_GENERATIVE_AI_API_KEY: alchemy.secret.env('GOOGLE_GENERATIVE_AI_API_KEY'),
   },
-  dev: { port: 3000 },
+  dev: { port: runtime.ports.server },
 });
 
 export const serverTunnel = useServerTunnel
@@ -78,7 +78,7 @@ export const serverTunnel = useServerTunnel
       adopt: true,
       apiToken: alchemy.secret.env('CLOUDFLARE_API_TOKEN'),
       ingress: [
-        { hostname: runtime.serverHostname, service: 'http://localhost:3000' },
+        { hostname: runtime.serverHostname, service: `http://localhost:${runtime.ports.server}` },
         { service: 'http_status:404' },
       ],
     })

@@ -1,9 +1,11 @@
 import { test, expect } from 'bun:test';
 import { parse } from 'dotenv';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deriveEnvTier, getStageKind, resolveStage } from '@compound/config/stage';
+import { execFileSync } from 'node:child_process';
+import { deriveEnvTier, getStageKind, linkedWorktreeRoot, resolveStage } from '@compound/config/stage';
+import { stagePorts } from '@compound/config/ports';
 import { resolveRuntimeContext } from '@compound/config/runtime';
 import { DEEPGRAM_MODEL, GEMINI_MODEL } from '@compound/config/models';
 import { renderEnv, renderEnvTemplate, stageFrom, readEnv, targets, serviceAccountToken } from './environment';
@@ -51,6 +53,68 @@ test('PostBob stage pattern maps machine dev and PR stages to shared vault tiers
   expect(() => stageFrom(['--stage', 'unknown'])).toThrow();
   expect(() => stageFrom(['--stage'])).toThrow();
   expect(() => stageFrom(['--dev', '--stage', 'prod'])).toThrow();
+});
+test('a linked worktree resolves its own sandbox stage; the main checkout keeps the machine stage', () => {
+  // git reports real paths, so compare against the resolved temp directory.
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'compound-worktree-test-')));
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    const main = join(directory, 'main');
+    const linked = join(directory, 'Feature Branch.v2');
+    git(directory, 'init', '-q', '-b', 'main', main);
+    git(main, '-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'root');
+    git(main, 'worktree', 'add', '-q', '--detach', linked);
+    expect(linkedWorktreeRoot(main)).toBeNull();
+    expect(linkedWorktreeRoot(join(directory, 'nowhere-' + Date.now()) )).toBeNull();
+    expect(linkedWorktreeRoot(join(linked, 'nested'))).toBeNull();
+    const nested = join(linked, 'packages');
+    execFileSync('mkdir', ['-p', nested]);
+    expect(linkedWorktreeRoot(nested)).toBe(linked);
+    expect(resolveStage('dev', { cwd: main })).toBe(resolveStage('dev'));
+    const sandbox = resolveStage('dev', { cwd: linked });
+    expect(sandbox).toMatch(/^sandbox-feature-branch-v2-[a-f0-9]{8}$/);
+    expect(sandbox).toBe(resolveStage('dev', { cwd: nested }));
+    expect(getStageKind(sandbox)).toBe('sandbox');
+    expect(deriveEnvTier(sandbox)).toBe('dev');
+    expect(sandbox.length).toBeLessThanOrEqual(48);
+    expect(stageFrom(['--stage', sandbox])).toBe(sandbox);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+test('sandbox stages get a stable, distinct port block; machine dev stages keep the documented ports', () => {
+  expect(stagePorts('dev-isaac-1234')).toEqual({ web: 5173, server: 3000, convexCloud: 3210, convexSite: 3211, inspector: 9333 });
+  expect(stagePorts('pr-42')).toEqual(stagePorts('prod'));
+  const alpha = stagePorts('sandbox-alpha-12345678');
+  const beta = stagePorts('sandbox-beta-12345678');
+  expect(alpha).toEqual(stagePorts('sandbox-alpha-12345678'));
+  expect(alpha.web % 10).toBe(0);
+  expect(alpha.web).toBeGreaterThanOrEqual(20000);
+  expect(alpha.inspector).toBeLessThan(40000);
+  expect([alpha.server, alpha.convexCloud, alpha.convexSite, alpha.inspector]).toEqual([1, 2, 3, 4].map((n) => alpha.web + n));
+  expect(beta.web).not.toBe(alpha.web);
+});
+test('a sandbox stage runs Convex locally on its ports and keeps its own Worker, bucket and folder', () => {
+  const stage = 'sandbox-alpha-12345678';
+  const ports = stagePorts(stage);
+  const sandbox = resolveRuntimeContext(stage, identity);
+  expect(sandbox.ports).toEqual(ports);
+  expect(sandbox.convexUrl).toBe(`http://127.0.0.1:${ports.convexCloud}`);
+  expect(sandbox.convexSiteUrl).toBe(`http://127.0.0.1:${ports.convexSite}`);
+  expect(sandbox.webUrl).toBe(`http://localhost:${ports.web}`);
+  expect(sandbox.serverUrl).toBe(`https://server-${stage}.compound.example`);
+  expect(sandbox.bucket).toBe(`compound-media-${stage}`);
+  expect(sandbox.desktopConfig).toEqual({
+    stage,
+    projectsFolderName: `compound-${stage}`,
+    convexUrl: sandbox.convexUrl,
+    authUrl: sandbox.convexSiteUrl,
+    serverUrl: sandbox.serverUrl,
+  });
+  expect(sandbox.webClientEnv.VITE_CONVEX_SITE_URL).toBe(sandbox.convexSiteUrl);
+  expect(resolveRuntimeContext(stage, { ...identity, convexUrl: sandbox.convexUrl }).convexUrl).toBe(sandbox.convexUrl);
+  expect(() => resolveRuntimeContext(stage, { ...identity, convexUrl: 'https://dev-one.convex.cloud' })).toThrow('locally');
+  expect(() => resolveRuntimeContext(stage, { ...identity, convexUrl: 'http://127.0.0.1:3210' })).toThrow('locally');
 });
 test('one runtime resolver derives browser, desktop, Worker, and auth URLs', () => {
   const dev = resolveRuntimeContext('dev-isaac-1234', {

@@ -246,6 +246,8 @@ bun run --cwd apps/cli symlink:create
 
 The link points at the CLI build, which `bun run dev:desktop` refreshes on every start, so the linked `compound` always runs the latest code.
 
+`bun run dev` in a linked git worktree starts an independent stack (local Convex, own Worker and bucket, own ports and desktop profile) so several branches can run at once; see [worktrees](docs/cloud-setup.md#worktrees-one-sandbox-stage-each).
+
 Before sending a PR:
 
 ```sh

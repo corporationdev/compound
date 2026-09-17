@@ -64,7 +64,8 @@ import {
 import { AssetTransferManager, realAssetCloud } from "./assets-transfers";
 import type { LogEntry } from "@compound/dapi";
 
-const DEV_URL = "http://localhost:5173";
+// The dev launcher names the stage's Vite server; a bare `electron-forge start` keeps the default.
+const DEV_URL = process.env.COMPOUND_DEV_URL || "http://localhost:5173";
 const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
