@@ -52,7 +52,8 @@ const config: ForgeConfig = {
         : undefined,
   },
   makers: [
-    new MakerZIP({}, ['darwin']),
+    // Linux zips are pull-request builds for the ThinkPad; macOS zips ship beside the DMG.
+    new MakerZIP({}, ['darwin', 'linux']),
     new MakerDMG((arch) => ({
       name: `Compound-mac-${arch}`,
       icon: './assets/icon.icns',

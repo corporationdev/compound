@@ -31,7 +31,7 @@ export function sandboxInfo(stage: string) {
     // Only a sandbox runs with its own profile; the machine dev stage uses the default one.
     electronProfile: sandbox ? join(appDataDir(), `Compound-${stage}`) : null,
     projectsFolderName: runtime.desktopConfig.projectsFolderName,
-    signInCode: ['dev', 'sandbox', 'test'].includes(kind) ? '000000' : null,
+    signInCode: kind === 'production' || kind === 'unknown' ? null : '000000',
   };
 }
 if (import.meta.main) {

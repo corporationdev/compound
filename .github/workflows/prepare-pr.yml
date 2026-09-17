@@ -1,0 +1,229 @@
+# Prepares a pull request for verification, on request: deploys (or refreshes)
+# its preview stage, then builds the desktop app against that stage for the
+# platforms asked for and attaches the installers to the run. An agent runs it
+# with `bun run pr prepare <number> --platforms linux` once CI and review are
+# green; a person runs it from the Actions tab. Re-running is safe: the Convex
+# preview and Alchemy resources are reused by name, and runs for one branch
+# are serialized with each other and with teardown.
+name: Prepare PR
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: string
+      platforms:
+        description: Desktop installers to build against the preview
+        type: choice
+        options: [linux, mac, both, none]
+        default: linux
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: prepare-pr-${{ inputs.pr }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      head_ref: ${{ steps.pr.outputs.head_ref }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+    steps:
+      - name: Look up the pull request
+        id: pr
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ inputs.pr }}
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.PR) });
+            // Only same-repository branches get deployment credentials; forks never do.
+            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) return core.setFailed('Only same-repository pull requests can be prepared');
+            if (pr.state !== 'open') return core.setFailed(`Pull request #${pr.number} is ${pr.state}`);
+            if (pr.head.ref === 'main') return core.setFailed('Refusing to preview main');
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('head_sha', pr.head.sha);
+  deploy:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: Preview
+    # One preview per branch at a time, shared with Teardown Preview.
+    concurrency:
+      group: preview-${{ needs.resolve.outputs.head_ref }}
+      cancel-in-progress: false
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/preview-stage
+        id: stage
+        with:
+          branch: ${{ needs.resolve.outputs.head_ref }}
+      - name: Check
+        run: bun run check && bun run test:cloud && bun test scripts/preview.test.ts
+      - uses: ./.github/actions/inject-secrets
+        with:
+          stage: ${{ env.STAGE }}
+          op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Deploy Convex preview, Alchemy, and curated catalog
+        run: bun run deploy --stage "$STAGE"
+      - name: Save the stage's public client configuration for the desktop builds
+        run: |
+          mkdir -p .generated/runtime
+          cp apps/desktop/runtime-config.json .generated/runtime/runtime-config.json
+          cp apps/web/.env .generated/runtime/web.env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-config
+          path: .generated/runtime/
+          if-no-files-found: error
+      - name: Report the preview on the pull request
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- compound-preview -->';
+            const config = JSON.parse(fs.readFileSync('apps/desktop/runtime-config.json', 'utf8'));
+            const server = config.serverUrl;
+            const web = server.replace('://server-', '://app-');
+            const landing = server.replace('://server-', '://');
+            const logs = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = [marker, '## Preview deployment ready', '', `Stage: \`${process.env.STAGE}\` at ${process.env.HEAD_SHA.slice(0, 7)}`, '', `[Landing page](${landing}) · [Web preview](${web}) · [API health](${server}/health)`, '', 'Desktop installers built against this preview, when requested, are listed in the next comment. Preview data is preserved across updates until teardown or Convex expiry.', '', `[Deployment logs](${logs})`].join('\n');
+            const number = Number(process.env.PR);
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
+            const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
+  build-linux:
+    needs: [resolve, deploy]
+    if: inputs.platforms == 'linux' || inputs.platforms == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-config
+          path: .generated/runtime/
+      - name: Point the desktop at the preview stage
+        run: cp .generated/runtime/runtime-config.json apps/desktop/runtime-config.json && cp .generated/runtime/web.env apps/web/.env
+      - name: Stage chat runtime
+        run: bun run --cwd apps/desktop stage:chat
+      - name: Compile desktop
+        run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload && bun run --cwd apps/desktop build:native
+      - name: Build desktop web UI
+        run: bun run --cwd apps/web bundle:desktop
+      - name: Stage CLI, runtime, and docs
+        run: bun run --cwd apps/desktop stage:cli && bun run --cwd apps/desktop stage:runtime && bun run --cwd apps/desktop stage:docs
+      - name: Package
+        run: bun run --cwd apps/desktop electron-forge make --platform=linux --arch=x64
+      - name: Verify the installer's stage
+        env:
+          EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
+        run: bun scripts/pr-artifact-check.ts linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Compound-linux-x64
+          path: .generated/pr-build/
+          if-no-files-found: error
+          compression-level: 0
+  build-mac:
+    needs: [resolve, deploy]
+    if: inputs.platforms == 'mac' || inputs.platforms == 'both'
+    runs-on: macos-latest
+    # Signing and notarization use the Apple credentials in the prod vault.
+    environment: prod
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-config
+          path: .generated/runtime/
+      - name: Point the desktop at the preview stage
+        run: cp .generated/runtime/runtime-config.json apps/desktop/runtime-config.json && cp .generated/runtime/web.env apps/web/.env
+      - name: Load Apple release credentials
+        uses: 1password/load-secrets-action@v3
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          MACOS_CERT_P12: op://compound-prod/Apple/certificate
+          MACOS_CERT_PASSWORD: op://compound-prod/Apple/certificate-password
+          APPLE_API_KEY_BASE64: op://compound-prod/Apple/api-key
+          APPLE_API_KEY_ID: op://compound-prod/Apple/api-key-id
+          APPLE_API_ISSUER: op://compound-prod/Apple/api-issuer
+          APPLE_TEAM_ID: op://compound-prod/Apple/team-id
+      - name: Prepare signing keychain and validate Apple access
+        run: bun scripts/release-signing.ts
+      - name: Stage chat runtime
+        run: bun run --cwd apps/desktop stage:chat
+      - name: Compile desktop
+        run: bun run --cwd apps/desktop build:main && bun run --cwd apps/desktop build:preload && bun run --cwd apps/desktop build:native
+      - name: Build desktop web UI
+        run: bun run --cwd apps/web bundle:desktop
+      - name: Stage CLI, runtime, and docs
+        run: bun run --cwd apps/desktop stage:cli && bun run --cwd apps/desktop stage:runtime && bun run --cwd apps/desktop stage:docs
+      - name: Package, sign, notarize, and make installers
+        env:
+          DEBUG: electron-universal
+        run: bun run --cwd apps/desktop electron-forge make --arch=universal
+      - name: Verify signature, notarization, and the installer's stage
+        env:
+          EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
+        run: bun scripts/pr-artifact-check.ts mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Compound-mac-universal
+          path: .generated/pr-build/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Clean up signing credentials
+        if: always()
+        run: bun scripts/release-signing-cleanup.ts
+  report:
+    needs: [resolve, deploy, build-linux, build-mac]
+    if: always() && needs.deploy.result == 'success' && inputs.platforms != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - name: List the installers on the pull request
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          STAGE: ${{ needs.deploy.outputs.stage }}
+          LINUX: ${{ needs.build-linux.result }}
+          MAC: ${{ needs.build-mac.result }}
+        with:
+          script: |
+            const marker = '<!-- compound-pr-builds -->';
+            const run = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({ ...context.repo, run_id: Number(process.env.GITHUB_RUN_ID) });
+            const link = (name) => { const a = data.artifacts.find(x => x.name === name); return a ? `[${name}](${run}/artifacts/${a.id})` : null; };
+            const rows = [
+              ['Linux x64 (zip)', process.env.LINUX, link('Compound-linux-x64')],
+              ['macOS universal (dmg, zip)', process.env.MAC, link('Compound-mac-universal')],
+            ].filter(([, result]) => result !== 'skipped').map(([label, result, url]) => `| ${label} | ${result} | ${url ?? ''} |`);
+            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\`. Sign in with any email and the code \`000000\`.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app <number> --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
+            const number = Number(process.env.PR);
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
+            const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });

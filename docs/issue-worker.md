@@ -24,3 +24,21 @@ anyone opening a terminal. Setup and internals: `docs/cloud-setup.md`, section
 | `ready`       | Planned and waiting; the worker will pick it up.     |
 | `in-progress` | A thread is working on it (at most three at a time). |
 | `in-review`   | A PR is open; the thread is done.                    |
+
+## After the code: review, preview, evidence
+
+The thread's agent pushes to a draft PR as it works, then leaves draft when
+confident. CodeRabbit reviews at that point (`.coderabbit.yaml` skips drafts).
+The agent closes out every review thread, fixing or explicitly declining with
+a reason, and re-requests review until nothing is unresolved and CI is green.
+Then it runs the **Prepare PR** workflow (`bun run pr prepare <n>
+--platforms linux`), which deploys the PR's preview stage on request and
+builds a Linux installer against it. It launches that installer with a
+debugging port (`bun run pr app`), records a walkthrough with agent-browser,
+and attaches the recording to the PR (`bun run pr evidence`). Finally it asks
+for the macOS installer so a person can try the build, and moves the issue to
+`in-review`. A person merges. Nothing is deployed on push; previews exist only
+when asked for, and Teardown Preview removes them when the PR closes.
+
+`bun run pr status <n>` is the one command for the PR's checks, reviews,
+unresolved threads, and Prepare PR runs, as JSON.

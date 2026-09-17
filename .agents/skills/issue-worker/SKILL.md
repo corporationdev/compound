@@ -42,31 +42,109 @@ for p in $(pgrep bun); do readlink /proc/$p/cwd; done | grep -Fx "$PWD"
 If it finished but `.env` or `node_modules` is missing, the script failed; run
 the three steps yourself.
 
-## 3. Implement and verify
+## 3. Implement, and push as you go
 
-Make the change the issue asks for, following `AGENTS.md`. Then:
-
-- `bun run check`, and `bun test <path>` for tests near what you touched.
-- When the change is visible in the app, verify it there with the `sandbox`
-  skill (`.agents/skills/sandbox/SKILL.md`): `bun dev` detached, sign in,
-  seed, drive it with agent-browser, screenshot the result. A docs-only or
-  script-only change needs no app run; say so in the PR.
-
-Commit with clear messages as you go.
-
-## 4. Open the pull request
+Make the change the issue asks for, following `AGENTS.md`. Open a **draft**
+pull request early and push every meaningful commit to it: CI runs on each
+push and tells you about failures while they are cheap, and the branch is
+safe if the thread dies. CodeRabbit does not review drafts, so pushing often
+costs nothing.
 
 ```sh
 git push -u origin HEAD
-gh pr create -R corporationdev/compound --base <base branch from the first message> \
+gh pr create -R corporationdev/compound --draft --base <base branch from the first message> \
   --title "<issue title>" --body "Closes #<number>
 
-<what changed and how it was verified>"
+<what is changing>"
+```
+
+Verify in your sandbox as you work, not at the end: `bun run check`, tests
+near what you touched, and when the change is visible in the app, the
+`sandbox` skill (`bun dev` detached, sign in, seed, drive it with
+agent-browser). A docs-only or script-only change needs no app run.
+
+## 4. Close out the review
+
+When you are confident, leave draft. That is the one moment CodeRabbit
+reviews, and the moment CI must be green.
+
+```sh
+bun run pr ready <number>
+bun run pr wait-checks <number>
+bun run pr status <number>
+```
+
+`status` prints the checks, the reviews, and every unresolved review thread
+with its id, file, line, and text. Work through them until there are none.
+For each thread either fix it and push, or, when you think it is wrong or not
+worth doing, say why in one or two sentences and resolve it; both are fine,
+silence is not:
+
+```sh
+bun run pr resolve <thread id> --reply "Fixed in <sha>."
+bun run pr resolve <thread id> --reply "Leaving as is: <reason>."
+```
+
+After pushing fixes, ask for another pass and wait for it, then check again:
+
+```sh
+bun run pr request-review <number>
+bun run pr wait-checks <number>
+```
+
+There is no round limit. Keep going until `status` shows zero unresolved
+threads, no pending or failed checks, and CodeRabbit's latest review is on the
+current head. Then also fix the PR description so it describes the final
+change.
+
+## 5. Prove it on the preview
+
+With review and CI green, ask CI to deploy the pull request's preview stage
+and build the Linux installer against it. Nothing is deployed until you ask.
+
+```sh
+bun run pr prepare <number> --platforms linux --wait
+```
+
+That takes ten to twenty minutes. When it finishes, fetch and launch the
+installer here on the ThinkPad; it opens with a remote debugging port and its
+own profile, pointed at the preview's Convex, Worker, and bucket:
+
+```sh
+bun run pr app <number> --platform linux      # prints cdpPort
+agent-browser connect <cdpPort>
+agent-browser record start /tmp/pr-<number>.webm
+```
+
+Sign in with any email and `000000`, walk through what the issue asked for
+so that each acceptance criterion is visibly exercised, and take a screenshot
+of the end state. Keep the recording under three minutes. Then:
+
+```sh
+agent-browser record stop
+agent-browser screenshot /tmp/pr-<number>-final.png
+bun run pr app-stop <number>
+bun run pr evidence <number> /tmp/pr-<number>.webm /tmp/pr-<number>-final.png \
+  --body "<one paragraph: what the recording shows, and a checklist of the issue's criteria with pass/fail>"
+```
+
+`evidence` attaches the files to a draft release for the PR and comments the
+links on the PR. If the preview shows a bug, fix it, push, and go back to
+step 4; the review loop reruns and `prepare` refreshes the same preview.
+
+## 6. Hand it over
+
+Ask CI for the macOS installer so a person can try it on a Mac, then mark the
+issue for review. Do not merge; a person merges after watching the recording.
+
+```sh
+bun run pr prepare <number> --platforms mac
 gh issue edit <number> -R corporationdev/compound --remove-label in-progress --add-label in-review
 ```
 
-Clean up the sandbox stage when you ran one (`bun run sandbox:clean`), but
-leave the worktree; T3 Code owns it.
+End the turn with a short summary: the PR link, what the recording shows,
+and anything you left for the reviewer to decide. Clean up your sandbox stage
+(`bun run sandbox:clean`) but leave the worktree; T3 Code owns it.
 
 ## Rules
 
@@ -76,6 +154,7 @@ leave the worktree; T3 Code owns it.
 - Do not rebase onto or merge `main`, and do not force-push.
 - Do not claim, label, or comment on other issues, and do not change labels on
   this one except `in-progress` to `in-review` at the end.
+- Do not merge the pull request, and do not publish the evidence release.
 - Do not run plain `bun dev` in `~/code/compound`; it repoints the shared cloud
   Convex. In this worktree it is a sandbox and fine.
 
