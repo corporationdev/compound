@@ -67,7 +67,8 @@ test('preview lifecycle uses retained data and matching serialized PR workflows'
   const prepare = readFileSync(new URL('../.github/workflows/prepare-pr.yml', import.meta.url), 'utf8');
   const teardown = readFileSync(new URL('../.github/workflows/teardown-preview.yml', import.meta.url), 'utf8');
   expect(prepare).toContain('workflow_dispatch');
-  expect(prepare).not.toContain('pull_request:');
+  expect(prepare).toContain('types: [labeled]');
+  expect(prepare).not.toContain('synchronize');
   expect(prepare).toContain('group: preview-${{ needs.resolve.outputs.head_ref }}');
   expect(prepare).toContain('pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`');
   expect(teardown).toContain('group: preview-${{ github.event.pull_request.head.ref }}');

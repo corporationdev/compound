@@ -20,7 +20,8 @@ import { adoptDesktopSession } from './desktop-session.mjs';
 //   bun run pr app-stop <number>
 //   bun run pr evidence <number> <file>... [--body "..."]   attach files to the PR's evidence release and comment
 export const REPO = process.env.COMPOUND_REPO ?? 'corporationdev/compound';
-const WORKFLOW = 'prepare-pr.yml';
+const WORKFLOW_NAME = 'Prepare PR';
+const PREPARE_LABELS = ['linux', 'mac', 'both', 'none'] as const;
 const APPS = join(homedir(), '.cache', 'compound', 'pr-apps');
 
 function gh(args: string[], input?: string): string {
@@ -51,8 +52,7 @@ export async function status(number: number) {
     const first = t.comments.nodes[0] as { author: { login: string }; body: string; url: string } | undefined;
     return { id: t.id, path: t.path, line: t.line, isOutdated: t.isOutdated, author: first?.author.login ?? '', body: first?.body ?? '', url: first?.url ?? '' };
   });
-  // GitHub only knows a workflow once it is on the default branch; before that there are no runs.
-  const runs = prepareRuns().filter((r) => r.headSha === data.headRefOid);
+  const runs = prepareRuns(data.headRefName).filter((r) => r.headSha === data.headRefOid);
   return {
     number: data.number, title: data.title, state: data.state, isDraft: data.isDraft, mergeable: data.mergeable, url: data.url,
     head: { ref: data.headRefName, sha: data.headRefOid }, base: data.baseRefName,
@@ -60,14 +60,11 @@ export async function status(number: number) {
     reviews, unresolvedThreads: unresolved, prepareRuns: runs,
   };
 }
-type PrepareRun = { databaseId: number; status: string; conclusion: string; headSha: string; createdAt: string; url: string };
-function prepareRuns(): PrepareRun[] {
-  const result = spawnSync('gh', ['run', 'list', '-R', REPO, '--workflow', WORKFLOW, '--json', 'databaseId,status,conclusion,headSha,createdAt,url', '--limit', '30'], { encoding: 'utf8' });
-  if (result.status !== 0) {
-    if (/not found on the default branch/.test(result.stderr)) return [];
-    throw new Error(`gh run list failed: ${result.stderr.trim()}`);
-  }
-  return JSON.parse(result.stdout);
+type PrepareRun = { databaseId: number; status: string; conclusion: string; headSha: string; createdAt: string; url: string; workflowName: string };
+/** Runs of Prepare PR on a branch. Listed by branch, not by workflow file: GitHub only resolves a workflow file once it is on the default branch. */
+function prepareRuns(branch: string): PrepareRun[] {
+  return (JSON.parse(gh(['run', 'list', '-R', REPO, '--branch', branch, '--json', 'databaseId,status,conclusion,headSha,createdAt,url,workflowName', '--limit', '30'])) as PrepareRun[])
+    .filter((r) => r.workflowName === WORKFLOW_NAME);
 }
 export function resolveThread(id: string, reply?: string) {
   if (reply) graphql(`mutation($id:ID!,$body:String!){ addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id, body:$body}){ comment{ url } } }`, { id, body: reply });
@@ -81,13 +78,19 @@ export async function waitChecks(number: number, intervalMs = 30000) {
     await sleep(intervalMs);
   }
 }
+/** The request is a label; the workflow runs from the PR's branch and removes the label when done. */
 export async function prepare(number: number, platforms: string, wait: boolean) {
-  const before = new Set(prepareRuns().map((r) => r.databaseId));
-  gh(['workflow', 'run', WORKFLOW, '-R', REPO, '-f', `pr=${number}`, '-f', `platforms=${platforms}`]);
+  if (!(PREPARE_LABELS as readonly string[]).includes(platforms)) throw new Error(`--platforms is one of ${PREPARE_LABELS.join(', ')}`);
+  const s = await status(number);
+  const before = new Set(prepareRuns(s.head.ref).map((r) => r.databaseId));
+  const label = `prepare-${platforms === 'none' ? 'preview' : platforms}`;
+  // Re-adding a label that is still present is not an event; clear it first.
+  spawnSync('gh', ['pr', 'edit', String(number), '-R', REPO, '--remove-label', label], { stdio: 'ignore' });
+  gh(['pr', 'edit', String(number), '-R', REPO, '--add-label', label]);
   let run: { databaseId: number; url: string; status: string; conclusion: string } | undefined;
-  for (let i = 0; i < 20 && !run; i++) {
+  for (let i = 0; i < 24 && !run; i++) {
     await sleep(5000);
-    run = prepareRuns().find((r) => !before.has(r.databaseId));
+    run = prepareRuns(s.head.ref).find((r) => !before.has(r.databaseId));
   }
   if (!run) throw new Error('The workflow run did not appear');
   if (!wait) return run;
