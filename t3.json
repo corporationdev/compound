@@ -1,0 +1,21 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "scripts": [
+    {
+      "name": "Sandbox setup",
+      "command": "cp \"$T3CODE_PROJECT_ROOT/.env\" .env && bun install --frozen-lockfile && bun run setup",
+      "icon": "wrench",
+      "runOnWorktreeCreate": true,
+      "async": false
+    },
+    {
+      "name": "Dev",
+      "command": "bun dev",
+      "icon": "play"
+    },
+    {
+      "name": "Seed",
+      "command": "bun run sandbox:seed"
+    }
+  ]
+}
