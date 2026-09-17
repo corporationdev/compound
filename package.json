@@ -15,6 +15,7 @@
     "sandbox:info": "bun scripts/sandbox-info.ts",
     "sandbox:seed": "bun scripts/sandbox-seed.ts",
     "sandbox:clean": "bun scripts/sandbox-clean.ts",
+    "issue-worker": "bun scripts/issue-worker.ts",
     "dev:web_v1": "bun run --cwd apps/web dev",
     "dev:landing": "bun run --cwd apps/landing dev",
     "build:landing": "bun run --cwd apps/landing build",

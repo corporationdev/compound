@@ -122,6 +122,12 @@ Injection resolves only credentials listed in `.env.op` and distributes them acc
 
 The web app receives public URLs; desktop runtime configuration also includes its stage and default project-folder name. Neither receives provider secrets. Production release configuration is derived directly from committed config and needs **no 1Password access**.
 
+### Issues to T3 Code threads
+
+Planned work reaches the ThinkPad through GitHub. An agent planning with Isaac opens an issue on `corporationdev/compound` whose body is the plan and labels it `ready`. `bun run issue-worker` (`scripts/issue-worker.ts`, installed as the user unit in `scripts/issue-worker.service`) checks every minute and, for each `ready` issue while fewer than three are `in-progress`, moves the label to `in-progress`, starts a T3 Code thread whose first message is the issue, and comments the branch and thread id. The thread runs in a new worktree on `issue/<number>-<slug>`, created from `main` (or `--base`), where T3 Code runs the `t3.json` setup script. The agent there follows `.agents/skills/issue-worker/SKILL.md`: implement, verify in a sandbox, open a PR that says `Closes #<number>`, label the issue `in-review`, or comment and stop if blocked. A thread that fails to start puts the issue back to `ready` with a comment. Isaac follows the thread in the T3 Code app on his Mac, where the ThinkPad is an environment.
+
+T3 Code has no public API. `scripts/lib/t3code.ts` uses the one its own client uses (checked against 0.0.40): `GET /api/orchestration/*` for reads and `thread.turn.start` with a bootstrap over the `/ws` RPC socket. It mints its bearer session with T3 Code's CLI through the desktop binary and caches it in `~/.config/compound-issue-worker/`. That version runs the project's stored scripts rather than reading `t3.json`, so the worker copies the `t3.json` scripts into the Compound project when it has none. Each issue maps to a fixed thread id, so an issue is never started twice. `--once` runs a single pass.
+
 ## Auth behavior
 
 New users sign up by verifying their email code. Codes last ten minutes, have five allowed attempts, and resending reuses an unexpired code. Better Auth rate limits the auth endpoints. Profile name editing, sign-out, and account deletion are available. Social identities, marketing preferences, billing settings, profile photo upload and email-change UI are intentionally absent from this initial account screen.

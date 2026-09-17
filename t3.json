@@ -4,9 +4,8 @@
     {
       "name": "Sandbox setup",
       "command": "cp \"$T3CODE_PROJECT_ROOT/.env\" .env && bun install --frozen-lockfile && bun run setup",
-      "icon": "wrench",
-      "runOnWorktreeCreate": true,
-      "async": false
+      "icon": "configure",
+      "runOnWorktreeCreate": true
     },
     {
       "name": "Dev",
