@@ -137,7 +137,10 @@ export async function app(number: number, platform: string) {
   if (existsSync(pidFile)) try { process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGTERM'); } catch { /* not running */ }
   const port = appPort(number);
   const adopted = adoptDesktopSession();
-  const child = spawn(binary, [`--user-data-dir=${join(dir, 'profile')}`, `--remote-debugging-port=${port}`], { detached: true, stdio: ['ignore', 'ignore', 'ignore'], env: process.env });
+  // A shell inside an Electron host (T3 Code, VS Code) carries ELECTRON_RUN_AS_NODE, which would make the app run as plain Node and reject its own flags.
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const child = spawn(binary, [`--user-data-dir=${join(dir, 'profile')}`, `--remote-debugging-port=${port}`], { detached: true, stdio: ['ignore', 'ignore', 'ignore'], env });
   child.unref();
   writeFileSync(pidFile, String(child.pid));
   for (let i = 0; i < 60; i++) {
