@@ -66,8 +66,8 @@ export type Skip = { issue: Issue; reason: string };
 
 /**
  * Which `ready` issues to claim now. Only issues written by someone in the
- * organization (or a repository collaborator); anyone can label, but the work
- * itself must come from inside. Oldest first, never more than the free slots,
+ * organization (or a repository collaborator), whatever the repository's
+ * visibility; the work itself must come from inside. Oldest first, never more than the free slots,
  * never one that already carries a later label, already has a thread, or was
  * claimed earlier by this process.
  */

@@ -27,19 +27,25 @@ on:
 permissions:
   contents: read
   pull-requests: write
+# One run per branch at a time, shared with Teardown Preview's group. A manual
+# dispatch only knows the PR number, so it gets its own group.
 concurrency:
-  group: prepare-pr-${{ github.event.pull_request.number || inputs.pr }}
+  group: preview-${{ github.event.pull_request.head.ref || format('pr-{0}', inputs.pr) }}
   cancel-in-progress: false
 jobs:
-  resolve:
+  deploy:
     # A label event only counts when it is one of ours; other labels do nothing.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.label.name, 'prepare-')
     runs-on: ubuntu-latest
+    environment: Preview
     outputs:
       number: ${{ steps.pr.outputs.number }}
       platforms: ${{ steps.pr.outputs.platforms }}
       head_ref: ${{ steps.pr.outputs.head_ref }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
+      stage: ${{ steps.stage.outputs.stage }}
+      runtime_config: ${{ steps.runtime.outputs.runtime_config }}
+      web_env: ${{ steps.runtime.outputs.web_env }}
     steps:
       - name: Look up the pull request
         id: pr
@@ -61,28 +67,15 @@ jobs:
             if (pr.head.ref === 'main') return core.setFailed('Refusing to preview main');
             core.setOutput('head_ref', pr.head.ref);
             core.setOutput('head_sha', pr.head.sha);
-  deploy:
-    needs: resolve
-    runs-on: ubuntu-latest
-    environment: Preview
-    # One preview per branch at a time, shared with Teardown Preview.
-    concurrency:
-      group: preview-${{ needs.resolve.outputs.head_ref }}
-      cancel-in-progress: false
-    outputs:
-      stage: ${{ steps.stage.outputs.stage }}
-      runtime_config: ${{ steps.runtime.outputs.runtime_config }}
-      web_env: ${{ steps.runtime.outputs.web_env }}
-    steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.head_sha }}
+          ref: ${{ steps.pr.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/preview-stage
         id: stage
         with:
-          branch: ${{ needs.resolve.outputs.head_ref }}
+          branch: ${{ steps.pr.outputs.head_ref }}
       - name: Check
         run: bun run check && bun run test:cloud && bun test scripts/preview.test.ts
       - uses: ./.github/actions/inject-secrets
@@ -100,8 +93,8 @@ jobs:
       - name: Report the preview on the pull request
         uses: actions/github-script@v7
         env:
-          PR: ${{ needs.resolve.outputs.number }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          PR: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         with:
           script: |
             const fs = require('fs');
@@ -117,9 +110,18 @@ jobs:
             const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
             if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
             else await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
+      - name: Remove the request label when no build was asked for
+        if: github.event_name == 'pull_request' && steps.pr.outputs.platforms == 'none'
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          LABEL: ${{ github.event.label.name }}
+        with:
+          script: |
+            try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: Number(process.env.PR), name: process.env.LABEL }); } catch (error) { if (error.status !== 404) throw error; }
   build-linux:
-    needs: [resolve, deploy]
-    if: needs.resolve.outputs.platforms == 'linux' || needs.resolve.outputs.platforms == 'both'
+    needs: deploy
+    if: needs.deploy.outputs.platforms == 'linux' || needs.deploy.outputs.platforms == 'both'
     runs-on: ubuntu-latest
     # For the R2 key that publishes the installer.
     environment: Preview
@@ -127,7 +129,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.head_sha }}
+          ref: ${{ needs.deploy.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/inject-secrets
@@ -143,7 +145,7 @@ jobs:
           echo "$WEB_ENV" | base64 -d > apps/web/.env
       - name: Name the build after the pull request
         env:
-          PR: ${{ needs.resolve.outputs.number }}
+          PR: ${{ needs.deploy.outputs.number }}
         run: bun scripts/pr-brand.ts "$PR"
       - name: Stage chat runtime
         run: bun run --cwd apps/desktop stage:chat
@@ -158,15 +160,52 @@ jobs:
       - name: Verify the installer's stage
         env:
           EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.deploy.outputs.head_sha }}
         run: bun scripts/pr-artifact-check.ts linux
       - name: Publish the installer to the evidence bucket
         env:
-          PR: ${{ needs.resolve.outputs.number }}
+          PR: ${{ needs.deploy.outputs.number }}
         run: bun scripts/pr-publish.ts upload "$PR"
+      - name: List the installers on the pull request
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ needs.deploy.outputs.number }}
+          HEAD_SHA: ${{ needs.deploy.outputs.head_sha }}
+          STAGE: ${{ needs.deploy.outputs.stage }}
+        with:
+          script: |
+            // Each build job renders the comment from what is published for this
+            // commit, so whichever finishes last leaves it complete.
+            const marker = '<!-- compound-pr-builds -->';
+            const run = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const number = Number(process.env.PR);
+            const base = `https://evidence.compound.mov/pr-${number}/`;
+            const rows = [];
+            for (const [label, platform] of [['Linux x64 (zip)', 'linux'], ['macOS universal (dmg, zip)', 'mac']]) {
+              try {
+                const manifest = await (await fetch(`${base}manifest-${platform}.json`, { cache: 'no-store' })).json();
+                if (manifest.headSha !== process.env.HEAD_SHA) continue;
+                rows.push(`| ${label} | ${manifest.files.map(f => `[${f.name}](${base}${encodeURIComponent(f.name)})`).join(', ')} |`);
+              } catch {}
+            }
+            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\` and published to \`${base}\`. The app is named **Compound PR ${number}** with its own bundle id and profile, so it installs and runs beside the real Compound. Sign in with any email and the code \`000000\`.`, '', '| Platform | Download |', '|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
+            const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
+      - name: Remove the request label so the next request is a new event
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ needs.deploy.outputs.number }}
+          LABEL: ${{ github.event.label.name }}
+        with:
+          script: |
+            try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: Number(process.env.PR), name: process.env.LABEL }); } catch (error) { if (error.status !== 404) throw error; }
   build-mac:
-    needs: [resolve, deploy]
-    if: needs.resolve.outputs.platforms == 'mac' || needs.resolve.outputs.platforms == 'both'
+    needs: deploy
+    if: needs.deploy.outputs.platforms == 'mac' || needs.deploy.outputs.platforms == 'both'
     runs-on: macos-latest
     # Signing and notarization use the Apple credentials in the prod vault.
     environment: prod
@@ -174,7 +213,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.head_sha }}
+          ref: ${{ needs.deploy.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Point the desktop at the preview stage
@@ -186,7 +225,7 @@ jobs:
           echo "$WEB_ENV" | base64 -d > apps/web/.env
       - name: Name the build after the pull request
         env:
-          PR: ${{ needs.resolve.outputs.number }}
+          PR: ${{ needs.deploy.outputs.number }}
         run: bun scripts/pr-brand.ts "$PR"
       - name: Load Apple release credentials
         uses: 1password/load-secrets-action@v3
@@ -217,7 +256,7 @@ jobs:
       - name: Verify signature, notarization, and the installer's stage
         env:
           EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.deploy.outputs.head_sha }}
         run: bun scripts/pr-artifact-check.ts mac
       - name: Load installer storage credentials
         uses: 1password/load-secrets-action@v3
@@ -230,54 +269,44 @@ jobs:
           R2_SECRET_ACCESS_KEY: op://compound-prod/R2/secret-access-key
       - name: Publish the installers to the evidence bucket
         env:
-          PR: ${{ needs.resolve.outputs.number }}
+          PR: ${{ needs.deploy.outputs.number }}
         run: bun scripts/pr-publish.ts upload "$PR"
       - name: Clean up signing credentials
         if: always()
         run: bun scripts/release-signing-cleanup.ts
-  report:
-    needs: [resolve, deploy, build-linux, build-mac]
-    if: always() && needs.deploy.result == 'success' && needs.resolve.outputs.platforms != 'none'
-    runs-on: ubuntu-latest
-    steps:
       - name: List the installers on the pull request
+        if: always()
         uses: actions/github-script@v7
         env:
-          PR: ${{ needs.resolve.outputs.number }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          PR: ${{ needs.deploy.outputs.number }}
+          HEAD_SHA: ${{ needs.deploy.outputs.head_sha }}
           STAGE: ${{ needs.deploy.outputs.stage }}
-          LINUX: ${{ needs.build-linux.result }}
-          MAC: ${{ needs.build-mac.result }}
         with:
           script: |
+            // Each build job renders the comment from what is published for this
+            // commit, so whichever finishes last leaves it complete.
             const marker = '<!-- compound-pr-builds -->';
             const run = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
             const number = Number(process.env.PR);
             const base = `https://evidence.compound.mov/pr-${number}/`;
             const rows = [];
-            for (const [label, platform, result] of [['Linux x64 (zip)', 'linux', process.env.LINUX], ['macOS universal (dmg, zip)', 'mac', process.env.MAC]]) {
-              if (result === 'skipped') continue;
-              let links = '';
+            for (const [label, platform] of [['Linux x64 (zip)', 'linux'], ['macOS universal (dmg, zip)', 'mac']]) {
               try {
                 const manifest = await (await fetch(`${base}manifest-${platform}.json`, { cache: 'no-store' })).json();
-                links = manifest.files.map(f => `[${f.name}](${base}${encodeURIComponent(f.name)})`).join(', ');
+                if (manifest.headSha !== process.env.HEAD_SHA) continue;
+                rows.push(`| ${label} | ${manifest.files.map(f => `[${f.name}](${base}${encodeURIComponent(f.name)})`).join(', ')} |`);
               } catch {}
-              rows.push(`| ${label} | ${result} | ${links} |`);
             }
-            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\` and published to \`${base}\`. The app is named **Compound PR ${number}** with its own bundle id and profile, so it installs and runs beside the real Compound. Sign in with any email and the code \`000000\`.`, '', '| Platform | Build | Download |', '|---|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
+            const body = [marker, `## Desktop installers for ${process.env.HEAD_SHA.slice(0, 7)}`, '', `Built against preview stage \`${process.env.STAGE}\` and published to \`${base}\`. The app is named **Compound PR ${number}** with its own bundle id and profile, so it installs and runs beside the real Compound. Sign in with any email and the code \`000000\`.`, '', '| Platform | Download |', '|---|---|', ...rows, '', `Fetch and launch one with \`bun run pr app ${number} --platform linux|mac\`, which also opens a remote debugging port for agent-browser. [Run logs](${run})`].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number });
             const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
             if (previous) await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
             else await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
-  finish:
-    needs: [resolve, deploy, build-linux, build-mac, report]
-    if: always() && needs.resolve.result == 'success' && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
       - name: Remove the request label so the next request is a new event
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
-          PR: ${{ needs.resolve.outputs.number }}
+          PR: ${{ needs.deploy.outputs.number }}
           LABEL: ${{ github.event.label.name }}
         with:
           script: |
