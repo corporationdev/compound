@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { deployment } from '@compound/config/deployment';
@@ -24,6 +24,7 @@ const target = action === 'preview' ? { preview: true }
 if (action !== 'preview') requireKeys(backend, ['CONVEX_URL', 'SITE_URL', 'RESEND_FROM_EMAIL']);
 if (backend.BETTER_AUTH_SECRET.length < 32) throw new Error('BETTER_AUTH_SECRET needs at least 32 random characters');
 const cwd = resolve(root, 'packages/backend');
+if (sandbox) mkdirSync(resolve(cwd, '.convex/tmp'), { recursive: true });
 /**
  * The local deployment the Convex CLI created for this checkout, if any. Its
  * state lives beside the functions, so every worktree has its own; the CLI
@@ -36,6 +37,13 @@ function localDeploymentName(): string | null {
   return typeof name === 'string' && name ? name : null;
 }
 const ports = stagePorts(stage);
+if (sandbox) {
+  // The local backend runs "use node" actions with the Node on PATH and refuses versions it does not know.
+  const version = spawnSync('node', ['--version'], { encoding: 'utf8' }).stdout?.trim() ?? '';
+  const major = Number(version.match(/^v(\d+)/)?.[1]);
+  if (![20, 22, 24].includes(major))
+    throw new Error(`Convex's local backend needs Node 20, 22 or 24 first on PATH; found ${version || 'none'}. Install one (for example under ~/.local/node22) and prepend its bin to PATH.`);
+}
 // Until the first run creates the local deployment, configure one in the committed project.
 const sandboxArgs = () => [
   ...(localDeploymentName() ? [] : ['--configure', 'existing', '--team', deployment.convexTeamSlug, '--project', deployment.convexProjectSlug, '--dev-deployment', 'local']),
@@ -48,6 +56,9 @@ const run = (command: string[], quiet = false) => {
     cwd,
     env: {
       ...process.env,
+      // The CLI moves built modules from its temp dir into the deployment's storage with a
+      // rename, which fails across filesystems (a tmpfs /tmp on Linux). Keep temp beside the state.
+      ...(sandbox && !process.env.CONVEX_TMPDIR ? { CONVEX_TMPDIR: resolve(cwd, '.convex/tmp') } : {}),
       STAGE: stage,
       // Empty values shadow the injected .env so the CLI never selects the shared cloud deployment for a sandbox.
       CONVEX_DEPLOYMENT: local ? `local:${local}` : '',
