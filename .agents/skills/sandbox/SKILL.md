@@ -43,17 +43,12 @@ CLI, cloudflared, and the Convex CLI logged in once with `npx convex login`.
 
 ### Linux over SSH
 
-Electron needs the desktop session's display. From an SSH shell on a GNOME
-Wayland machine, export these before `bun dev`, or Electron exits with
-"Missing X server or $DISPLAY":
-
-```sh
-export DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_SESSION_TYPE=wayland \
-  XDG_RUNTIME_DIR=/run/user/$(id -u) \
-  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus \
-  ELECTRON_OZONE_PLATFORM_HINT=auto \
-  XAUTHORITY=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth.* | head -1)
-```
+Electron needs the desktop session's display. A shell that did not come
+from the desktop (SSH, a T3 Code terminal) has none, so the dev launcher
+finds the logged-in session itself and points Electron at it; the log says
+`using the desktop session`. Someone must be logged in to the desktop on
+that machine. If Electron still exits with "Missing X server or $DISPLAY",
+nobody is.
 
 Start the stack detached so it outlives the SSH session, and keep its log:
 
