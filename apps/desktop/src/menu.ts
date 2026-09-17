@@ -5,7 +5,8 @@
 import { app, Menu } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 
-export function setupAppMenu() {
+/** `checkForUpdates` is null in a build that cannot update itself; the item is left out. */
+export function setupAppMenu(checkForUpdates: (() => void) | null) {
   if (process.platform !== "darwin") return;
 
   const template: MenuItemConstructorOptions[] = [
@@ -13,6 +14,7 @@ export function setupAppMenu() {
       label: app.name,
       submenu: [
         { role: "about" },
+        ...(checkForUpdates ? [{ label: "Check for Updates…", click: checkForUpdates } satisfies MenuItemConstructorOptions] : []),
         { type: "separator" },
         { role: "services" },
         { type: "separator" },

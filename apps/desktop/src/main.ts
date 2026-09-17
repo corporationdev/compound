@@ -6,7 +6,7 @@ import { cloudConfig, authRequest, mediaRequest, uploadMedia, uploadCatalogAudio
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
@@ -20,6 +20,7 @@ import { prepareUserData } from "./brand-migration";
 import { ChatServer } from "./chat-server";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
+import type { UpdateState } from "./main-channels";
 import {
   compileProject,
   createProject,
@@ -62,6 +63,8 @@ import {
   writeWorkspaceFile,
 } from "./workspace";
 import { AssetTransferManager, realAssetCloud } from "./assets-transfers";
+import { Updater } from "./updates";
+import { release } from "@compound/config/release";
 import type { LogEntry } from "@compound/dapi";
 
 const DEV_URL = "http://localhost:5173";
@@ -105,6 +108,28 @@ const openWrites = new Map<string, { handle: FileHandle; path: string; temp: str
 
 let mainWindow: BrowserWindow | null = null;
 let assetsWindow: BrowserWindow | null = null;
+// The app updates itself from the public releases feed: a packaged production
+// build on macOS, where Squirrel.Mac can verify and swap the signed bundle. A
+// dev build, a build for another stage and other platforms have no updater.
+// COMPOUND_UPDATE_FEED names another feed, for trying a release before it is
+// the latest.
+const productionBuild = (() => {
+  if (!app.isPackaged) return false;
+  try {
+    return JSON.parse(readFileSync(join(app.getAppPath(), "runtime-config.json"), "utf8")).stage === "prod";
+  } catch {
+    return false;
+  }
+})();
+const UPDATES_UNAVAILABLE: UpdateState = { status: "unavailable" };
+const updater = productionBuild && process.platform === "darwin"
+  ? new Updater({
+      feedUrl: process.env.COMPOUND_UPDATE_FEED || release.feedUrl,
+      version: app.getVersion(),
+      window: () => mainWindow,
+      onChange: (state) => mainBridge.emit(mainWindow, MAIN_CHANNELS.UPDATES_STATE, state),
+    })
+  : null;
 // Every project's asset uploads and downloads; state goes to the window as events.
 const assetTransfers = new AssetTransferManager({
   cloud: realAssetCloud,
@@ -298,6 +323,9 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.CLI_STATUS, () => cliStatus());
   mainBridge.handle(MAIN_CHANNELS.CLI_INSTALL, () => installCli());
   mainBridge.handle(MAIN_CHANNELS.CLI_UNINSTALL, () => uninstallCli());
+  mainBridge.handle(MAIN_CHANNELS.UPDATES_GET, () => updater?.current ?? UPDATES_UNAVAILABLE);
+  mainBridge.handle(MAIN_CHANNELS.UPDATES_CHECK, (_data, event) => { trustedRenderer(event); return updater ? updater.check(false) : UPDATES_UNAVAILABLE; });
+  mainBridge.handle(MAIN_CHANNELS.UPDATES_INSTALL, (_data, event) => { trustedRenderer(event); updater?.install(); });
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
@@ -420,7 +448,8 @@ if (app.requestSingleInstanceLock()) {
       if (!devIcon.isEmpty()) app.dock?.setIcon(devIcon);
     }
 
-    setupAppMenu();
+    setupAppMenu(updater ? () => void updater.check(true) : null);
+    updater?.start();
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true));
     session.defaultSession.setPermissionCheckHandler(() => true);
     session.defaultSession.setDevicePermissionHandler(() => true);

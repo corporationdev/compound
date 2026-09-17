@@ -93,6 +93,9 @@ export const MAIN_CHANNELS = {
   CLI_STATUS: "cli:status",
   CLI_INSTALL: "cli:install",
   CLI_UNINSTALL: "cli:uninstall",
+  UPDATES_GET: "updates:get",
+  UPDATES_CHECK: "updates:check",
+  UPDATES_INSTALL: "updates:install",
 
   // Main→Renderer events
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
@@ -101,6 +104,7 @@ export const MAIN_CHANNELS = {
   SYNC_STATUS: "sync:status",
   SYNC_CONFLICT: "sync:conflict",
   CLOUD_ASSETS_STATE: "cloud:assets-state",
+  UPDATES_STATE: "updates:state",
 } as const;
 
 /**
@@ -197,6 +201,20 @@ export type CliUninstallResult =
   | { status: "absent" }
   | { status: "cancelled" }
   | { status: "error"; error: string };
+
+/**
+ * Where the app's updater stands (see updates.ts). `unavailable` is a build
+ * that cannot update itself: development, a pull request build, not macOS.
+ * `ready` means the new version is on disk and a restart installs it.
+ */
+export type UpdateState =
+  | { status: "unavailable" }
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "up-to-date" }
+  | { status: "downloading"; version: string }
+  | { status: "ready"; version: string }
+  | { status: "error"; message: string };
 
 export type MainChannel = (typeof MAIN_CHANNELS)[keyof typeof MAIN_CHANNELS];
 
@@ -383,6 +401,12 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.CLI_STATUS]: { request: void; response: CliStatus };
   [MAIN_CHANNELS.CLI_INSTALL]: { request: void; response: CliInstallResult };
   [MAIN_CHANNELS.CLI_UNINSTALL]: { request: void; response: CliUninstallResult };
+  // The updater's state now; a check runs one and answers once it has either
+  // started a download (which UPDATES_STATE events then follow) or settled.
+  [MAIN_CHANNELS.UPDATES_GET]: { request: void; response: UpdateState };
+  [MAIN_CHANNELS.UPDATES_CHECK]: { request: void; response: UpdateState };
+  // Restarts into the downloaded version; nothing happens unless one is ready.
+  [MAIN_CHANNELS.UPDATES_INSTALL]: { request: void; response: void };
 };
 
 export type FsEntry = {
@@ -408,6 +432,7 @@ export type MainEventMap = {
   [MAIN_CHANNELS.SYNC_CONFLICT]: { dir: string; path: string; keptCopy: string };
   // A project's asset transfers moved (see assets-transfers.ts).
   [MAIN_CHANNELS.CLOUD_ASSETS_STATE]: import("./assets-transfers").AssetsSnapshot;
+  [MAIN_CHANNELS.UPDATES_STATE]: UpdateState;
 };
 export type MainEventChannel = keyof MainEventMap;
 

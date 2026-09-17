@@ -9,7 +9,7 @@
 <p align="center">The professional video editor built for agents</p>
 
 <p align="center">
-  <a href="https://github.com/corporationdev/compound/releases/latest">Download for macOS</a> ·
+  <a href="https://github.com/corporationdev/compound-releases/releases/latest">Download for macOS</a> ·
   <a href="https://github.com/corporationdev/compound/issues">Support</a> ·
   <a href="docs/reference/tools/README.md">Tool reference</a>
 </p>
@@ -58,7 +58,7 @@ The desktop app serves its editing tools as an MCP server, and ships the same se
 
 Download the desktop app, it walks you through setting everything up:
 
-<a href="https://github.com/corporationdev/compound/releases/latest"><img src="https://img.shields.io/badge/Download-Compound-161616?style=for-the-badge&logo=apple&logoColor=F8F8F8&labelColor=000000" alt="Download Compound" /></a>
+<a href="https://github.com/corporationdev/compound-releases/releases/latest"><img src="https://img.shields.io/badge/Download-Compound-161616?style=for-the-badge&logo=apple&logoColor=F8F8F8&labelColor=000000" alt="Download Compound" /></a>
 
 Use with Claude Code, Codex, Cursor, Copilot, or Gemini CLI. The app registers its MCP server with your agent, so just ask for what you want in plain language. Every session's instructions carry the editing and watching skills, so the agent reads the guidance it needs up front. `compound` is the same set of tools as a CLI.
 
