@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -26,8 +26,9 @@ if (platform === 'mac') {
   const app = only('*-darwin-arm64/*.app', out);
   appDir = join(app, 'Contents/Resources/app');
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
-  const identity = execFileSync('codesign', ['-dv', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString();
-  if (!/Authority=Developer ID Application/.test(identity) && !/Developer ID Application/.test(execFileSync('codesign', ['-dvv', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString()))
+  // codesign reports on stderr.
+  const details = spawnSync('codesign', ['-dvv', app], { encoding: 'utf8' });
+  if (!/Authority=Developer ID Application/.test(`${details.stdout}${details.stderr}`))
     throw new Error('Pull request build is not signed with the Developer ID');
   installers = [...new Bun.Glob('**/*.{dmg,zip}').scanSync(join(out, 'make'))];
 } else if (platform === 'linux') {
