@@ -6,10 +6,11 @@ buttons point to the production installer. Run `bun run dev:landing` locally.
 
 ## Where releases live
 
-Installers are published to the public repository
+Installers are published to the repository
 [corporationdev/compound-releases](https://github.com/corporationdev/compound-releases),
-separate from this private one so the app and the landing page can fetch them
-without credentials. Every release carries:
+separate from the source so releases have a page of their own, the feed and
+download URLs never depend on this repository's visibility, and the token that
+publishes them can write nothing else. Every release carries:
 
 - `Compound-mac-universal.dmg`, the installer people download.
 - `Compound-mac-universal.zip`, what the app's updater installs.

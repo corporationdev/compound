@@ -1,8 +1,8 @@
 /**
- * Where installers and the update feed live: the releases of a public GitHub
- * repository, separate from the private source so the app and the landing
- * page can fetch them without credentials. Every release carries the DMG for
- * people, the zip for Squirrel.Mac, checksums, and the feed document.
+ * Where installers and the update feed live: the releases of a GitHub
+ * repository of their own, so the app and the landing page fetch them at
+ * URLs that never depend on the source repository. Every release carries the
+ * DMG for people, the zip for Squirrel.Mac, checksums, and the feed document.
  */
 const repository = { owner: 'corporationdev', name: 'compound-releases' } as const;
 const url = `https://github.com/${repository.owner}/${repository.name}`;
