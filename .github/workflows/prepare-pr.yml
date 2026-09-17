@@ -206,7 +206,7 @@ jobs:
     needs: deploy
     if: needs.deploy.outputs.platforms == 'mac' || needs.deploy.outputs.platforms == 'both'
     runs-on: macos-latest
-    # Signing and notarization use the Apple credentials in the prod vault.
+    # Signing uses the Apple credentials in the prod vault.
     environment: prod
     timeout-minutes: 90
     steps:
