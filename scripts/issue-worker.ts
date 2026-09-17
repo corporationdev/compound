@@ -162,16 +162,22 @@ async function gh(args: string[]): Promise<string> {
   return stdout;
 }
 
+/** Open issues with a label. The REST API, because `gh issue list` cannot report the author's association. */
 async function listIssues(label: string): Promise<Issue[]> {
-  const raw = JSON.parse(await gh(['issue', 'list', '--state', 'open', '--label', label, '--limit', '100', '--json', 'number,title,body,labels,author,authorAssociation'])) as {
+  const raw = JSON.parse(await gh(['api', `repos/${REPO}/issues?state=open&labels=${encodeURIComponent(label)}&per_page=100`])) as {
     number: number;
     title: string;
-    body: string;
+    body: string | null;
     labels: { name: string }[];
-    author: { login: string };
-    authorAssociation: string;
+    user: { login: string };
+    author_association: string;
+    pull_request?: unknown;
   }[];
-  return raw.map((issue) => ({ ...issue, labels: issue.labels.map((l) => l.name), author: issue.author.login }));
+  // The issues endpoint lists pull requests too; only real issues are work.
+  return raw.filter((issue) => !issue.pull_request).map((issue) => ({
+    number: issue.number, title: issue.title, body: issue.body ?? '', labels: issue.labels.map((l) => l.name),
+    author: issue.user.login, authorAssociation: issue.author_association,
+  }));
 }
 
 async function ensureLabels() {
