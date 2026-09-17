@@ -155,7 +155,8 @@ function log(message: string) {
 }
 
 async function gh(args: string[]): Promise<string> {
-  const proc = Bun.spawn(['gh', ...args, '-R', REPO], { stdout: 'pipe', stderr: 'pipe' });
+  // `gh api` takes full paths and has no --repo flag; every other subcommand is pinned to the repo.
+  const proc = Bun.spawn(['gh', ...args, ...(args[0] === 'api' ? [] : ['-R', REPO])], { stdout: 'pipe', stderr: 'pipe' });
   const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (code !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${stderr.trim() || stdout.trim()}`);
   return stdout;
