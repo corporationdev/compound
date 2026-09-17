@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolveRuntimeContext } from '@compound/config/runtime';
 import { release } from '@compound/config/release';
+import { evidence } from '@compound/config/evidence';
 import alchemy from 'alchemy';
 import { R2Bucket, Tunnel, Worker, Vite } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
@@ -101,6 +102,13 @@ export const releases = runtime.stageKind === 'production'
   ? await R2Bucket('releases', {
       name: release.bucket, adopt: true, devDomain: false, delete: false,
     })
+  : undefined;
+
+// Pull request installers and recordings, public behind evidence.<rootDomain>.
+// Account-level, so it is declared with production only; the custom domain was
+// attached once through the API and is not managed here.
+export const evidenceBucket = runtime.stageKind === 'production'
+  ? await R2Bucket('evidence', { name: evidence.bucket, adopt: true, devDomain: false, delete: false })
   : undefined;
 
 export const landing = runtime.landingHostname

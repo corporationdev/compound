@@ -11,8 +11,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref != 'main' && github.actor != 'dependabot[bot]'
     environment: Preview
     permissions:
-      # The PR's draft release (installers, evidence) goes with the preview.
-      contents: write
+      contents: read
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
@@ -38,9 +37,8 @@ jobs:
       - name: Destroy Alchemy and delete Convex preview
         if: steps.current.outputs.closed == 'true'
         run: bun scripts/teardown-preview.ts --stage "$STAGE"
-      - name: Delete the pull request's draft release
+      - name: Remove the pull request's installers and evidence from the bucket
         if: steps.current.outputs.closed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        run: gh release delete "pr-$PR" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || echo "No draft release for #$PR"
+        run: bun scripts/pr-publish.ts delete "$PR"

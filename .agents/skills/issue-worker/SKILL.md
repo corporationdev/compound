@@ -128,8 +128,8 @@ bun run pr evidence <number> /tmp/pr-<number>.webm /tmp/pr-<number>-final.png \
   --body "<one paragraph: what the recording shows, and a checklist of the issue's criteria with pass/fail>"
 ```
 
-`evidence` attaches the files to the PR's draft release, `pr-<number>`, next to
-its installers, and comments the links on the PR. If the preview shows a bug, fix it, push, and go back to
+`evidence` uploads the files to the public evidence bucket under `pr-<number>/`,
+next to the installers, and comments links that play in the browser. If the preview shows a bug, fix it, push, and go back to
 step 4; the review loop reruns and `prepare` refreshes the same preview.
 
 ## 6. Hand it over

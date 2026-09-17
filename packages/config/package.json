@@ -10,6 +10,7 @@
     "./deployment": "./src/deployment.ts",
     "./models": "./src/models.ts",
     "./release": "./src/release.ts",
+    "./evidence": "./src/evidence.ts",
     "./transcription": "./src/transcription.ts"
   },
   "scripts": {
