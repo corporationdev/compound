@@ -56,9 +56,10 @@ const run = (command: string[], quiet = false) => {
     cwd,
     env: {
       ...process.env,
-      // The CLI moves built modules from its temp dir into the deployment's storage with a
-      // rename, which fails across filesystems (a tmpfs /tmp on Linux). Keep temp beside the state.
-      ...(sandbox && !process.env.CONVEX_TMPDIR ? { CONVEX_TMPDIR: resolve(cwd, '.convex/tmp') } : {}),
+      // The CLI and the local backend binary move built modules from their temp dir into the
+      // deployment's storage with a rename, which fails across filesystems (a tmpfs /tmp on
+      // Linux). Keep both temp dirs beside the state; TMPDIR is what the binary reads.
+      ...(sandbox ? { CONVEX_TMPDIR: resolve(cwd, '.convex/tmp'), TMPDIR: resolve(cwd, '.convex/tmp') } : {}),
       STAGE: stage,
       // Empty values shadow the injected .env so the CLI never selects the shared cloud deployment for a sandbox.
       CONVEX_DEPLOYMENT: local ? `local:${local}` : '',
