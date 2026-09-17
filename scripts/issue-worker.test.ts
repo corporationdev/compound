@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { branchName, firstMessage, planClaims, threadIdFor, type Issue } from './issue-worker';
 import { projectScriptsFromT3Json } from './lib/t3code';
 
-const issue = (number: number, labels: string[] = ['ready']): Issue => ({ number, title: `Issue ${number}`, body: '', labels });
+const issue = (number: number, labels: string[] = ['ready'], authorAssociation = 'MEMBER'): Issue => ({ number, title: `Issue ${number}`, body: '', labels, authorAssociation, author: 'someone' });
 
 describe('branchName', () => {
   test('slugs the title under issue/<number>-', () => {
@@ -44,6 +44,15 @@ describe('planClaims', () => {
     const plan = planClaims({ ready: [issue(1), issue(1), issue(2)], inProgressCount: 0, started: new Set([2]) });
     expect(plan.claim.map((i) => i.number)).toEqual([1]);
     expect(plan.skip.map((s) => [s.issue.number, s.reason])).toEqual([[2, 'already has a thread']]);
+  });
+
+  test('claims only issues written from inside the organization, without using a slot on the rest', () => {
+    const plan = planClaims({ ready: [issue(1, ['ready'], 'NONE'), issue(2, ['ready'], 'CONTRIBUTOR'), issue(3, ['ready'], 'COLLABORATOR'), issue(4, ['ready'], 'OWNER'), issue(5)], inProgressCount: 0, started: new Set(), max: 3 });
+    expect(plan.claim.map((i) => i.number)).toEqual([3, 4, 5]);
+    expect(plan.skip.map((s) => [s.issue.number, s.reason])).toEqual([
+      [1, 'author someone is NONE, not in the organization'],
+      [2, 'author someone is CONTRIBUTOR, not in the organization'],
+    ]);
   });
 
   test('skips issues that also carry a later label without using a slot', () => {

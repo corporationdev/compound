@@ -31,7 +31,14 @@ export interface Issue {
   title: string;
   body: string;
   labels: string[];
+  /** GitHub's relation of the issue's author to the repository: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, ... */
+  authorAssociation: string;
+  author: string;
 }
+
+/** Only people inside the organization, or invited to the repository, can hand the worker work. */
+export const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+export const isTrustedAuthor = (issue: Pick<Issue, 'authorAssociation'>) => TRUSTED_ASSOCIATIONS.has(issue.authorAssociation);
 
 /** `issue/<number>-<slug>`: lowercase ASCII words from the title, at most 48 characters of slug. */
 export function branchName(number: number, title: string): string {
@@ -58,9 +65,11 @@ export function threadIdFor(number: number): string {
 export type Skip = { issue: Issue; reason: string };
 
 /**
- * Which `ready` issues to claim now. Oldest first, never more than the free
- * slots, never one that already carries a later label, already has a thread,
- * or was claimed earlier by this process.
+ * Which `ready` issues to claim now. Only issues written by someone in the
+ * organization (or a repository collaborator); anyone can label, but the work
+ * itself must come from inside. Oldest first, never more than the free slots,
+ * never one that already carries a later label, already has a thread, or was
+ * claimed earlier by this process.
  */
 export function planClaims(input: {
   ready: Issue[];
@@ -76,7 +85,8 @@ export function planClaims(input: {
     if (seen.has(issue.number)) continue;
     seen.add(issue.number);
     const later = issue.labels.find((label) => label === 'in-progress' || label === 'in-review');
-    if (later) skip.push({ issue, reason: `also labeled ${later}` });
+    if (!isTrustedAuthor(issue)) skip.push({ issue, reason: `author ${issue.author} is ${issue.authorAssociation}, not in the organization` });
+    else if (later) skip.push({ issue, reason: `also labeled ${later}` });
     else if (input.started.has(issue.number)) skip.push({ issue, reason: 'already has a thread' });
     else if (slots === 0) skip.push({ issue, reason: `${MAX_IN_PROGRESS} issues already in progress` });
     else {
@@ -112,13 +122,15 @@ async function gh(args: string[]): Promise<string> {
 }
 
 async function listIssues(label: string): Promise<Issue[]> {
-  const raw = JSON.parse(await gh(['issue', 'list', '--state', 'open', '--label', label, '--limit', '100', '--json', 'number,title,body,labels'])) as {
+  const raw = JSON.parse(await gh(['issue', 'list', '--state', 'open', '--label', label, '--limit', '100', '--json', 'number,title,body,labels,author,authorAssociation'])) as {
     number: number;
     title: string;
     body: string;
     labels: { name: string }[];
+    author: { login: string };
+    authorAssociation: string;
   }[];
-  return raw.map((issue) => ({ ...issue, labels: issue.labels.map((l) => l.name) }));
+  return raw.map((issue) => ({ ...issue, labels: issue.labels.map((l) => l.name), author: issue.author.login }));
 }
 
 async function ensureLabels() {
