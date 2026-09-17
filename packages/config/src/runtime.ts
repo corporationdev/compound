@@ -1,4 +1,5 @@
 import { deployment } from './deployment';
+import { stagePorts } from './ports';
 import { deriveEnvTier, getStageKind } from './stage-kind';
 
 export function validateStage(stage: string): string {
@@ -26,7 +27,9 @@ export function resolveRuntimeContext(
   validateStage(stage);
   const kind = getStageKind(stage);
   const local = kind === 'dev' || kind === 'sandbox';
+  const sandbox = kind === 'sandbox';
   const production = kind === 'production';
+  const ports = stagePorts(stage);
   const rootDomain = options.rootDomain ?? deployment.rootDomain;
   if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(rootDomain)) {
     throw new Error('Set Compound’s public rootDomain in packages/config/src/deployment.ts');
@@ -36,26 +39,43 @@ export function resolveRuntimeContext(
   if (production && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(productionName)) {
     throw new Error('Set productionConvexDeployment in packages/config/src/deployment.ts');
   }
-  const convexUrl = production ? `https://${productionName}.convex.cloud` : options.convexUrl;
-  if (!convexUrl || !/^https:\/\/[a-z0-9]+(?:-[a-z0-9]+)*\.convex\.cloud$/.test(convexUrl)) {
+  // A sandbox stage runs its own Convex backend on this machine; its URLs
+  // follow from the stage's port block, so no deployment output is needed.
+  const sandboxConvexUrl = `http://127.0.0.1:${ports.convexCloud}`;
+  const convexUrl = production
+    ? `https://${productionName}.convex.cloud`
+    : sandbox
+      ? (options.convexUrl ?? sandboxConvexUrl)
+      : options.convexUrl;
+  if (
+    !convexUrl ||
+    (sandbox
+      ? convexUrl !== sandboxConvexUrl
+      : !/^https:\/\/[a-z0-9]+(?:-[a-z0-9]+)*\.convex\.cloud$/.test(convexUrl))
+  ) {
     throw new Error(
-      `Missing hosted Convex deployment URL for ${stage}. Configure Convex locally or provide its deployment output in CI.`,
+      sandbox
+        ? `Sandbox stage ${stage} runs Convex locally at ${sandboxConvexUrl}`
+        : `Missing hosted Convex deployment URL for ${stage}. Configure Convex locally or provide its deployment output in CI.`,
     );
   }
   if (production && options.convexUrl && options.convexUrl !== convexUrl)
     throw new Error('Production Convex URL does not match the committed deployment identity');
-  const convexSiteUrl = convexUrl.replace('.convex.cloud', '.convex.site');
+  const convexSiteUrl = sandbox
+    ? `http://127.0.0.1:${ports.convexSite}`
+    : convexUrl.replace('.convex.cloud', '.convex.site');
   const webUrl = local
-    ? 'http://localhost:5173'
+    ? `http://localhost:${ports.web}`
     : `https://${production ? 'app' : `app-${stage}`}.${rootDomain}`;
   const serverHostname = `${production ? 'server' : `server-${stage}`}.${rootDomain}`;
-  // PostBob's dev tunnel forwards this stable hostname to the local Worker on :3000.
+  // PostBob's dev tunnel forwards this stable hostname to the local Worker on the stage's server port.
   const serverUrl = `https://${serverHostname}`;
   const landingHostname = local ? undefined : production ? rootDomain : `${stage}.${rootDomain}`;
   return {
     stage,
     stageKind: kind,
     envTier: deriveEnvTier(stage),
+    ports,
     convexUrl,
     convexSiteUrl,
     webUrl,

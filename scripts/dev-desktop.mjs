@@ -11,16 +11,35 @@
 // Ctrl-C tears the whole tree down.
 
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { get } from "node:http";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "dotenv";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BIN = join(ROOT, "node_modules", ".bin");
-const DEV_PORT = 5173;
+// runtime:write records the stage and its local ports here. A bare checkout
+// that never ran setup keeps the historical ports.
+const webEnv = existsSync(join(ROOT, "apps", "web", ".env")) ? parse(readFileSync(join(ROOT, "apps", "web", ".env"))) : {};
+const STAGE = webEnv.STAGE ?? "";
+const DEV_PORT = Number(webEnv.COMPOUND_WEB_PORT) || 5173;
 const DEV_URL = `http://localhost:${DEV_PORT}`;
+const INSPECTOR_PORT = Number(webEnv.COMPOUND_INSPECTOR_PORT) || 0;
+// A sandbox stage (a linked worktree) is one of several apps on this machine.
+// It gets its own Electron profile, so the single-instance lock, saved
+// projects and chat data stay apart from the machine's main dev app, and a
+// remote debugging port so a script can drive it.
+const SANDBOX = STAGE.startsWith("sandbox");
+
+/** Electron's appData directory on this platform, where profiles live. */
+function appDataDir() {
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support");
+  if (process.platform === "win32") return process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
+  return process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+}
 const children = [];
 let shuttingDown = false;
 
@@ -169,5 +188,12 @@ if (!existsSync(electronLink)) {
 console.log("[dev:desktop] starting desktop app…");
 // Extra Electron flags for a dev session, e.g. a remote debugging port for
 // driving the app from a script: COMPOUND_DEV_ELECTRON_ARGS="--remote-debugging-port=9333".
-const electronArgs = (process.env.COMPOUND_DEV_ELECTRON_ARGS ?? "").split(/\s+/).filter(Boolean);
+const electronArgs = [
+  ...(SANDBOX ? [`--user-data-dir=${join(appDataDir(), `Compound-${STAGE}`)}`] : []),
+  ...(SANDBOX && INSPECTOR_PORT ? [`--remote-debugging-port=${INSPECTOR_PORT}`] : []),
+  ...(process.env.COMPOUND_DEV_ELECTRON_ARGS ?? "").split(/\s+/).filter(Boolean),
+];
+// The main process loads this stage's Vite server rather than the default port.
+process.env.COMPOUND_DEV_URL = DEV_URL;
+if (SANDBOX) console.log(`[dev:desktop] sandbox stage ${STAGE}: web ${DEV_URL}, profile Compound-${STAGE}${INSPECTOR_PORT ? `, inspector :${INSPECTOR_PORT}` : ""}`);
 run("desktop", "electron-forge", ["start", ...(electronArgs.length ? ["--", ...electronArgs] : [])], DESKTOP);

@@ -51,6 +51,9 @@ apps/desktop/runtime-config.json
 !.env.example
 !.env.op
 
+# Local Convex backend state for sandbox (worktree) stages
+packages/backend/.convex/
+
 # Local transcription/model test environments
 .cache/
 __pycache__/

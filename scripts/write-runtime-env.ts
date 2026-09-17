@@ -22,10 +22,14 @@ export function writeRuntime(stage: string) {
   const infra = scopedEnv('packages/infra', stage);
   requireKeys(infra, ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'ALCHEMY_PASSWORD', 'ALCHEMY_STATE_TOKEN']);
   requireKeys(server, ['CLOUDFLARE_ACCOUNT_ID', ...workerSecretKeys]);
-  requireKeys(backend, ['CONVEX_DEPLOY_KEY']);
+  const sandbox = getStageKind(stage) === 'sandbox';
+  if (!sandbox) requireKeys(backend, ['CONVEX_DEPLOY_KEY']);
   const local = getStageKind(stage) === 'dev' ? readEnv('packages/backend/.env.local') : {};
   // Deployment outputs override discovery; stale generated app .env URLs are never inputs.
-  const convexUrl = convexTarget(stage, backend.CONVEX_DEPLOY_KEY!, process.env.CONVEX_URL?.trim() || local.CONVEX_URL).url;
+  // A sandbox stage's Convex runs locally on ports derived from the stage, so nothing is discovered.
+  const convexUrl = sandbox
+    ? undefined
+    : convexTarget(stage, backend.CONVEX_DEPLOY_KEY!, process.env.CONVEX_URL?.trim() || local.CONVEX_URL).url;
   const runtime = resolveRuntimeContext(stage, { convexUrl });
   if (!/^[a-f0-9]{32}$/.test(server.CLOUDFLARE_ACCOUNT_ID!))
     throw new Error('Invalid Cloudflare account id');
@@ -43,7 +47,13 @@ export function writeRuntime(stage: string) {
   writePrivate('apps/server/.env', renderEnvTemplate('apps/server', serverValues));
   writePrivate(
     'apps/web/.env',
-    renderEnvTemplate('apps/web', { STAGE: stage, ...runtime.webClientEnv }),
+    renderEnvTemplate('apps/web', {
+      STAGE: stage,
+      ...runtime.webClientEnv,
+      COMPOUND_WEB_PORT: String(runtime.ports.web),
+      COMPOUND_SERVER_PORT: String(runtime.ports.server),
+      COMPOUND_INSPECTOR_PORT: String(runtime.ports.inspector),
+    }),
   );
   writePrivate(
     'apps/desktop/runtime-config.json',
