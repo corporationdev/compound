@@ -42,7 +42,7 @@ jobs:
     environment: prod
     timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
     env:
       RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
     steps:
@@ -98,9 +98,9 @@ jobs:
       - name: Verify signature, notarization, architectures, and bundled CLI
         run: bun scripts/release-artifacts.ts
       - name: Save verified release artifacts
-        # A backup copy only: the installers below go to the GitHub release and
-        # R2. Account artifact storage is small and fills after a few builds, so
-        # a full quota must not fail a signed, notarized release.
+        # A backup copy only: the installers below go to the public releases
+        # repository. Account artifact storage is small and fills after a few
+        # builds, so a full quota must not fail a signed, notarized release.
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -110,29 +110,17 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
-      - name: Attach installers to the GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes
-          fi
-          gh release upload "$RELEASE_TAG" .generated/release/*.dmg .generated/release/*.zip .generated/release/checksums.txt --repo "$GITHUB_REPOSITORY" --clobber
-      - name: Load installer storage credentials
+      - name: Load the releases repository token
         uses: 1password/load-secrets-action@v3
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: op://compound-prod/Cloudflare/account-id
-          R2_ACCESS_KEY_ID: op://compound-prod/R2/access-key-id
-          R2_SECRET_ACCESS_KEY: op://compound-prod/R2/secret-access-key
-      - name: Publish the public download
-        run: bun scripts/release-publish.ts
-      - name: Publish GitHub release
+          GITHUB_RELEASES_TOKEN: op://compound-prod/GitHub/releases-token
+      - name: Publish to the public releases repository
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        run: bun scripts/release-publish.ts
       - name: Clean up signing credentials
         if: always()
         run: bun scripts/release-signing-cleanup.ts

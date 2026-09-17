@@ -4,13 +4,20 @@ The landing page is an Astro app in `apps/landing`, deployed by Alchemy at
 `compound.mov`. Preview landing pages use `<stage>.compound.mov`; all download
 buttons point to the production installer. Run `bun run dev:landing` locally.
 
-## First deployment
+## Where releases live
 
-Push the changes to `main` and let **Deploy Production** complete. This creates
-the landing Worker and the persistent `compound-releases-prod` R2 bucket, along
-with the existing production backend resources. The production R2 credentials
-must have Object Read & Write access to this bucket. It is separate from the
-temporary media buckets and has no automatic expiration.
+Installers are published to the public repository
+[corporationdev/compound-releases](https://github.com/corporationdev/compound-releases),
+separate from this private one so the app and the landing page can fetch them
+without credentials. Every release carries:
+
+- `Compound-mac-universal.dmg`, the installer people download.
+- `Compound-mac-universal.zip`, what the app's updater installs.
+- `checksums.txt`, SHA-256 of both.
+- `latest-mac.json`, the update feed: the version, the zip's URL, and checksums.
+
+`https://compound.mov/download` redirects to the newest stable release's DMG
+through GitHub's `releases/latest/download/` URL; the README links there too.
 
 GitHub needs `OP_SERVICE_ACCOUNT_TOKEN` with read access to `compound-prod`.
 The **Release** workflow loads these fields only in the release job:
@@ -18,13 +25,18 @@ The **Release** workflow loads these fields only in the release job:
 | 1Password item | Fields |
 | --- | --- |
 | `Apple` | `certificate`, `certificate-password`, `api-key`, `api-key-id`, `api-issuer`, `team-id` |
-| `R2` | `access-key-id`, `secret-access-key` |
-| `Cloudflare` | `account-id` |
+| `GitHub` | `releases-token` |
 
 `certificate` is a base64 encrypted PKCS#12 containing the Developer ID Application
 certificate and private key. `api-key` is the base64 App Store Connect team key.
 The signing keychain and decoded files are temporary and cleaned up after the job.
 Apple credentials do not belong in the application `.env.op` or client bundle.
+
+`releases-token` is a fine-grained personal access token owned by the
+organization with **Contents: read and write** on `compound-releases` and
+nothing else; the workflow's own token cannot write to another repository. It
+is referenced from `.env.op` as `GITHUB_RELEASES_TOKEN` (resolved for the
+production tier only) and loaded by the workflow directly.
 
 ## Cut a release
 
@@ -51,17 +63,33 @@ The job then builds one universal
 Mac app, signs and notarizes it, checks both architectures and the bundled CLI,
 and produces `Compound-mac-universal.dmg` and `Compound-mac-universal.zip`.
 
-Verified artifacts are retained in GitHub Actions and attached to the private
-repository's GitHub release. Public downloads are served from R2:
+`scripts/release-publish.ts` then creates the release on `compound-releases`
+as a draft, attaches the four files, checks that every upload is whole, and
+publishes it. Only then does `latest` move. A published release is never
+changed: rerunning the workflow for a version that is out is a no-op when the
+files match and an error when they do not, so a changed build needs a new
+version.
 
-- `https://compound.mov/download` redirects to the latest release's DMG.
-- `/releases/v<VERSION>/Compound-mac-universal.dmg` is the immutable installer.
-- `/releases/v<VERSION>/Compound-mac-universal.zip` is the immutable ZIP.
+A release cut from `main` (the workflow's own version bump, or a tag on a
+`main` commit) is stable. A tag pushed from any other branch is published as a
+**prerelease**: it appears on the releases page for people to try, but neither
+`latest` nor the app's updater ever points at it.
 
-The latest pointer changes only after both uploads complete. Older versions cannot
-replace the latest pointer, and a published version cannot be overwritten with
-different files. If a build changes, cut a new version. Before the first release,
-the download endpoint returns a short unavailable response.
+## Updating the app
+
+The packaged macOS app checks `latest-mac.json` on the newest stable release
+fifteen seconds after launch and every four hours, and on demand from
+**Compound → Check for Updates…**. The main process compares the feed's version
+with its own first; only when the feed names something newer is Electron's
+`autoUpdater` (Squirrel.Mac) pointed at it, because Squirrel installs whatever a
+feed names. Squirrel downloads the zip, checks that its code signature matches
+the running app's, and stages it. A toast in the window offers **Restart**; the
+menu check also answers "up to date" and errors as dialogs.
+
+Development builds, pull request builds and other platforms have no updater.
+`COMPOUND_UPDATE_FEED=<url>` in the environment points a packaged build at
+another feed, such as a prerelease's `latest-mac.json`, to try an update before
+it is the latest.
 
 Local unsigned packaging for testing: `SKIP_SIGN=1 bun run make --arch=universal`.
 Use `bun scripts/release-env.ts` first when specifically testing production URLs;

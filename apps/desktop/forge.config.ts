@@ -5,7 +5,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerZIP } from '@electron-forge/maker-zip';
-import { PublisherGithub } from '@electron-forge/publisher-github';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -68,12 +67,6 @@ const config: ForgeConfig = {
         { x: 470, y: 217, type: 'link', path: '/Applications' },
       ],
     })),
-  ],
-  publishers: [
-    new PublisherGithub({
-      repository: { owner: 'corporationdev', name: 'compound' },
-      draft: true,
-    }),
   ],
 };
 

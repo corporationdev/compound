@@ -23,7 +23,6 @@
     "dev": "bun run stage:chat && bun run build && electron-forge start",
     "package": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:runtime && bun run stage:docs && electron-forge package",
     "make": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:runtime && bun run stage:docs && electron-forge make",
-    "publish": "bun run stage:chat && bun run build && bun run build:web && bun run stage:cli && bun run stage:runtime && bun run stage:docs && electron-forge publish",
     "make:icns": "sh scripts/make-icns.sh"
   },
   "devDependencies": {
@@ -32,7 +31,6 @@
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
-    "@electron-forge/publisher-github": "^7.11.1",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^24.10.1",
     "electron": "^43.1.1",

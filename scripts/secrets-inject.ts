@@ -39,8 +39,10 @@ for (const key of allKeys) {
     throw new Error(`Invalid .env.op entry ${key}: only vault references belong here; keep the service account token in root .env`);
 }
 for (const key of included) if (!allKeys.has(key)) throw new Error(`Unknown --include key: ${key}`);
+// Some references exist in one tier's vault only.
+const tierOnly: Record<string, ReturnType<typeof deriveEnvTier>> = { CONVEX_MANAGEMENT_TOKEN: 'preview', GITHUB_RELEASES_TOKEN: 'prod' };
 const keys = included.length ? included : [...allKeys].filter(
-  (key) => key !== 'CONVEX_MANAGEMENT_TOKEN' || deriveEnvTier(stage) === 'preview',
+  (key) => !tierOnly[key] || tierOnly[key] === deriveEnvTier(stage),
 );
 requireKeys(
   Object.fromEntries(keys.map((key) => [key, template[key]?.replace('op://', '') ?? ''])),

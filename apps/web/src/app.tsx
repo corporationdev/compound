@@ -10,6 +10,7 @@ import { AppContextMenu } from "@/components/app-context-menu";
 
 import { AuthProvider, useAuth } from '@/context/auth';
 import { PersistRoute } from '@/lib/persist-route';
+import { useAppUpdates } from '@/hooks/use-app-updates';
 import { EditorApi } from '@/dapi';
 import { ScreenTooSmall } from '@/components/screen-too-small';
 import { UnsupportedBrowser } from '@/components/unsupported-browser';
@@ -46,6 +47,8 @@ function BootSplash() {
 
 function EnvironmentOverlays() { return <><ScreenTooSmall /><UnsupportedBrowser /></>; }
 
+function AppUpdates() { useAppUpdates(); return null; }
+
 function App() {
   const RouterComponent = window.desktop ? HashRouter : Router;
   return (
@@ -60,6 +63,7 @@ function App() {
             </AuthProvider>
           </AppContextMenu>
           <Toaster />
+          <AppUpdates />
           <EnvironmentOverlays />
           <PersistRoute />
         </ColorModeProvider>
