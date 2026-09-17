@@ -223,6 +223,20 @@ export class T3Code {
     return this.dispatch({ type: 'project.meta.update', commandId: randomUUID(), projectId, scripts });
   }
 
+  /** Send a follow-up message to an existing thread, starting a new turn with the thread's own model. */
+  sendMessage(threadId: string, text: string, modelSelection: ModelSelection) {
+    return this.dispatch({
+      type: 'thread.turn.start',
+      commandId: randomUUID(),
+      threadId,
+      message: { messageId: randomUUID(), role: 'user', text, attachments: [] },
+      modelSelection,
+      runtimeMode: 'full-access',
+      interactionMode: 'default',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
   /**
    * Create a thread in a new worktree on a new branch and send its first
    * message, in one command. T3 Code creates the worktree from `baseBranch`

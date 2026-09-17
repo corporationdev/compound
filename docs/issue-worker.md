@@ -42,3 +42,11 @@ when asked for, and Teardown Preview removes them when the PR closes.
 
 `bun run pr status <n>` is the one command for the PR's checks, reviews,
 unresolved threads, and Prepare PR runs, as JSON.
+
+## Feedback
+
+Comment on the issue or its PR. Every minute the worker forwards new comments
+from people in the organization to the issue's thread as a "Feedback from @…"
+message and reacts with 👀 on the comment so you can see it was picked up.
+Comments by the worker's own account and by bots are never forwarded, and a
+thread that is mid-turn gets them at its next idle moment.

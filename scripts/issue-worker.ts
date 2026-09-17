@@ -12,8 +12,8 @@
  * An issue maps to one fixed thread id, so a thread that already exists in
  * T3 Code is never started twice, even across restarts.
  */
-import { closeSync, openSync, readFileSync, unlinkSync, writeSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deterministicId, projectScriptsFromT3Json, T3Code, type ModelSelection, type ShellProject } from './lib/t3code.ts';
@@ -97,6 +97,46 @@ export function planClaims(input: {
   return { claim, skip };
 }
 
+/** A comment a person left on the issue or its pull request, as the worker sees it. */
+export interface Feedback {
+  id: string;
+  url: string;
+  author: string;
+  authorAssociation: string;
+  body: string;
+  createdAt: string;
+  /** Where it was left: the issue, the PR conversation, a review body, or a review comment on a file. */
+  where: 'issue' | 'pr' | 'review' | 'review-comment';
+  path?: string;
+  line?: number | null;
+}
+
+/**
+ * Which comments to forward to the thread now: from people in the
+ * organization, not from the worker's own account (the thread's agent uses
+ * it too), not bots, newer than the thread, and not forwarded before.
+ */
+export function selectFeedback(input: { comments: Feedback[]; workerLogin: string; since: string; forwarded: ReadonlySet<string> }): Feedback[] {
+  return input.comments
+    .filter((c) => TRUSTED_ASSOCIATIONS.has(c.authorAssociation))
+    .filter((c) => c.author !== input.workerLogin && !c.author.endsWith('[bot]'))
+    .filter((c) => c.createdAt > input.since && !input.forwarded.has(c.id))
+    .filter((c) => c.body.trim().length > 0)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** The message the thread gets for a comment: who, where, then the comment itself. */
+export function feedbackMessage(issueNumber: number, feedback: Feedback): string {
+  const place = feedback.where === 'issue' ? `issue #${issueNumber}`
+    : feedback.where === 'review-comment' ? `the pull request, on \`${feedback.path}\`${feedback.line ? ` line ${feedback.line}` : ''}`
+    : feedback.where === 'review' ? 'the pull request, as a review' : 'the pull request';
+  return [
+    `Feedback from @${feedback.author} on ${place} (${feedback.url}). Treat it as a change to the plan: act on it, reply on GitHub where they wrote it when a reply is needed, and continue.`,
+    '',
+    feedback.body.trim(),
+  ].join('\n');
+}
+
 /** The thread's first message: which skill to use, then the issue itself. */
 export function firstMessage(issue: Issue, branch: string, base: string): string {
   return [
@@ -148,6 +188,79 @@ async function comment(number: number, body: string) {
   await gh(['issue', 'comment', String(number), '--body', body]);
 }
 
+const FORWARDED_FILE = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'compound-issue-worker', 'forwarded.json');
+function readForwarded(): Set<string> {
+  try { return new Set(JSON.parse(readFileSync(FORWARDED_FILE, 'utf8')) as string[]); } catch { return new Set(); }
+}
+function writeForwarded(forwarded: Set<string>) {
+  mkdirSync(join(FORWARDED_FILE, '..'), { recursive: true });
+  writeFileSync(FORWARDED_FILE, JSON.stringify([...forwarded]));
+}
+
+type RawComment = { id: number; html_url: string; user: { login: string; type: string }; author_association: string; body: string | null; created_at: string; path?: string; line?: number | null; submitted_at?: string };
+const api = async (path: string) => JSON.parse(await gh(['api', `repos/${REPO}/${path}`, '--paginate'])) as RawComment[];
+const toFeedback = (where: Feedback['where']) => (c: RawComment): Feedback => ({
+  id: `${where}:${c.id}`, url: c.html_url, author: c.user.login, authorAssociation: c.author_association,
+  body: c.body ?? '', createdAt: c.created_at ?? c.submitted_at ?? '', where, path: c.path, line: c.line,
+});
+
+/** Everything people have written on the issue and on its pull request, if one exists. */
+async function collectFeedback(issue: Issue): Promise<Feedback[]> {
+  const comments = (await api(`issues/${issue.number}/comments`)).map(toFeedback('issue'));
+  const branch = branchName(issue.number, issue.title);
+  const prs = JSON.parse(await gh(['pr', 'list', '--head', branch, '--state', 'all', '--json', 'number', '--limit', '1'])) as { number: number }[];
+  const pr = prs[0]?.number;
+  if (!pr) return comments;
+  const [conversation, reviews, reviewComments] = await Promise.all([
+    api(`issues/${pr}/comments`),
+    api(`pulls/${pr}/reviews`),
+    api(`pulls/${pr}/comments`),
+  ]);
+  return [
+    ...comments,
+    ...conversation.map(toFeedback('pr')),
+    ...reviews.filter((r) => r.body).map((r) => toFeedback('review')({ ...r, created_at: r.submitted_at ?? '' })),
+    ...reviewComments.map(toFeedback('review-comment')),
+  ];
+}
+
+/** The reaction that shows a comment reached the thread; the file is what stops it going twice. */
+async function markForwarded(feedback: Feedback) {
+  const [where, id] = feedback.id.split(':');
+  const path = where === 'review-comment' ? `pulls/comments/${id}` : where === 'review' ? null : `issues/comments/${id}`;
+  if (path) await gh(['api', '-X', 'POST', `repos/${REPO}/${path}/reactions`, '-f', 'content=eyes']).catch(() => undefined);
+}
+
+/**
+ * Route new comments from people to the threads working on them. A thread
+ * that is mid-turn is left alone; the comment waits for the next tick.
+ */
+async function forwardFeedback(t3: T3Code, workerLogin: string, reported: Set<string>) {
+  const issues = [...(await listIssues('in-progress')), ...(await listIssues('in-review'))];
+  const forwarded = readForwarded();
+  for (const issue of issues) {
+    const thread = await t3.thread(threadIdFor(issue.number));
+    if (!thread) continue;
+    const since = thread.messages[0]?.createdAt ?? '';
+    const pending = selectFeedback({ comments: await collectFeedback(issue), workerLogin, since, forwarded });
+    if (pending.length === 0) continue;
+    if (thread.latestTurn && !['completed', 'failed', 'cancelled', 'interrupted', 'idle'].includes(thread.latestTurn.state)) {
+      const key = `${issue.number}:busy`;
+      if (!reported.has(key)) log(`#${issue.number} has ${pending.length} comment(s) waiting; thread turn is ${thread.latestTurn.state}`);
+      reported.add(key);
+      continue;
+    }
+    reported.delete(`${issue.number}:busy`);
+    for (const feedback of pending) {
+      await t3.sendMessage(thread.id, feedbackMessage(issue.number, feedback), thread.modelSelection);
+      forwarded.add(feedback.id);
+      writeForwarded(forwarded);
+      await markForwarded(feedback);
+      log(`#${issue.number} forwarded ${feedback.where} comment by @${feedback.author} to thread ${thread.id}`);
+    }
+  }
+}
+
 /**
  * The Compound project in T3 Code, with a worktree setup script. T3 Code
  * 0.0.40 runs the project's stored scripts, not the checked-in `t3.json`, so a
@@ -170,6 +283,8 @@ async function compoundProject(t3: T3Code): Promise<ShellProject> {
 interface Options {
   base: string;
   model: ModelSelection;
+  /** The GitHub account the worker and its threads act as; its own comments are never fed back. */
+  login: string;
 }
 
 /** Claims issue by issue: label, thread, comment; or put it back. */
@@ -217,9 +332,10 @@ async function claim(t3: T3Code, project: ShellProject, issue: Issue, options: O
 }
 
 async function tick(options: Options, claimed: Set<number>, reported: Set<string>) {
+  const t3 = await T3Code.connect();
+  await forwardFeedback(t3, options.login, reported);
   const [ready, inProgress] = await Promise.all([listIssues('ready'), listIssues('in-progress')]);
   if (ready.length === 0) return;
-  const t3 = await T3Code.connect();
   const started = new Set(claimed);
   for (const issue of ready) if (await t3.thread(threadIdFor(issue.number))) started.add(issue.number);
   const plan = planClaims({ ready, inProgressCount: inProgress.length, started });
@@ -266,13 +382,14 @@ if (import.meta.main) {
   });
   const [instanceId, model] = values.model.split(':');
   if (!instanceId || !model) throw new Error('--model is <provider instance>:<model>, e.g. claudeAgent:claude-fable-5-1');
-  const options: Options = { base: values.base, model: { instanceId, model } };
+  const login = (await gh(['api', 'user', '--jq', '.login'])).trim();
+  const options: Options = { base: values.base, model: { instanceId, model }, login };
   const unlock = lock();
   process.on('SIGINT', () => process.exit(130));
   process.on('SIGTERM', () => process.exit(143));
   process.on('exit', unlock);
 
-  log(`issue worker for ${REPO}: base ${options.base}, model ${values.model}${values.once ? ', once' : ''}`);
+  log(`issue worker for ${REPO} as @${login}: base ${options.base}, model ${values.model}${values.once ? ', once' : ''}`);
   await ensureLabels();
   const claimed = new Set<number>();
   const reported = new Set<string>();

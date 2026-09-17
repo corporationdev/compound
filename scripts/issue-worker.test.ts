@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { branchName, firstMessage, planClaims, threadIdFor, type Issue } from './issue-worker';
+import { branchName, feedbackMessage, firstMessage, planClaims, selectFeedback, threadIdFor, type Feedback, type Issue } from './issue-worker';
 import { projectScriptsFromT3Json } from './lib/t3code';
 
 const issue = (number: number, labels: string[] = ['ready'], authorAssociation = 'MEMBER'): Issue => ({ number, title: `Issue ${number}`, body: '', labels, authorAssociation, author: 'someone' });
@@ -84,4 +84,38 @@ test('t3.json scripts become T3 Code project scripts', () => {
     { id: 'sandbox-setup', name: 'Sandbox setup', command: 'bun run setup', icon: 'configure', runOnWorktreeCreate: true },
     { id: 'dev', name: 'Dev', command: 'bun dev', icon: 'play', runOnWorktreeCreate: false },
   ]);
+});
+
+describe('feedback routing', () => {
+  const fb = (id: string, over: Partial<Feedback> = {}): Feedback => ({ id, url: `https://github.com/x/${id}`, author: 'isaacdyor', authorAssociation: 'MEMBER', body: 'Please also do X.', createdAt: '2026-09-17T02:00:00Z', where: 'issue', ...over });
+  const since = '2026-09-17T01:00:00Z';
+
+  test('forwards new comments from people in the organization, oldest first', () => {
+    const picked = selectFeedback({ comments: [fb('issue:2', { createdAt: '2026-09-17T03:00:00Z' }), fb('issue:1')], workerLogin: 'kwng-dev', since, forwarded: new Set() });
+    expect(picked.map((c) => c.id)).toEqual(['issue:1', 'issue:2']);
+  });
+
+  test('skips outsiders, bots, the worker itself, old comments, forwarded ones, and empty bodies', () => {
+    const picked = selectFeedback({
+      comments: [
+        fb('issue:1', { authorAssociation: 'NONE' }),
+        fb('issue:2', { author: 'coderabbitai[bot]', authorAssociation: 'NONE' }),
+        fb('issue:3', { author: 'kwng-dev' }),
+        fb('issue:4', { createdAt: '2026-09-16T00:00:00Z' }),
+        fb('issue:5'),
+        fb('issue:6', { body: '   ' }),
+        fb('pr:7'),
+      ],
+      workerLogin: 'kwng-dev', since, forwarded: new Set(['issue:5']),
+    });
+    expect(picked.map((c) => c.id)).toEqual(['pr:7']);
+  });
+
+  test('the message says who, where, and what', () => {
+    const text = feedbackMessage(7, fb('review-comment:9', { where: 'review-comment', path: 'docs/issue-worker.md', line: 12 }));
+    expect(text.split('\n')[0]).toContain('@isaacdyor');
+    expect(text.split('\n')[0]).toContain('`docs/issue-worker.md` line 12');
+    expect(text).toContain('Please also do X.');
+    expect(feedbackMessage(7, fb('issue:1')).split('\n')[0]).toContain('issue #7');
+  });
 });

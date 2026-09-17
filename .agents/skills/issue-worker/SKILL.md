@@ -146,6 +146,16 @@ End the turn with a short summary: the PR link, what the recording shows,
 and anything you left for the reviewer to decide. Clean up your sandbox stage
 (`bun run sandbox:clean`) but leave the worktree; T3 Code owns it.
 
+## Feedback while you work
+
+When someone in the organization comments on the issue or on your pull
+request, the worker forwards it into this thread as a message that starts
+with "Feedback from @…" and marks the comment with an eyes reaction. Treat
+it as a change to the plan: act on it, reply on GitHub where they wrote it
+when a reply is needed, and continue from wherever you were. It arrives
+between your turns, so finish what you are doing at a sensible point; nothing
+is lost while a turn is running.
+
 ## Rules
 
 - This worktree and branch are for this one issue. Do not check out, commit to,
