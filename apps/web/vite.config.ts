@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
     }
   }
 
+  // Written by runtime:write; absent for a bare checkout, which keeps the historical ports.
+  const ports = loadEnv(mode, __dirname, 'COMPOUND_')
+  const webPort = Number(ports.COMPOUND_WEB_PORT) || 5173
+  const serverPort = Number(ports.COMPOUND_SERVER_PORT) || 3000
+
   return {
     plugins: [
       solid(),
@@ -32,7 +37,7 @@ export default defineConfig(({ mode }) => {
       APP_VERSION: JSON.stringify(pkg.version),
     },
     server: {
-      port: 5173,
+      port: webPort,
       strictPort: true,
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
@@ -40,7 +45,7 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: `http://localhost:${serverPort}`,
           changeOrigin: true,
         },
       },

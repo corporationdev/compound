@@ -65,6 +65,8 @@ afterEach(() => {
 });
 
 test('sign-up through email OTP creates a personal organization owned by the user', async () => {
+  // The emailed code is production behaviour; developer stages issue a fixed code instead.
+  process.env.STAGE = 'prod';
   process.env.CONVEX_SITE_URL = 'https://test.convex.site';
   process.env.SITE_URL = 'http://localhost:5173';
   process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';

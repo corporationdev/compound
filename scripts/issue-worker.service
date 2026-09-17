@@ -1,0 +1,31 @@
+# User unit for the GitHub issue worker (scripts/issue-worker.ts).
+#
+# Install, from the checkout the worker should run from:
+#   mkdir -p ~/.config/systemd/user
+#   cp scripts/issue-worker.service ~/.config/systemd/user/compound-issue-worker.service
+#   # edit WorkingDirectory if the checkout is not ~/code/compound-issue-worker
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now compound-issue-worker
+#   journalctl --user -u compound-issue-worker -f
+#
+# It starts with the user session at login. To keep it running with nobody
+# logged in, `loginctl enable-linger $USER`; T3 Code must be running either way.
+
+[Unit]
+Description=Compound issue worker: GitHub issues labeled ready become T3 Code threads
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/code/compound-issue-worker
+# Node 22 before the system Node; bun and gh after it.
+Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+# Worktrees are created from this branch (from origin when it exists there).
+Environment=ISSUE_WORKER_BASE=main
+ExecStart=%h/.bun/bin/bun scripts/issue-worker.ts
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

@@ -7,7 +7,7 @@ const args = process.argv.slice(2);
 const action = args[0];
 if (!['dev', 'deploy', 'destroy'].includes(action ?? '')) throw new Error('Expected dev, deploy, or destroy');
 const stage = stageFrom(args);
-if (action === 'dev' && getStageKind(stage) !== 'dev') throw new Error('Live development requires a dev stage');
+if (action === 'dev' && !['dev', 'sandbox'].includes(getStageKind(stage))) throw new Error('Live development requires a dev or sandbox stage');
 const infra = scopedEnv('packages/infra', stage);
 const server = scopedEnv('apps/server', stage);
 requireKeys(infra, ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'ALCHEMY_PASSWORD', 'ALCHEMY_STATE_TOKEN']);

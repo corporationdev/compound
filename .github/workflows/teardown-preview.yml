@@ -37,3 +37,8 @@ jobs:
       - name: Destroy Alchemy and delete Convex preview
         if: steps.current.outputs.closed == 'true'
         run: bun scripts/teardown-preview.ts --stage "$STAGE"
+      - name: Remove the pull request's installers and evidence from the bucket
+        if: steps.current.outputs.closed == 'true'
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: bun scripts/pr-publish.ts delete "$PR"

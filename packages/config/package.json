@@ -5,10 +5,12 @@
   "exports": {
     "./stage": "./src/stage.ts",
     "./stage-kind": "./src/stage-kind.ts",
+    "./ports": "./src/ports.ts",
     "./runtime": "./src/runtime.ts",
     "./deployment": "./src/deployment.ts",
     "./models": "./src/models.ts",
     "./release": "./src/release.ts",
+    "./evidence": "./src/evidence.ts",
     "./transcription": "./src/transcription.ts"
   },
   "scripts": {

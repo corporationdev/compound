@@ -10,17 +10,27 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'));
-const productionRelease = process.env.COMPOUND_RELEASE === '1';
+// A pull request build carries its own name and bundle id (scripts/pr-brand.ts)
+// so it installs beside the real app; a production build is plain "Compound".
+const runtimeConfig = (() => { try { return JSON.parse(readFileSync(join(__dirname, 'runtime-config.json'), 'utf8')); } catch { return {}; } })();
+const appName: string = runtimeConfig.appName ?? 'Compound';
+const appBundleId: string = runtimeConfig.appId ?? 'dev.corporation.compound';
+const fileSlug = appName.replace(/\s+/g, '-');
+// The signing script marks the environment as a release; only a build carrying
+// production configuration is held to release rules (signed and notarized).
+const productionRelease = process.env.COMPOUND_RELEASE === '1' && (runtimeConfig.stage ?? 'prod') === 'prod';
 if (productionRelease) {
-  if (process.env.SKIP_SIGN) throw new Error('Production releases must be signed');
+  if (process.env.SKIP_SIGN || process.env.SKIP_NOTARIZE) throw new Error('Production releases must be signed and notarized');
   for (const key of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_SIGNING_IDENTITY'])
     if (!process.env[key]) throw new Error(`Missing release credential: ${key}`);
 }
 
 const config: ForgeConfig = {
   packagerConfig: {
-    name: 'Compound',
-    appBundleId: 'dev.corporation.compound',
+    name: appName,
+    // The binary keeps its name whatever the app is called, so tooling finds it.
+    executableName: 'Compound',
+    appBundleId,
     appCategoryType: 'public.app-category.video',
     appVersion: version,
     icon: './assets/icon',
@@ -43,7 +53,7 @@ const config: ForgeConfig = {
       ...(process.env.APPLE_SIGNING_IDENTITY ? { identity: process.env.APPLE_SIGNING_IDENTITY } : {}),
     },
     osxNotarize:
-      !process.env.SKIP_SIGN && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
+      !process.env.SKIP_SIGN && !process.env.SKIP_NOTARIZE && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
         ? {
             appleApiKey: process.env.APPLE_API_KEY,
             appleApiKeyId: process.env.APPLE_API_KEY_ID,
@@ -52,9 +62,11 @@ const config: ForgeConfig = {
         : undefined,
   },
   makers: [
-    new MakerZIP({}, ['darwin']),
+    // Linux zips are pull-request builds for the ThinkPad; macOS zips ship beside the DMG.
+    new MakerZIP({}, ['darwin', 'linux']),
     new MakerDMG((arch) => ({
-      name: `Compound-mac-${arch}`,
+      // hdiutil caps a volume name at 27 characters, so a PR build drops the "mac".
+      name: appName === 'Compound' ? `Compound-mac-${arch}` : `${fileSlug}-${arch}`,
       icon: './assets/icon.icns',
       // Dark, on-brand window; @2x sibling is picked up automatically for retina.
       background: './assets/dmg-background.png',

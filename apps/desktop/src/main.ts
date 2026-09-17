@@ -6,7 +6,7 @@ import { cloudConfig, authRequest, mediaRequest, uploadMedia, uploadCatalogAudio
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
@@ -64,13 +64,27 @@ import {
 import { AssetTransferManager, realAssetCloud } from "./assets-transfers";
 import type { LogEntry } from "@compound/dapi";
 
-const DEV_URL = "http://localhost:5173";
+// The dev launcher names the stage's Vite server; a bare `electron-forge start` keeps the default.
+const DEV_URL = process.env.COMPOUND_DEV_URL || "http://localhost:5173";
 const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
 app.setName("Compound");
+// A packaged build for another stage (a pull request preview) is a different
+// app: its own name in the dock and its own profile, so it runs beside the
+// real install and never touches its data or its single-instance lock.
+const packagedStage = (() => {
+  if (!app.isPackaged) return null;
+  try {
+    const config = JSON.parse(readFileSync(join(app.getAppPath(), "runtime-config.json"), "utf8"));
+    return typeof config.stage === "string" && config.stage !== "prod" ? { stage: config.stage as string, appName: typeof config.appName === "string" ? (config.appName as string) : `Compound ${config.stage}` } : null;
+  } catch {
+    return null;
+  }
+})();
+if (packagedStage) app.setName(packagedStage.appName);
 const customUserData = app.commandLine.getSwitchValue("user-data-dir");
-app.setPath("userData", customUserData || prepareUserData(app.getPath("appData")));
+app.setPath("userData", customUserData || (packagedStage ? join(app.getPath("appData"), `Compound-${packagedStage.stage}`) : prepareUserData(app.getPath("appData"))));
 app.commandLine.appendSwitch("enable-blink-features", "CanvasDrawElement");
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 app.commandLine.appendSwitch("disable-background-timer-throttling");

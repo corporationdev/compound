@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolveRuntimeContext } from '@compound/config/runtime';
 import { release } from '@compound/config/release';
+import { evidence } from '@compound/config/evidence';
 import alchemy from 'alchemy';
 import { R2Bucket, Tunnel, Worker, Vite } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
@@ -69,7 +70,7 @@ export const server = await Worker('server', {
     DEEPGRAM_API_KEY: alchemy.secret.env('DEEPGRAM_API_KEY'),
     GOOGLE_GENERATIVE_AI_API_KEY: alchemy.secret.env('GOOGLE_GENERATIVE_AI_API_KEY'),
   },
-  dev: { port: 3000 },
+  dev: { port: runtime.ports.server },
 });
 
 export const serverTunnel = useServerTunnel
@@ -78,7 +79,7 @@ export const serverTunnel = useServerTunnel
       adopt: true,
       apiToken: alchemy.secret.env('CLOUDFLARE_API_TOKEN'),
       ingress: [
-        { hostname: runtime.serverHostname, service: 'http://localhost:3000' },
+        { hostname: runtime.serverHostname, service: `http://localhost:${runtime.ports.server}` },
         { service: 'http_status:404' },
       ],
     })
@@ -101,6 +102,13 @@ export const releases = runtime.stageKind === 'production'
   ? await R2Bucket('releases', {
       name: release.bucket, adopt: true, devDomain: false, delete: false,
     })
+  : undefined;
+
+// Pull request installers and recordings, public behind evidence.<rootDomain>.
+// Account-level, so it is declared with production only; the custom domain was
+// attached once through the API and is not managed here.
+export const evidenceBucket = runtime.stageKind === 'production'
+  ? await R2Bucket('evidence', { name: evidence.bucket, adopt: true, devDomain: false, delete: false })
   : undefined;
 
 export const landing = runtime.landingHostname

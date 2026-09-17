@@ -1,3 +1,4 @@
+import { getStageKind } from '@compound/config/stage-kind';
 import { createClient, type AuthFunctions, type GenericCtx } from '@convex-dev/better-auth';
 import { convex, crossDomain } from '@convex-dev/better-auth/plugins';
 import { betterAuth, type BetterAuthOptions } from 'better-auth/minimal';
@@ -9,6 +10,19 @@ import { query } from './_generated/server';
 import authConfig from './auth.config';
 import authSchema from './betterAuth/schema';
 import { createPersonalOrganization } from './lib/organizations';
+
+/**
+ * Whether this deployment accepts the fixed sign-in code. Every stage but
+ * production does: the machine dev deployment, a worktree sandbox, a test
+ * stage, and a pull request's preview, which agents sign in to for the final
+ * verification. A preview is reachable from the internet, so its data is
+ * treated as disposable. A deployment with no STAGE set is treated as
+ * production, so a missing variable never opens sign-in.
+ */
+export const SANDBOX_OTP = '000000';
+export function acceptsSandboxOtp(stage = process.env.STAGE): boolean {
+  return ['dev', 'sandbox', 'test', 'preview'].includes(getStageKind(stage ?? ''));
+}
 
 // Typed up front to break the type cycle between this module and the generated api.
 const authFunctions: AuthFunctions = internal.auth;
@@ -58,7 +72,14 @@ export function createAuthOptions(ctx: GenericCtx<DataModel>) {
         allowedAttempts: 5,
         resendStrategy: 'reuse',
         changeEmail: { enabled: true, verifyCurrentEmail: true },
+        // A developer stage issues the fixed code so agents and scripts can
+        // sign in as any address without a mailbox; see acceptsSandboxOtp.
+        ...(acceptsSandboxOtp() ? { generateOTP: () => SANDBOX_OTP } : {}),
         async sendVerificationOTP({ email, otp }) {
+          if (acceptsSandboxOtp()) {
+            console.log(`[auth] ${process.env.STAGE}: sign-in code for ${email} is ${otp} (not emailed on a developer stage)`);
+            return;
+          }
           const key = process.env.RESEND_API_KEY;
           const from = process.env.RESEND_FROM_EMAIL;
           if (!key || !from) throw new Error('Email delivery is not configured');

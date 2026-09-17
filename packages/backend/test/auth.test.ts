@@ -111,6 +111,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 test('email OTP creates signed native session, rejects bad codes, and revokes it on account deletion', async () => {
+  // The emailed code is production behaviour; developer stages issue a fixed code instead.
+  process.env.STAGE = 'prod';
   process.env.CONVEX_SITE_URL = 'https://test.convex.site';
   process.env.SITE_URL = 'http://localhost:5173';
   process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
@@ -168,4 +170,31 @@ test('email OTP creates signed native session, rejects bad codes, and revokes it
   expect((await auth('delete-user', {}, signed!)).status).toBe(200);
   expect(await t.run((ctx) => ctx.db.get(uploaded!._id))).toBeNull();
   expect(await (await auth('get-session', undefined, signed!)).json()).toBeNull();
+});
+
+test('developer stages sign in with the fixed code and send no email; production and unset stages do not', async () => {
+  const { acceptsSandboxOtp, SANDBOX_OTP } = await import('../convex/auth');
+  expect(SANDBOX_OTP).toBe('000000');
+  for (const stage of ['dev-isaac-1234', 'sandbox-alpha-12345678', 'test-ci', 'preview-branch-12345678', 'pr-42'])
+    expect(acceptsSandboxOtp(stage)).toBe(true);
+  for (const stage of ['prod', 'production', 'prod-eu', undefined, '', 'nonsense'])
+    expect(acceptsSandboxOtp(stage)).toBe(false);
+  process.env.STAGE = 'sandbox-test-12345678';
+  process.env.CONVEX_SITE_URL = 'https://test.convex.site';
+  process.env.SITE_URL = 'http://localhost:5173';
+  process.env.BETTER_AUTH_SECRET = 'test-only-secret-with-at-least-32-characters';
+  process.env.RESEND_API_KEY = 'test-resend-key';
+  process.env.RESEND_FROM_EMAIL = 'Compound <test@example.com>';
+  const t = setup();
+  let emails = 0;
+  globalThis.fetch = (async () => { emails++; return Response.json({ id: 'never' }); }) as unknown as typeof fetch;
+  const auth = (path: string, body: unknown) =>
+    t.fetch(`/api/auth/${path}`, { method: 'POST', headers: { Origin: 'compound://', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  expect((await auth('email-otp/send-verification-otp', { email: 'agent@compound.mov', type: 'sign-in' })).status).toBe(200);
+  expect(emails).toBe(0);
+  expect((await auth('sign-in/email-otp', { email: 'agent@compound.mov', otp: '111111' })).status).toBe(400);
+  const verified = await auth('sign-in/email-otp', { email: 'agent@compound.mov', otp: SANDBOX_OTP });
+  expect(verified.status).toBe(200);
+  expect(verified.headers.get('set-auth-token')).toContain('.');
+  delete process.env.STAGE;
 });

@@ -62,12 +62,19 @@ test('ambiguous or unauthorized cleanup fails without deleting anything', async 
 test('preview lifecycle uses retained data and matching serialized PR workflows', () => {
   const backend = readFileSync(new URL('./backend.ts', import.meta.url), 'utf8');
   expect(backend).not.toContain('--preview-create');
-  const deploy = readFileSync(new URL('../.github/workflows/deploy-preview.yml', import.meta.url), 'utf8');
+  // Previews are deployed on request by Prepare PR and removed by Teardown
+  // Preview; both serialize on the branch's group and refuse forks.
+  const prepare = readFileSync(new URL('../.github/workflows/prepare-pr.yml', import.meta.url), 'utf8');
   const teardown = readFileSync(new URL('../.github/workflows/teardown-preview.yml', import.meta.url), 'utf8');
-  for (const workflow of [deploy, teardown]) {
-    expect(workflow).toContain('group: preview-${{ github.event.pull_request.head.ref }}');
+  expect(prepare).toContain('workflow_dispatch');
+  expect(prepare).toContain('types: [labeled]');
+  expect(prepare).not.toContain('synchronize');
+  expect(prepare).toContain("group: preview-${{ github.event.pull_request.head.ref || format('pr-{0}', inputs.pr) }}");
+  expect(prepare).toContain('pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`');
+  expect(teardown).toContain('group: preview-${{ github.event.pull_request.head.ref }}');
+  expect(teardown).toContain('head.repo.full_name == github.repository');
+  for (const workflow of [prepare, teardown]) {
     expect(workflow).toContain('cancel-in-progress: false');
-    expect(workflow).toContain('head.repo.full_name == github.repository');
     expect(workflow).not.toContain('pull_request_target');
   }
 });

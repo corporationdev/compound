@@ -11,7 +11,8 @@ export function stageFrom(args: string[]): string {
   const index = args.indexOf('--stage');
   if (index >= 0 && args.includes('--dev')) throw new Error('Use --stage or --dev, not both');
   if (index >= 0 && !args[index + 1]) throw new Error('Missing --stage value');
-  return validateStage(index >= 0 ? args[index + 1]! : resolveStage('dev'));
+  // The default stage belongs to this checkout: a linked worktree gets its own sandbox stage.
+  return validateStage(index >= 0 ? args[index + 1]! : resolveStage('dev', { cwd: root }));
 }
 export function readEnv(path: string): Record<string, string> {
   const file = resolve(root, path);

@@ -1,0 +1,7 @@
+# CodeRabbit reviews once, when a pull request leaves draft. Agents push to a
+# draft as they work and mark it ready when confident; see the issue-worker skill.
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+  request_changes_workflow: false
