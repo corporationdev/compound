@@ -92,6 +92,22 @@ Development builds, pull request builds and other platforms have no updater.
 another feed, such as a prerelease's `latest-mac.json`, to try an update before
 it is the latest.
 
+To try an update by hand, launch the packaged app through LaunchServices, not
+straight from a terminal:
+
+```sh
+open -n --env COMPOUND_UPDATE_FEED=https://github.com/corporationdev/compound-releases/releases/download/v<VERSION>/latest-mac.json \
+  /path/to/Compound.app --args --user-data-dir=/tmp/compound-update-test
+```
+
+macOS holds the process that launched an app responsible for App Management,
+so an app started from a terminal cannot write into its own bundle; Squirrel
+then falls back to a privileged install and puts up a password prompt that
+never resolves from a script. `open` makes launchd the parent. It also drops
+the caller's environment, hence `--env`; a shell inside an Electron host (T3
+Code, VS Code) also needs `env -u ELECTRON_RUN_AS_NODE open …`, or the app
+runs as plain Node and rejects its flags.
+
 Local unsigned packaging for testing: `SKIP_SIGN=1 bun run make --arch=universal`.
 Use `bun scripts/release-env.ts` first when specifically testing production URLs;
 run `bun run setup` afterward to restore development configuration.
