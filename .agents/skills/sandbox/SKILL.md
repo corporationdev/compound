@@ -36,8 +36,41 @@ bun dev                           # Convex watch + Worker + tunnel + Vite + Elec
 inspector port from `sandbox:info` to listen before driving the app. It
 fails fast if a port is taken; nothing is shared silently.
 
-Requirements on a new machine: Node 22, Bun 1.3.11, the 1Password CLI,
-cloudflared, and the Convex CLI logged in once with `npx convex login`.
+Requirements on a new machine: Node 20, 22 or 24 first on PATH (the local
+Convex backend refuses newer ones; a private install such as
+`~/.local/node22/bin` prepended to PATH is enough), Bun 1.3.11, the 1Password
+CLI, cloudflared, and the Convex CLI logged in once with `npx convex login`.
+
+### Linux over SSH
+
+Electron needs the desktop session's display. From an SSH shell on a GNOME
+Wayland machine, export these before `bun dev`, or Electron exits with
+"Missing X server or $DISPLAY":
+
+```sh
+export DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_SESSION_TYPE=wayland \
+  XDG_RUNTIME_DIR=/run/user/$(id -u) \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus \
+  ELECTRON_OZONE_PLATFORM_HINT=auto \
+  XAUTHORITY=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth.* | head -1)
+```
+
+Start the stack detached so it outlives the SSH session, and keep its log:
+
+```sh
+nohup bun dev > /tmp/dev-sandbox.log 2>&1 < /dev/null &
+```
+
+Main-process output only reaches that log. Drive the app from another
+machine by forwarding the inspector port, then attach as usual:
+
+```sh
+ssh -N -L 22904:127.0.0.1:22904 thinkpad &      # port from sandbox:info on the remote
+agent-browser connect 22904
+```
+
+A machine already running `bun dev:client` for someone's dev stage is fine;
+the sandbox uses its own ports and profile.
 
 ## Sign in
 
