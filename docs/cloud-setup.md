@@ -116,7 +116,7 @@ Each worktree needs its own `bun install`, and the root `.env` with `OP_SERVICE_
 
 **Sign-in on developer stages.** Dev, sandbox and test stages issue the fixed code `000000` for any address and log it instead of emailing (`acceptsSandboxOtp` in `packages/backend/convex/auth.ts`). Preview and production stages email the code as before. A deployment without `STAGE` behaves as production.
 
-Agents get the same instructions from `.claude/skills/sandbox/SKILL.md`.
+Agents get the same instructions from `.agents/skills/sandbox/SKILL.md`.
 
 Injection resolves only credentials listed in `.env.op` and distributes them according to each app's grouped `.env.example`. Literal credentials and bootstrap tokens are rejected in `.env.op`. Like PostBob, the injector passes a temporary reference-only file to `op inject` because stdin detection fails under Bun; it captures resolved values and removes the temporary file. `--include KEY` refreshes selected credentials only after full injection for the same stage. `--check` writes nothing. Full stage changes clear prior runtime values; runtime generation writes only allowlisted values with restrictive permissions. Generated files stay ignored, and secrets are never printed or placed in subprocess arguments.
 
