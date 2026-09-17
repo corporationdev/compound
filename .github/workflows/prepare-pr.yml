@@ -76,8 +76,7 @@ jobs:
         id: stage
         with:
           branch: ${{ steps.pr.outputs.head_ref }}
-      - name: Check
-        run: bun run check && bun run test:cloud && bun test scripts/preview.test.ts
+      # The Check workflow already typechecks and tests every push; this only deploys.
       - uses: ./.github/actions/inject-secrets
         with:
           stage: ${{ env.STAGE }}
@@ -249,11 +248,13 @@ jobs:
         run: bun run --cwd apps/web bundle:desktop
       - name: Stage CLI, runtime, and docs
         run: bun run --cwd apps/desktop stage:cli && bun run --cwd apps/desktop stage:runtime && bun run --cwd apps/desktop stage:docs
-      - name: Package, sign, notarize, and make installers
+      # Apple Silicon only and signed but not notarized: a pull request build is
+      # for trying, not shipping, and notarization alone is several minutes.
+      - name: Package, sign, and make installers
         env:
-          DEBUG: electron-universal
-        run: bun run --cwd apps/desktop electron-forge make --arch=universal
-      - name: Verify signature, notarization, and the installer's stage
+          SKIP_NOTARIZE: '1'
+        run: bun run --cwd apps/desktop electron-forge make --arch=arm64
+      - name: Verify signature and the installer's stage
         env:
           EXPECTED_STAGE: ${{ needs.deploy.outputs.stage }}
           HEAD_SHA: ${{ needs.deploy.outputs.head_sha }}

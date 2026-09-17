@@ -127,6 +127,8 @@ export async function app(number: number, platform: string) {
     const download = spawnSync('curl', ['-fsSL', '--retry', '3', '-C', '-', '-o', join(dir, zip), evidence.url(`${evidence.prefix(number)}${zip}`)], { stdio: 'inherit' });
     if (download.status !== 0) throw new Error(`Download of ${zip} failed (curl exit ${download.status})`);
     spawnSync(platform === 'mac' ? 'ditto' : 'unzip', platform === 'mac' ? ['-x', '-k', join(dir, zip), join(dir, 'app')] : ['-q', '-o', join(dir, zip), '-d', join(dir, 'app')], { stdio: 'inherit' });
+    // Not notarized: clear the quarantine flag so Gatekeeper does not refuse a build we just verified came from CI.
+    if (platform === 'mac') spawnSync('xattr', ['-dr', 'com.apple.quarantine', join(dir, 'app')], { stdio: 'ignore' });
     writeFileSync(stamp, String(m.headSha));
   }
   const binary = platform === 'mac'

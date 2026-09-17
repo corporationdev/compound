@@ -22,11 +22,13 @@ const only = (pattern: string, where: string) => {
   return join(where, matches[0]!);
 };
 if (platform === 'mac') {
-  const app = only('*-darwin-universal/*.app', out);
+  // Apple Silicon only, signed with the Developer ID but not notarized (see the workflow).
+  const app = only('*-darwin-arm64/*.app', out);
   appDir = join(app, 'Contents/Resources/app');
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
-  execFileSync('xcrun', ['stapler', 'validate', app], { stdio: 'inherit' });
-  execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' });
+  const identity = execFileSync('codesign', ['-dv', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+  if (!/Authority=Developer ID Application/.test(identity) && !/Developer ID Application/.test(execFileSync('codesign', ['-dvv', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString()))
+    throw new Error('Pull request build is not signed with the Developer ID');
   installers = [...new Bun.Glob('**/*.{dmg,zip}').scanSync(join(out, 'make'))];
 } else if (platform === 'linux') {
   const app = only('*-linux-x64', out);

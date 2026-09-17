@@ -18,7 +18,7 @@ const appBundleId: string = runtimeConfig.appId ?? 'dev.corporation.compound';
 const fileSlug = appName.replace(/\s+/g, '-');
 const productionRelease = process.env.COMPOUND_RELEASE === '1';
 if (productionRelease) {
-  if (process.env.SKIP_SIGN) throw new Error('Production releases must be signed');
+  if (process.env.SKIP_SIGN || process.env.SKIP_NOTARIZE) throw new Error('Production releases must be signed and notarized');
   for (const key of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_SIGNING_IDENTITY'])
     if (!process.env[key]) throw new Error(`Missing release credential: ${key}`);
 }
@@ -51,7 +51,7 @@ const config: ForgeConfig = {
       ...(process.env.APPLE_SIGNING_IDENTITY ? { identity: process.env.APPLE_SIGNING_IDENTITY } : {}),
     },
     osxNotarize:
-      !process.env.SKIP_SIGN && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
+      !process.env.SKIP_SIGN && !process.env.SKIP_NOTARIZE && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
         ? {
             appleApiKey: process.env.APPLE_API_KEY,
             appleApiKeyId: process.env.APPLE_API_KEY_ID,
