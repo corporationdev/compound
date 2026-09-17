@@ -16,7 +16,9 @@ const runtimeConfig = (() => { try { return JSON.parse(readFileSync(join(__dirna
 const appName: string = runtimeConfig.appName ?? 'Compound';
 const appBundleId: string = runtimeConfig.appId ?? 'dev.corporation.compound';
 const fileSlug = appName.replace(/\s+/g, '-');
-const productionRelease = process.env.COMPOUND_RELEASE === '1';
+// The signing script marks the environment as a release; only a build carrying
+// production configuration is held to release rules (signed and notarized).
+const productionRelease = process.env.COMPOUND_RELEASE === '1' && (runtimeConfig.stage ?? 'prod') === 'prod';
 if (productionRelease) {
   if (process.env.SKIP_SIGN || process.env.SKIP_NOTARIZE) throw new Error('Production releases must be signed and notarized');
   for (const key of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_SIGNING_IDENTITY'])
