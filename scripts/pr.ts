@@ -123,9 +123,9 @@ export async function app(number: number, platform: string) {
     rmSync(join(dir, 'app'), { recursive: true, force: true });
     const zip = m.files.map((f) => f.name).find((n) => n.endsWith('.zip'));
     if (!zip) throw new Error(`No zip published for #${number} ${platform}`);
-    const download = await fetch(evidence.url(`${evidence.prefix(number)}${zip}`));
-    if (!download.ok) throw new Error(`Download failed: ${download.status}`);
-    await Bun.write(join(dir, zip), download);
+    // curl streams a 200 MB file to disk reliably and resumes; fetch into Bun.write did not.
+    const download = spawnSync('curl', ['-fsSL', '--retry', '3', '-C', '-', '-o', join(dir, zip), evidence.url(`${evidence.prefix(number)}${zip}`)], { stdio: 'inherit' });
+    if (download.status !== 0) throw new Error(`Download of ${zip} failed (curl exit ${download.status})`);
     spawnSync(platform === 'mac' ? 'ditto' : 'unzip', platform === 'mac' ? ['-x', '-k', join(dir, zip), join(dir, 'app')] : ['-q', '-o', join(dir, zip), '-d', join(dir, 'app')], { stdio: 'inherit' });
     writeFileSync(stamp, String(m.headSha));
   }
