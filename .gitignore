@@ -39,7 +39,8 @@ out/
 
 # AI
 skills-lock.json
-.agents
+.agents/*
+!.agents/skills/
 # Generated Compound runtime configuration and local secrets
 .generated/
 .astro/
