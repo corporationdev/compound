@@ -128,6 +128,8 @@ Planned work reaches the ThinkPad through GitHub. An agent planning with Isaac o
 
 T3 Code has no public API. `scripts/lib/t3code.ts` uses the one its own client uses (checked against 0.0.40): `GET /api/orchestration/*` for reads and `thread.turn.start` with a bootstrap over the `/ws` RPC socket. It mints its bearer session with T3 Code's CLI through the desktop binary and caches it in `~/.config/compound-issue-worker/`. That version runs the project's stored scripts rather than reading `t3.json`, so the worker copies the `t3.json` scripts into the Compound project when it has none. Each issue maps to a fixed thread id, so an issue is never started twice. `--once` runs a single pass.
 
+The issue worker exists and runs on the ThinkPad.
+
 ## Auth behavior
 
 New users sign up by verifying their email code. Codes last ten minutes, have five allowed attempts, and resending reuses an unexpired code. Better Auth rate limits the auth endpoints. Profile name editing, sign-out, and account deletion are available. Social identities, marketing preferences, billing settings, profile photo upload and email-change UI are intentionally absent from this initial account screen.
